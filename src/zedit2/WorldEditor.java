@@ -3028,28 +3028,12 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
     }
 
     private boolean moveStatTo(Board board, int src, int destination) {
-        // Yes, this is doing more steps than it theoretically has to!
-        // I don't understand the logic of Board#finaliseStats enough to confidently
-        // feed it an elaborate move that performs multiple reorderings.
         if(src<1) { return false; }
         if(destination<1) { destination=1; }
         int length=board.getStatCount();
         if(destination>=length) { destination=length-1; }
         if(destination==src) { return false; }
-        if(src<destination) {
-            for(int i=src;i<destination;++i) {
-                board.moveStatToEnd(src+1);
-            }
-            for(int i=destination;i<length;++i) {
-                board.moveStatToEnd(src);
-            }
-        }
-        else if(src>destination) {
-            board.moveStatToEnd(src);
-            for(int i=destination+1;i<length;++i) {
-                board.moveStatToEnd(destination);
-            }
-        }
+        board.moveStatTo(src,destination);
         return true;
     }
 

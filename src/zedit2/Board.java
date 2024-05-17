@@ -387,10 +387,20 @@ public abstract class Board {
         return true;
     }
 
-    public void moveStatToEnd(int statIdx) {
-        Stat stat=stats.get(statIdx);
-        stats.remove(statIdx);
-        stats.add(stat);
+    public void moveStatTo(int src, int destination) {
+        Stat stat=stats.get(src);
+        if(src<destination) {
+            for(int i=src;i<destination;++i) {
+                stats.set(i,stats.get(i+1));
+            }
+            stats.set(destination,stat);
+        }
+        else {
+            for(int i=src;i>destination;--i) {
+                stats.set(i,stats.get(i-1));
+            }
+            stats.set(destination,stat);
+        }
         finaliseStats();
     }
 
