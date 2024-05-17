@@ -593,8 +593,8 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
             worldCopy.setName(newWorldName.getBytes());
         }
 
-        if (boards.size() > 101 && !worldData.isSuperZZT()) {
-            warning.warn(1, "World has >101 boards, which may cause problems in vanilla ZZT.");
+        if (boards.size() > 254 && !worldData.isSuperZZT()) {
+            warning.warn(1, "World has >254 boards, which may cause problems in Weave 3.");
         } else if (boards.size() > 33 && worldData.isSuperZZT()) {
             warning.warn(1, "World has >33 boards, which may cause problems in vanilla Super ZZT.");
         }
@@ -915,7 +915,7 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
             m.add("Save", "Ctrl-S", e -> menuSave());
             m.add("Save as", "S", e -> menuSaveAs());
             m.add();
-            m.add("Zedit2 settings...", null, e -> {
+            m.add("ZLoom2 settings...", null, e -> {
                 new Settings(this);
             });
             m.add();
@@ -1305,36 +1305,12 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
         return globalEditor.getBufferTile(worldData.isSuperZZT());
     }
 
-    private boolean isValidTile(Tile tile) {
-        if (validGracePeriod) return true;
-        String configKey = "DONT_WARN_" + tile.getId() + (worldData.isSuperZZT() ? "_SZZT" : "");
-        if (globalEditor.getBoolean(configKey, false)) return true;
-        if (ZType.isCrashy(worldData.isSuperZZT(), tile)) {
-            int r = JOptionPane.showOptionDialog(frame,
-                    "This element type (" + ZType.getName(worldData.isSuperZZT(), tile.getId()) + ") is known to cause stability problems in ZZT.\nIt will most likely cause ZZT to crash if touched by the player, and may cause problems even if not touched.",
-                    "Unstable type selected",
-                    JOptionPane.DEFAULT_OPTION,
-                    JOptionPane.WARNING_MESSAGE,
-                    null,
-                    new String[]{"Okay", "Use it anyway", "Use it anyway (don't warn me again)"},
-                    null);
-            if (r == JOptionPane.CLOSED_OPTION) return false;
-            if (r == 0) return false;
-            if (r == 2) globalEditor.setBoolean(configKey, true);
-            validGracePeriod = true;
-        }
-        return true;
-    }
-
     private void setBufferTile(Tile tile) {
-        if (!isValidTile(tile)) return;
         globalEditor.setBufferTile(tile, worldData.isSuperZZT());
     }
 
     private void setBufferToElement(String element, boolean editOnPlace) {
         Tile tile = getTileFromElement(element, getTileColour(getBufferTile()));
-        if (!isValidTile(tile)) return;
-
         if (editOnPlace) {
             openTileEditorExempt(tile, currentBoard, -1, -1, this::elementPlaceAtCursor, false);
         } else {
@@ -1343,7 +1319,6 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
     }
 
     private void elementPlaceAtCursor(Tile tile) {
-        if (!isValidTile(tile)) return;
         setBufferTile(tile);
         var board = getBoardAt(cursorX, cursorY);
 
@@ -1358,13 +1333,9 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
     private void paintTile(Tile tile, int col) {
         var backupTile = tile.clone();
         if (isText(tile)) {
-            tile.setId(ZType.getTextId(worldData.isSuperZZT(), col));
+            tile.setId((col % 128) + 128);
         } else {
             tile.setCol(col);
-        }
-        if (!isValidTile(tile)) {
-            tile.setId(backupTile.getId());
-            tile.setCol(backupTile.getCol());
         }
     }
 
@@ -2374,7 +2345,7 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
             paintTile(tile, newCol);
             setBufferTile(tile);
             afterUpdate();
-        }, isText(getBufferTile()) ? ColourSelector.TEXTCOLOUR : ColourSelector.COLOUR);
+        }, ColourSelector.COLOUR);
     }
 
     void testCharsetPalette(File dir, String basename, ArrayList<File> unlinkList, ArrayList<String> argList) throws IOException
@@ -3227,7 +3198,7 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
         } else {
             boardInfo = "(no board)";
         }
-        frame.setTitle("zedit2 [" + worldName + "] :: " + boardInfo + (isDirty() ? "*" : ""));
+        frame.setTitle("zloom2 [" + worldName + "] :: " + boardInfo + (isDirty() ? "*" : ""));
     }
     private Tile getTileAt(int x, int y, boolean copy) {
         if (x < 0 || y < 0 || x >= width || y >= height) {
@@ -3691,7 +3662,7 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
                         col = ' ';
                     }
 
-                    int id = ZType.getTextId(worldData.isSuperZZT(), getTileColour(getBufferTile()));
+                    int id = (getTileColour(getBufferTile()) % 128) + 128;
                     Tile textTile = new Tile(id, col);
                     putTileAt(cursorX, cursorY, textTile, PUT_DEFAULT);
 

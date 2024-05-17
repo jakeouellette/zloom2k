@@ -80,13 +80,6 @@ public class ZType {
             return SZZTType.getTextColour(id);
         }
     }
-    public static boolean isCrashy(boolean szzt, Tile tile) {
-        if (!szzt) {
-            return ZZTType.isCrashy(tile);
-        } else {
-            return SZZTType.isCrashy(tile);
-        }
-    }
     public static boolean isText(boolean szzt, int id) {
         return getTextColour(szzt, id) != -1;
     }
@@ -118,8 +111,8 @@ public class ZType {
                 case ZZTType.HBLINKRAY: tileId = SZZTType.HBLINKRAY; break;
                 case ZZTType.VBLINKRAY: tileId = SZZTType.VBLINKRAY; break;
                 default:
-                    if (tileId >= ZZTType.BLUETEXT && tileId <= ZZTType.GREYTEXT)
-                        tileId = tileId - ZZTType.BLUETEXT + SZZTType.BLUETEXT;
+                    if (tileId >= ZZTType.CUSTOMTEXT && tileId <= ZZTType.BLACKTEXT)
+                        tileId = tileId - ZZTType.CUSTOMTEXT + SZZTType.CUSTOMTEXT;
                     break;
             }
         } else {
@@ -144,8 +137,8 @@ public class ZType {
                 case SZZTType.HBLINKRAY: tileId = ZZTType.HBLINKRAY; break;
                 case SZZTType.VBLINKRAY: tileId = ZZTType.VBLINKRAY; break;
                 default:
-                    if (tileId >= SZZTType.BLUETEXT && tileId <= SZZTType.GREYTEXT)
-                        tileId = tileId - SZZTType.BLUETEXT + ZZTType.BLUETEXT;
+                    if (tileId >= SZZTType.CUSTOMTEXT && tileId <= SZZTType.BLACKTEXT)
+                        tileId = tileId - SZZTType.CUSTOMTEXT + ZZTType.CUSTOMTEXT;
                     break;
             }
         }

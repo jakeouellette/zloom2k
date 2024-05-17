@@ -1,7 +1,7 @@
-# zedit2
+# zloom2
 ZZT and Super ZZT world editor
 
-This is the MIT-licensed release of zedit2 - past versions can be obtained from https://zedit2.skyend.net/
+This is a Weave 3 hack of the MIT-licensed release of zedit2 - past versions can be obtained from https://zedit2.skyend.net/ - hacked versions for Weave 3 can be found at https://meangirls.itch.io/weave-3
 
 The code is licensed under MIT. The font (Px437_IBM_EGA8.ttf) is licensed under CC-BY-SA and is (c) VileR.
 

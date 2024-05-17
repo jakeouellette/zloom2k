@@ -17,7 +17,6 @@ public class ColourSelector extends JPanel implements KeyActionReceiver, MouseLi
     boolean wrap = false;
 
     public static final int COLOUR = 0;
-    public static final int TEXTCOLOUR = 1;
     public static final int CHAR = 2;
     private static String[] TITLES = {"Select a colour", "Select a text colour", "Select a character"};
 
@@ -31,7 +30,6 @@ public class ColourSelector extends JPanel implements KeyActionReceiver, MouseLi
 
         switch (this.selectorMode) {
             case COLOUR:
-            case TEXTCOLOUR:
                 width = 16;
                 height = 16;
                 break;
@@ -129,7 +127,7 @@ public class ColourSelector extends JPanel implements KeyActionReceiver, MouseLi
     }
 
     private void operationCursorMove(int xOff, int yOff) {
-        int xMin = selectorMode == TEXTCOLOUR ? width - 1 : 0;
+        int xMin = 0;
         if (x == 0 && xOff == -1 && wrap) {
             x = width - 1;
             y = (y + height - 1) % height;
@@ -200,7 +198,6 @@ public class ColourSelector extends JPanel implements KeyActionReceiver, MouseLi
         var sb = new StringBuilder(256);
         for (int col = 0; col < 256; col++) {
             int c = col;
-            if (selectorMode == TEXTCOLOUR && (col & 0x0F) != 15) c = 0;
             if (selectorMode != CHAR) {
                 sb.append((char) ((254 << 8) | c));
             } else {

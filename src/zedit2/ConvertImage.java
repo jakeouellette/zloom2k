@@ -38,8 +38,7 @@ public class ConvertImage extends JDialog {
             "Bomb", "Energizer", "Bullet", "Water", "Floor", "Solid", "Normal", "Breakable", "Boulder", "SliderNS", "SliderEW",
             "BlinkWall", "Ricochet", "HBlinkRay", "Bear", "Ruffian", "Slime", "Shark", "Pusher", "Lion", "Tiger",
             "VBlinkRay", "Head", "Segment", "BlueText", "GreenText", "CyanText", "RedText", "PurpleText", "BrownText",
-            "BlackText", "WaterN", "WaterS", "WaterE", "WaterW", "Roton", "DragonPup", "Pairer", "Spider", "Lava",
-            "BlackBText", "BlueBText", "GreenBText", "CyanBText", "RedBText", "PurpleBText", "BrownBText", "GreyBText", "GreyText"));
+            "BlackText", "CustomText"));
 
     public ConvertImage(WorldEditor worldEditor, Image sourceImage) {
         this.editor = worldEditor;

@@ -34,7 +34,7 @@ public class Settings {
         {"Creatures", "Bear(Cycle=3)", "Ruffian(Cycle=1)", "Slime(Cycle=3)", "Shark(Cycle=3)", "SpinningGun(Cycle=2)", "Lion(Cycle=2)", "Tiger(Cycle=2)", "Head(Cycle=2)", "Segment(Cycle=2)", "Roton(Cycle=1)", "DragonPup(Cycle=2)", "Pairer(Cycle=2)", "Spider(Cycle=1)"},
         {"Puzzle pieces", "Boulder", "SliderNS", "SliderEW", "Ricochet", "Pusher(Cycle=4)", "Duplicator(Cycle=2)", "Bomb(Cycle=6)", "BlinkWall()"},
         {"Transport", "Passage(Cycle=0)", "Transporter(Cycle=2)", "Clockwise(Cycle=3)", "Counter(Cycle=2)", "WaterN", "WaterS", "WaterE", "WaterW", "BoardEdge"},
-        {"Text", "BlackText!Black Text", "BlueText!Blue Text", "GreenText!Green Text", "CyanText!Cyan Text", "RedText!Red Text", "PurpleText!Purple Text", "BrownText!Brown Text", "BlackBText!Black Blinking Text", "BlueBText!Blue Blinking Text", "GreenBText!Green Blinking Text", "CyanBText!Cyan Blinking Text", "RedBText!Red Blinking Text", "PurpleBText!Purple Blinking Text", "BrownBText!Brown Blinking Text", "GreyBText!Grey Blinking Text", "GreyText!Grey Text"},
+        {"Text", "CustomText!Custom Text", "BlackText!Black Text", "BlueText!Blue Text", "GreenText!Green Text", "CyanText!Cyan Text", "RedText!Red Text", "PurpleText!Purple Text", "BrownText!Brown Text"},
         {"Miscellaneous", "Messenger()", "Monitor()", "HBlinkRay", "VBlinkRay"},
         {"Objects", "Object(Cycle=1,P1=1)", "Player(Cycle=1,StatId=0,IsPlayer=true)", "Player(Cycle=1)Player Clone", "Scroll()", "Star()", "Bullet()"}
     };
@@ -56,7 +56,7 @@ public class Settings {
         Util.addEscClose(dialog, dialog.getRootPane());
         dialog.setResizable(false);
         dialog.setIconImage(null);
-        dialog.setTitle("ZEdit2 Settings");
+        dialog.setTitle("ZLoom2 Settings");
         dialog.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
         //dialog.setResizable(false);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);

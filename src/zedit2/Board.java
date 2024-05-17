@@ -239,8 +239,10 @@ public abstract class Board {
                 warning.warn(1, "has over 128 stats, which may cause problems in Super ZZT.");
             }
         } else {
-            if (stats.size() - 1 > 150) {
-                warning.warn(1, "has over 150 stats, which may cause problems in ZZT.");
+            if (stats.size() > 254) {
+                warning.warn(1, "has over 254 stats, and Weave 3 can't handle that. Be careful!");
+            } else if (stats.size() - 1 > 150) {
+                warning.warn(1, "has over 150 stats- make sure to set 'other.maxstats = " + (stats.size() - 1) + "' (or higher) in your CFG.");
             }
         }
         Util.setInt16(worldData, offset, stats.size() - 1);

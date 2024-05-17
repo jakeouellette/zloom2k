@@ -249,4 +249,5 @@ public class SZZTType extends ZType {
     public static final int BROWNBTEXT = 86;
     public static final int GREYBTEXT = 87;
     public static final int GREYTEXT = 95;
+    public static final int CUSTOMTEXT = 128;
 }

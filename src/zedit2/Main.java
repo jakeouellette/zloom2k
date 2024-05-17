@@ -6,7 +6,7 @@ import java.io.IOException;
 import javax.swing.*;
 
 public class Main implements Runnable {
-    public static final String VERSION = "0.39";
+    public static final String VERSION = "0.39loom";
     private static String[] args;
     public static void main(String[] args) {
         //System.setProperty("sun.java2d.opengl", "True");
@@ -42,33 +42,7 @@ public class Main implements Runnable {
                 var defaultSzzt = ge.getBoolean("DEFAULT_SZZT", false);
                 editor = new WorldEditor(ge, defaultSzzt);
             }
-            //var editor = new WorldEditor(ge, "C:\\Users\\" + System.getProperty("user.name") + "\\Dropbox\\YHWH\\zzt\\zzt\\ForElise.zzt");
-            //var editor = new WorldEditor(ge, new File("C:\\Users\\" + System.getProperty("user.name") + "\\Dropbox\\YHWH\\zzt\\zzt\\superzzt\\FOREST.SZT"));
-            /*
-
-            var world = new ZZTWorld("TOWN.ZZT");
-            var board = world.getBoard(25);
-
-            JFrame frame = new JFrame("zedit2");
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-            //JLabel label = new JLabel("TOWN.ZZT board is titled " + board.getName());
-
-            var canvas = new DosCanvas();
-
-            board.drawToCanvas(canvas);
-
-            var scrollPane = new JScrollPane(canvas);
-            var controlPane = new JPanel();
-            controlPane.setPreferredSize(new Dimension(100, 1));
-            var splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controlPane, scrollPane);
-
-
-            frame.getContentPane().add(splitPane);
-            //frame.setPreferredSize(new Dimension(640, 350));
-            frame.pack();
-            frame.setVisible(true);
-            */
+            
         } catch (IOException | WorldCorruptedException e) {
             JOptionPane.showMessageDialog(null, e, "Error loading world", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
