@@ -805,7 +805,10 @@ public class Settings {
                 "Ctrl-6", "Store in buffer slot 6",
                 "Ctrl-7", "Store in buffer slot 7",
                 "Ctrl-8", "Store in buffer slot 8",
-                "Ctrl-9", "Store in buffer slot 9"};
+                "Ctrl-9", "Store in buffer slot 9",
+                "COMMA", "Move stat up in stats table",
+                "PERIOD", "Move stat down in stats table",
+        };
         var ge = editor.getGlobalEditor();
 
         HashMap<String, KeyStroke> keyMap = new HashMap<>();

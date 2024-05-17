@@ -60,7 +60,8 @@ case COL_UCO:
     private AbstractTableModel tableModel = null;
     private String[] options;
 
-    public StatSelector(WorldEditor editor, Board board, ActionListener listener, String[] options)
+    public StatSelector(WorldEditor editor, Board board, ActionListener listener, String[] options,
+                        KeyStroke upKeybind, KeyStroke downKeybind)
     {
         this.editor = editor;
         this.board = board;
@@ -247,6 +248,12 @@ case COL_UCO:
                     }
                     e.consume();
                 }
+                if(upKeybind!=null && Util.keyMatches(e,upKeybind)) {
+                    statSelector.selectRow(3);
+                }
+                if(downKeybind!=null && Util.keyMatches(e,downKeybind)) {
+                    statSelector.selectRow(4);
+                }
             }
         });
         table.addMouseListener(new MouseAdapter(){
@@ -341,5 +348,13 @@ case COL_UCO:
             int viewRow = table.convertRowIndexToView(selectedRow);
             table.addRowSelectionInterval(viewRow, viewRow);
         }
+    }
+
+    public void focusStat(int i) {
+        if(table.getRowCount()<1) { return; }
+        if(i<0) { i=0; }
+        if(i>=table.getRowCount()) { i= table.getRowCount()-1; }
+        table.clearSelection();;
+        table.addRowSelectionInterval(i,i);
     }
 }

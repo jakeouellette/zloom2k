@@ -387,6 +387,13 @@ public abstract class Board {
         return true;
     }
 
+    public void moveStatToEnd(int statIdx) {
+        Stat stat=stats.get(statIdx);
+        stats.remove(statIdx);
+        stats.add(stat);
+        finaliseStats();
+    }
+
     public void finaliseStats() {
         postProcessStats();
         needsFinalisation = false;
@@ -542,7 +549,6 @@ public abstract class Board {
             var code = stats.get(codeOwnerIdx).getCode();
             int newOwner = list.get(0);
             for (int i : list) {
-                System.out.printf("Rebinding %d to %d\n", i, newOwner);
                 stats.get(i).setCodeLength(-newOwner);
             }
             stats.get(newOwner).setCode(code);

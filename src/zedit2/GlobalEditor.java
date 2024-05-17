@@ -537,6 +537,8 @@ public class GlobalEditor {
         newConfigOption("K_Ctrl-7", "ctrl 7");
         newConfigOption("K_Ctrl-8", "ctrl 8");
         newConfigOption("K_Ctrl-9", "ctrl 9");
+        newConfigOption("K_COMMA", "COMMA");
+        newConfigOption("K_PERIOD", "PERIOD");
 
         newConfigOption("ZZT_GRAD_0", "CAAAAAEAAAAAEwEAFwEAFgEAFQEAExkAFxkAFhkAFQkA");
         newConfigOption("ZZT_GRAD_1", "CAAAAAEAAAAAEwIAFwIAFgIAFQIAEyoAFyoAFioAFQoA");

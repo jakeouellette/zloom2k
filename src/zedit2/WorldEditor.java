@@ -2966,24 +2966,93 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
         int boardX = cursorX / boardW * boardW;
         int boardY = cursorY / boardH * boardH;
         if (board == null) return;
+        String[] contextOptions=new String[] {
+                "Modify",
+                "Modify (advanced)",
+                "Move to 1",
+                "Move up",
+                "Move down",
+                "Move to end"
+        };
+        KeyStroke upStroke = Util.getKeyStroke(globalEditor,"COMMA");
+        if(upStroke!=null) {
+            String upString = Util.keyStrokeString(upStroke);
+            if(upString!=null && !upString.isEmpty()) {
+                contextOptions[3]=contextOptions[3]+" ("+upString+")";
+            } else { upStroke = null; }
+        }
+        KeyStroke downStroke = Util.getKeyStroke(globalEditor,"PERIOD");
+        if(downStroke!=null) {
+            String downString = Util.keyStrokeString(downStroke);
+            if(downString!=null && !downString.isEmpty()) {
+                contextOptions[4]=contextOptions[4]+" ("+downString+")";
+            } else { downStroke=null; }
+        }
+
         new StatSelector(this, board, e -> {
             int val = StatSelector.getStatIdx(e.getActionCommand());
             int option = StatSelector.getOption(e.getActionCommand());
             var stat = board.getStat(val);
-            int x = stat.getX() - 1;
-            int y = stat.getY() - 1;
 
-            openTileEditor(board.getStatsAt(x, y), board, x, y, resultTile -> {
-                setStats(board, boardX, boardY, x, y, resultTile.getStats());
-                if (resultTile.getId() != -1) {
-                    addRedraw(x + boardX, y + boardY, x + boardX, y + boardY);
-                    board.setTileRaw(x, y, resultTile.getId(), resultTile.getCol());
-                }
-                ((StatSelector)(e.getSource())).dataChanged();
-                afterModification();
-            }, option == 1, val);
-        }, new String[]{"Modify", "Modify (advanced)"});
+            switch(option) {
+                case 0: case 1:
+                    int x = stat.getX() - 1;
+                    int y = stat.getY() - 1;
+
+                    openTileEditor(board.getStatsAt(x, y), board, x, y, resultTile -> {
+                        setStats(board, boardX, boardY, x, y, resultTile.getStats());
+                        if (resultTile.getId() != -1) {
+                            addRedraw(x + boardX, y + boardY, x + boardX, y + boardY);
+                            board.setTileRaw(x, y, resultTile.getId(), resultTile.getCol());
+                        }
+                        ((StatSelector) (e.getSource())).dataChanged();
+                        afterModification();
+                    }, option == 1, val);
+                    break;
+                case 2: case 3: case 4: case 5:
+                    int destination;
+                    switch(option) {
+                        case 2: destination=1; break;
+                        case 3: destination=val-1; break;
+                        case 4: destination=val+1; break;
+                        default: destination=board.getStatCount()-1;
+                    }
+                    if(moveStatTo(board,val,destination)) {
+                        ((StatSelector) (e.getSource())).dataChanged();
+                        ((StatSelector) (e.getSource())).focusStat(destination);
+                        afterModification();
+                    }
+                    break;
+            }
+        }, contextOptions, upStroke, downStroke);
     }
+
+    private boolean moveStatTo(Board board, int src, int destination) {
+        // Yes, this is doing more steps than it theoretically has to!
+        // I don't understand the logic of Board#finaliseStats enough to confidently
+        // feed it an elaborate move that performs multiple reorderings.
+        if(src<1) { return false; }
+        if(destination<1) { destination=1; }
+        int length=board.getStatCount();
+        if(destination>=length) { destination=length-1; }
+        if(destination==src) { return false; }
+        if(src<destination) {
+            for(int i=src;i<destination;++i) {
+                board.moveStatToEnd(src+1);
+            }
+            for(int i=destination;i<length;++i) {
+                board.moveStatToEnd(src);
+            }
+        }
+        else if(src>destination) {
+            board.moveStatToEnd(src);
+            for(int i=destination+1;i<length;++i) {
+                board.moveStatToEnd(destination);
+            }
+        }
+        return true;
+    }
+
 
     private void openTileEditor(Tile tile, Board board, int x, int y, TileEditorCallback callback, boolean advanced)
     {

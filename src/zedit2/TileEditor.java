@@ -797,7 +797,7 @@ public class TileEditor {
                             stat.setCodeLength(-val);
                         }
                         upd();
-                    }, new String[]{"Select"});
+                    }, new String[]{"Select"},null,null);
                 }
             });
         } else {
@@ -926,7 +926,7 @@ public class TileEditor {
                     ((StatSelector)(e1.getSource())).close();
                     int val = StatSelector.getStatIdx(e1.getActionCommand());
                     spinner.setValue(val);
-                }, new String[]{"Select"});
+                }, new String[]{"Select"},null,null);
             });
             spinPanelSearch.setToolTipText(String.format("Find a %s", tooltip));
             spinPanelSel.add(spinPanelSearch, BorderLayout.WEST);
