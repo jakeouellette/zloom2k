@@ -1,46 +1,52 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import javax.swing.event.ChangeListener;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.ListSelectionListener;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
-import java.util.HashSet;
-import java.util.List;
+import zedit2.CP437.font
+import zedit2.CP437.toUnicode
+import zedit2.ColourSelector.Companion.createColourSelector
+import zedit2.StatSelector.Companion.getStatIdx
+import java.awt.*
+import java.awt.event.ActionEvent
+import java.awt.event.ActionListener
+import java.awt.event.KeyEvent
+import java.awt.event.KeyListener
+import javax.swing.*
+import javax.swing.event.ChangeEvent
+import javax.swing.event.ChangeListener
+import javax.swing.event.ListSelectionListener
 
-import static zedit2.Util.keyMatches;
-
-public class TileEditor {
-    private final boolean editExempt;
-    private int selected;
-    private WorldEditor editor;
-    private Tile tile, originalTile;
-    private boolean szzt;
-    private String[] everyType;
-    private TileEditorCallback callback;
-    private JDialog tileEditorFrame = null;
-    private static int internalTagTracker = 0;
-    private JList<String> statList = null;
-    private int tileX, tileY;
-    private Board board;
-    private boolean advanced;
-    private Stat currentStat;
-    private JPanel otherEditorPanel;
-    private JPanel otherEditorPanelActive;
-
-    private static final int PARAM_P1 = 1;
-    private static final int PARAM_P2 = 2;
-    private static final int PARAM_P3 = 3;
+class TileEditor(
+    editor: WorldEditor,
+    board: Board,
+    inputTile: Tile?,
+    stats: List<Stat>?,
+    callback: TileEditorCallback,
+    x: Int,
+    y: Int,
+    advanced: Boolean,
+    selected: Int,
+    editExempt: Boolean
+) {
+    private val editExempt: Boolean
+    private val selected: Int
+    private val editor: WorldEditor
+    private lateinit var tile: Tile
+    private val originalTile: Tile
+    private val szzt: Boolean
+    private lateinit var everyType: Array<String?>
+    private val callback: TileEditorCallback
+    private var tileEditorFrame: JDialog? = null
+    private var statList: JList<String?>? = null
+    private val tileX: Int
+    private val tileY: Int
+    private val board: Board
+    private var currentStat: Stat? = null
+    private var otherEditorPanel: JPanel? = null
+    private var otherEditorPanelActive: JPanel? = null
 
     // Edit: ID, Colour
     // +-------+
     // | Stats | X, Y, StepX, StepY, Cycle, P1, P2, P3, Follower, Leader, Uid, Uco, CurrentInstruction, Code / Bind, Order
     // +-------+
-
     // Type: [        ] Col: [ ]
     // ------------------------------------
     //  Stat  | X      | P1     | Uid    |
@@ -48,672 +54,691 @@ public class TileEditor {
     // -------| StepX  | P3     | IP     |
     //  New   | StepY  | Follower| Code   |
     //          Cycle    Leader    Order
-
-    public TileEditor(WorldEditor editor, Board board, Tile inputTile, List<Stat> stats, TileEditorCallback callback, int x, int y, boolean advanced, int selected, boolean editExempt) {
-        internalTagTracker++;
-        this.callback = callback;
-        this.editor = editor;
-        this.board = board;
-        this.advanced = advanced;
-        this.selected = selected;
-        this.editExempt = editExempt;
-        tileX = x;
-        tileY = y;
+    init {
+        internalTagTracker++
+        this.callback = callback
+        this.editor = editor
+        this.board = board
+        this.selected = selected
+        this.editExempt = editExempt
+        tileX = x
+        tileY = y
         if (inputTile == null) {
             if (stats != null) {
-                if (x >= 0 && y >= 0 && x < board.getWidth() && y < board.getHeight()) {
-                    tile = board.getTile(x, y, false);
+                if (x >= 0 && y >= 0 && x < board.width && y < board.height) {
+                    tile = board.getTile(x, y, false)
                 } else {
-                    tile = new Tile(-1, -1, stats);
+                    tile = Tile(-1, -1, stats)
                 }
             } else {
-                throw new RuntimeException("Must pass in stats or a tile");
+                throw RuntimeException("Must pass in stats or a tile")
             }
         } else {
-            tile = inputTile.clone();
+            tile = inputTile.clone()
         }
-        originalTile = tile.clone();
-        szzt = editor.getWorldData().isSuperZZT();
+        originalTile = tile!!.clone()
+        szzt = editor.worldData.isSuperZZT
         if (advanced) {
-            createAdvancedGUI();
+            createAdvancedGUI()
         } else {
-            editorSelect();
+            editorSelect()
         }
     }
-    private void editorSelect()
-    {
+
+    private fun editorSelect() {
         // Certain things are not editable except with the advanced editor.
         // These will result in the dialog not popping up
-        var stats = tile.getStats();
+        val stats = tile.stats
         // First of all, multiple stats means you get the advanced editor, always
-        if (stats.size() > 1) {
-            createAdvancedGUI();
-            return;
+        if (stats!!.size > 1) {
+            createAdvancedGUI()
+            return
         }
         // On the other hand, no stats means no editor, except for text, which gets a char picker
-        if (stats.size() == 0) {
-            if (ZType.isText(szzt, tile.getId())) {
-                editorText();
-                return;
+        if (stats.isEmpty()) {
+            if (ZType.isText(szzt, tile.id)) {
+                editorText()
+                return
             }
         }
 
-        if (stats.size() == 1) {
-            currentStat = stats.get(0);
+        if (stats.size == 1) {
+            currentStat = stats[0]
 
-            // The type of editor we will present will depend on the id + stats of the thing being edited
-            switch (tile.getId()) {
-                case ZType.OBJECT:
-                    editorObject();
-                    return;
-                case ZType.SCROLL:
-                    editorScroll();
-                    return;
-                default:
-                    break;
+            when (tile.id) {
+                ZType.OBJECT -> {
+                    editorObject()
+                    return
+                }
+
+                ZType.SCROLL -> {
+                    editorScroll()
+                    return
+                }
+
+                else -> {}
             }
-
             // May be some other type
             if (editorOther()) {
-                return;
+                return
             }
         }
 
         // Nothing happened. Call the callback
-        callback.callback(tile);
+        callback.callback(tile)
     }
 
-    private boolean constructOtherDialog() {
-        otherEditorPanel = new JPanel(new BorderLayout());
-        otherEditorPanelActive = otherEditorPanel;
+    private fun constructOtherDialog(): Boolean {
+        otherEditorPanel = JPanel(BorderLayout())
+        otherEditorPanelActive = otherEditorPanel
 
-        var tileId = tile.getId();
-        boolean szzt = editor.getWorldData().isSuperZZT();
-        switch (tileId) {
-            case ZType.PASSAGE:
-                editorAddBoardSelect(PARAM_P3);
-                return true;
-            case ZType.DUPLICATOR:
-                editorAddBar("Start time", 1, 6, PARAM_P1);
-                editorAddDirection("Duplicate in direction");
-                editorAddBar("Speed", 1, 9, PARAM_P2);
-                return true;
-            case ZType.BOMB:
-                editorAddBar("Countdown (1=unlit 2=cleanup)", 1, 9, PARAM_P1);
-                return true;
-            case ZType.BLINKWALL:
-                editorAddBar("Start time", 1, 9, PARAM_P1);
-                editorAddDirection("Direction");
-                editorAddBar("Period", 1, 9, PARAM_P2);
-                return true;
-            case ZType.TRANSPORTER:
-                editorAddDirection("Direction");
-                return true;
-            case ZType.BEAR:
-                editorAddBar("Sensitivity", 1, 9, PARAM_P1);
-                return true;
-            case ZType.RUFFIAN:
-                editorAddBar("Intelligence", 1, 9, PARAM_P1);
-                editorAddBar("Resting time", 1, 9, PARAM_P2);
-                return true;
-            case ZType.SLIME:
-                editorAddBar("Speed", 1, 9, PARAM_P2);
-                return true;
-            case ZType.TIGER:
-            case ZType.SPINNINGGUN:
-                editorAddBar("Intelligence", 1, 9, PARAM_P1);
-                editorAddBar("Firing rate", 1, 9, PARAM_P2, 127);
-                editorAddRadio("Fires bullets", "Fires stars", PARAM_P2, 128);
-                return true;
-            case ZType.PUSHER:
-                editorAddDirection("Direction");
-                return true;
-            case ZType.LION:
-                editorAddBar("Intelligence", 1, 9, PARAM_P1);
-                return true;
-            case ZType.HEAD:
-                editorAddBar("Intelligence", 1, 9, PARAM_P1);
-                editorAddBar("Deviance", 1, 9, PARAM_P2);
-                return true;
-            default:
-                break;
+        val tileId = tile!!.id
+        val szzt = editor.worldData.isSuperZZT
+        when (tileId) {
+            ZType.PASSAGE -> {
+                editorAddBoardSelect(PARAM_P3)
+                return true
+            }
+
+            ZType.DUPLICATOR -> {
+                editorAddBar("Start time", 1, 6, PARAM_P1)
+                editorAddDirection("Duplicate in direction")
+                editorAddBar("Speed", 1, 9, PARAM_P2)
+                return true
+            }
+
+            ZType.BOMB -> {
+                editorAddBar("Countdown (1=unlit 2=cleanup)", 1, 9, PARAM_P1)
+                return true
+            }
+
+            ZType.BLINKWALL -> {
+                editorAddBar("Start time", 1, 9, PARAM_P1)
+                editorAddDirection("Direction")
+                editorAddBar("Period", 1, 9, PARAM_P2)
+                return true
+            }
+
+            ZType.TRANSPORTER, ZType.PUSHER -> {
+                editorAddDirection("Direction")
+                return true
+            }
+
+            ZType.BEAR -> {
+                editorAddBar("Sensitivity", 1, 9, PARAM_P1)
+                return true
+            }
+
+            ZType.RUFFIAN -> {
+                editorAddBar("Intelligence", 1, 9, PARAM_P1)
+                editorAddBar("Resting time", 1, 9, PARAM_P2)
+                return true
+            }
+
+            ZType.SLIME -> {
+                editorAddBar("Speed", 1, 9, PARAM_P2)
+                return true
+            }
+
+            ZType.TIGER, ZType.SPINNINGGUN -> {
+                editorAddBar("Intelligence", 1, 9, PARAM_P1)
+                editorAddBar("Firing rate", 1, 9, PARAM_P2, 127)
+                editorAddRadio("Fires bullets", "Fires stars", PARAM_P2, 128)
+                return true
+            }
+
+            ZType.LION -> {
+                editorAddBar("Intelligence", 1, 9, PARAM_P1)
+                return true
+            }
+
+            ZType.HEAD -> {
+                editorAddBar("Intelligence", 1, 9, PARAM_P1)
+                editorAddBar("Deviance", 1, 9, PARAM_P2)
+                return true
+            }
+
+            else -> {}
         }
-
         if ((!szzt && tileId == ZZTType.BULLET) || (szzt && tileId == SZZTType.BULLET)) {
-            editorAddDirection("Direction");
-            editorAddRadio("Player bullet", "Enemy bullet", PARAM_P1, 1);
-            return true;
+            editorAddDirection("Direction")
+            editorAddRadio("Player bullet", "Enemy bullet", PARAM_P1, 1)
+            return true
         }
         if ((!szzt && tileId == ZZTType.STAR) || (szzt && tileId == SZZTType.STAR)) {
-            editorAddDirection("Direction");
-            editorAddRadio("Player star", "Enemy star", PARAM_P1, 1);
-            editorAddSpinner("Lifespan", 0, 255, PARAM_P2);
-            return true;
+            editorAddDirection("Direction")
+            editorAddRadio("Player star", "Enemy star", PARAM_P1, 1)
+            editorAddSpinner("Lifespan", 0, 255, PARAM_P2)
+            return true
         }
         if (!szzt && tileId == ZZTType.SHARK) {
-            editorAddBar("Intelligence", 1, 9, PARAM_P1);
-            return true;
+            editorAddBar("Intelligence", 1, 9, PARAM_P1)
+            return true
         }
         if (szzt && tileId == SZZTType.ROTON) {
-            editorAddBar("Intelligence", 1, 9, PARAM_P1);
-            editorAddBar("Switch rate", 1, 9, PARAM_P2);
-            return true;
+            editorAddBar("Intelligence", 1, 9, PARAM_P1)
+            editorAddBar("Switch rate", 1, 9, PARAM_P2)
+            return true
         }
         if (szzt && tileId == SZZTType.DRAGONPUP) {
-            editorAddBar("Intelligence", 1, 9, PARAM_P1);
-            editorAddBar("Switch rate", 1, 9, PARAM_P2);
-            return true;
+            editorAddBar("Intelligence", 1, 9, PARAM_P1)
+            editorAddBar("Switch rate", 1, 9, PARAM_P2)
+            return true
         }
         if (szzt && tileId == SZZTType.PAIRER) {
-            editorAddBar("Intelligence", 1, 9, PARAM_P1);
-            return true;
+            editorAddBar("Intelligence", 1, 9, PARAM_P1)
+            return true
         }
         if (szzt && tileId == SZZTType.SPIDER) {
-            editorAddBar("Intelligence", 1, 9, PARAM_P1);
-            return true;
+            editorAddBar("Intelligence", 1, 9, PARAM_P1)
+            return true
         }
 
-        return false;
+        return false
     }
 
-    private int getParam(int param) {
-        switch (param) {
-            case PARAM_P1: return currentStat.getP1();
-            case PARAM_P2: return currentStat.getP2();
-            case PARAM_P3: return currentStat.getP3();
-            default: throw new UnsupportedOperationException();
-        }
-    }
-
-    private void setParam(int param, int value) {
-        switch (param) {
-            case PARAM_P1:
-                currentStat.setP1(value);
-                break;
-            case PARAM_P2:
-                currentStat.setP2(value);
-                break;
-            case PARAM_P3:
-                currentStat.setP3(value);
-                break;
-            default: throw new UnsupportedOperationException();
+    private fun getParam(param: Int): Int {
+        return when (param) {
+            PARAM_P1 -> currentStat!!.p1
+            PARAM_P2 -> currentStat!!.p2
+            PARAM_P3 -> currentStat!!.p3
+            else -> throw UnsupportedOperationException()
         }
     }
 
-    private void appendToActivePanel(JComponent component) {
-        otherEditorPanelActive.add(component, BorderLayout.NORTH);
-        var newActivePanel = new JPanel(new BorderLayout());
-        otherEditorPanelActive.add(newActivePanel, BorderLayout.CENTER);
-        otherEditorPanelActive = newActivePanel;
-    }
-
-    private void editorAddSpinner(String label, int min, int max, int param) {
-        var panel = new JPanel(new BorderLayout());
-        panel.add(new JLabel(label), BorderLayout.WEST);
-        int initialValue = getParam(param);
-        var spinner = new JSpinner(new SpinnerNumberModel(initialValue, min, max, 1));
-        spinner.addChangeListener(e -> setParam(param, (Integer) spinner.getValue()));
-        panel.add(spinner, BorderLayout.EAST);
-
-        appendToActivePanel(panel);
-    }
-
-    private void editorAddRadio(String option1, String option2, int param, int value) {
-        boolean initialState = (getParam(param) & value) == value;
-        var panel = new JPanel(new BorderLayout());
-        var cb1 = new JRadioButton(option1, !initialState);
-        var cb2 = new JRadioButton(option2, initialState);
-        ChangeListener listener = e -> {
-            int v = getParam(param) & (~value) | (cb2.isSelected() ? value : 0);
-            setParam(param, v);
-        };
-        cb1.addChangeListener(listener);
-        cb2.addChangeListener(listener);
-        var bg = new ButtonGroup();
-        bg.add(cb1);
-        bg.add(cb2);
-
-        panel.add(cb1, BorderLayout.NORTH);
-        panel.add(cb2, BorderLayout.SOUTH);
-
-        appendToActivePanel(panel);
-    }
-
-    private void editorAddDirection(String label) {
-        var panel = new JPanel(new GridLayout(4, 1));
-        panel.setBorder(BorderFactory.createTitledBorder(label));
-        var cbN = new JRadioButton("North", (currentStat.getStepX() == 0) && (currentStat.getStepY() == -1));
-        var cbS = new JRadioButton("South", (currentStat.getStepX() == 0) && (currentStat.getStepY() == 1));
-        var cbE = new JRadioButton("East", (currentStat.getStepX() == 1) && (currentStat.getStepY() == 0));
-        var cbW = new JRadioButton("West", (currentStat.getStepX() == -1) && (currentStat.getStepY() == 0));
-        ChangeListener listener = e -> {
-            if (cbN.isSelected()) { currentStat.setStepX(0); currentStat.setStepY(-1); }
-            else if (cbS.isSelected()) { currentStat.setStepX(0); currentStat.setStepY(1); }
-            else if (cbE.isSelected()) { currentStat.setStepX(1); currentStat.setStepY(0); }
-            else if (cbW.isSelected()) { currentStat.setStepX(-1); currentStat.setStepY(0); }
-        };
-        cbN.addChangeListener(listener);
-        cbS.addChangeListener(listener);
-        cbE.addChangeListener(listener);
-        cbW.addChangeListener(listener);
-        var bg = new ButtonGroup();
-        bg.add(cbN);
-        bg.add(cbS);
-        bg.add(cbE);
-        bg.add(cbW);
-        panel.add(cbN);
-        panel.add(cbS);
-        panel.add(cbE);
-        panel.add(cbW);
-
-        appendToActivePanel(panel);
-    }
-
-    private void editorAddBar(String label, int min, int max, int param) {
-        editorAddBar(label, min, max, param, Integer.MAX_VALUE);
-    }
-    private void editorAddBar(String label, int min, int max, int param, int mask) {
-        var panel = new JPanel(new BorderLayout());
-        panel.add(new JLabel(label), BorderLayout.NORTH);
-        int initialValue = getParam(param) & mask;
-        var slider = new JSlider(JSlider.HORIZONTAL, min, max, Util.clamp(initialValue + 1, min, max));
-        slider.setMajorTickSpacing(1);
-        slider.setPaintLabels(true);
-        slider.addChangeListener(e -> {
-            int v = slider.getValue() - 1;
-            v = (getParam(param) & ~mask) | (v & mask);
-            setParam(param, v);
-        });
-        panel.add(slider, BorderLayout.SOUTH);
-
-        appendToActivePanel(panel);
-    }
-
-    private void editorAddBoardSelect(int param) {
-        int destination = getParam(param);
-        var boards = editor.getBoards();
-        var boardNames = new String[boards.size()];
-        for (int i = 0; i < boardNames.length; i++) {
-            boardNames[i] = CP437.toUnicode(boards.get(i).getName());
+    private fun setParam(param: Int, value: Int) {
+        when (param) {
+            PARAM_P1 -> currentStat!!.p1 = value
+            PARAM_P2 -> currentStat!!.p2 = value
+            PARAM_P3 -> currentStat!!.p3 = value
+            else -> throw UnsupportedOperationException()
         }
-        var boardSelect = new JComboBox<String>(boardNames);
-        if (destination < boards.size()) {
-            boardSelect.setSelectedIndex(destination);
+    }
+
+    private fun appendToActivePanel(component: JComponent) {
+        otherEditorPanelActive!!.add(component, BorderLayout.NORTH)
+        val newActivePanel = JPanel(BorderLayout())
+        otherEditorPanelActive!!.add(newActivePanel, BorderLayout.CENTER)
+        otherEditorPanelActive = newActivePanel
+    }
+
+    private fun editorAddSpinner(label: String, min: Int, max: Int, param: Int) {
+        val panel = JPanel(BorderLayout())
+        panel.add(JLabel(label), BorderLayout.WEST)
+        val initialValue = getParam(param)
+        val spinner = JSpinner(SpinnerNumberModel(initialValue, min, max, 1))
+        spinner.addChangeListener { e: ChangeEvent? -> setParam(param, spinner.value as Int) }
+        panel.add(spinner, BorderLayout.EAST)
+
+        appendToActivePanel(panel)
+    }
+
+    private fun editorAddRadio(option1: String, option2: String, param: Int, value: Int) {
+        val initialState = (getParam(param) and value) == value
+        val panel = JPanel(BorderLayout())
+        val cb1 = JRadioButton(option1, !initialState)
+        val cb2 = JRadioButton(option2, initialState)
+        val listener = ChangeListener { e: ChangeEvent? ->
+            val v = getParam(param) and (value.inv()) or (if (cb2.isSelected) value else 0)
+            setParam(param, v)
+        }
+        cb1.addChangeListener(listener)
+        cb2.addChangeListener(listener)
+        val bg = ButtonGroup()
+        bg.add(cb1)
+        bg.add(cb2)
+
+        panel.add(cb1, BorderLayout.NORTH)
+        panel.add(cb2, BorderLayout.SOUTH)
+
+        appendToActivePanel(panel)
+    }
+
+    private fun editorAddDirection(label: String) {
+        val panel = JPanel(GridLayout(4, 1))
+        panel.border = BorderFactory.createTitledBorder(label)
+        val cbN = JRadioButton("North", (currentStat!!.stepX == 0) && (currentStat!!.stepY == -1))
+        val cbS = JRadioButton("South", (currentStat!!.stepX == 0) && (currentStat!!.stepY == 1))
+        val cbE = JRadioButton("East", (currentStat!!.stepX == 1) && (currentStat!!.stepY == 0))
+        val cbW = JRadioButton("West", (currentStat!!.stepX == -1) && (currentStat!!.stepY == 0))
+        val listener = ChangeListener { e: ChangeEvent? ->
+            if (cbN.isSelected) {
+                currentStat!!.stepX = 0
+                currentStat!!.stepY = -1
+            } else if (cbS.isSelected) {
+                currentStat!!.stepX = 0
+                currentStat!!.stepY = 1
+            } else if (cbE.isSelected) {
+                currentStat!!.stepX = 1
+                currentStat!!.stepY = 0
+            } else if (cbW.isSelected) {
+                currentStat!!.stepX = -1
+                currentStat!!.stepY = 0
+            }
+        }
+        cbN.addChangeListener(listener)
+        cbS.addChangeListener(listener)
+        cbE.addChangeListener(listener)
+        cbW.addChangeListener(listener)
+        val bg = ButtonGroup()
+        bg.add(cbN)
+        bg.add(cbS)
+        bg.add(cbE)
+        bg.add(cbW)
+        panel.add(cbN)
+        panel.add(cbS)
+        panel.add(cbE)
+        panel.add(cbW)
+
+        appendToActivePanel(panel)
+    }
+
+    private fun editorAddBar(label: String, min: Int, max: Int, param: Int, mask: Int = Int.MAX_VALUE) {
+        val panel = JPanel(BorderLayout())
+        panel.add(JLabel(label), BorderLayout.NORTH)
+        val initialValue = getParam(param) and mask
+        val slider = JSlider(JSlider.HORIZONTAL, min, max, Util.clamp(initialValue + 1, min, max))
+        slider.majorTickSpacing = 1
+        slider.paintLabels = true
+        slider.addChangeListener { e: ChangeEvent? ->
+            var v = slider.value - 1
+            v = (getParam(param) and mask.inv()) or (v and mask)
+            setParam(param, v)
+        }
+        panel.add(slider, BorderLayout.SOUTH)
+
+        appendToActivePanel(panel)
+    }
+
+    private fun editorAddBoardSelect(param: Int) {
+        val destination = getParam(param)
+        val boards = editor.boards
+        val boardNames = arrayOfNulls<String>(boards.size)
+        for (i in boardNames.indices) {
+            boardNames[i] = toUnicode(boards[i].getName())
+        }
+        val boardSelect = JComboBox(boardNames)
+        if (destination < boards.size) {
+            boardSelect.setSelectedIndex(destination)
         } else {
-            boardSelect.setEditable(true);
-            boardSelect.getEditor().setItem(String.format("(invalid reference: %d)", destination));
+            boardSelect.isEditable = true
+            boardSelect.editor.item = String.format("(invalid reference: %d)", destination)
         }
-        boardSelect.setFont(CP437.getFont());
-        boardSelect.addActionListener(e -> {
-            int newDestination = boardSelect.getSelectedIndex();
+        boardSelect.font = font
+        boardSelect.addActionListener { e: ActionEvent? ->
+            var newDestination = boardSelect.selectedIndex
             if (newDestination != -1) {
-                setParam(param, newDestination);
+                setParam(param, newDestination)
             } else {
                 try {
-                    newDestination = Integer.parseInt((String) boardSelect.getEditor().getItem());
+                    newDestination = (boardSelect.editor.item as String).toInt()
                     if (newDestination >= 0 && newDestination <= 255) {
-                        setParam(param, newDestination);
+                        setParam(param, newDestination)
                     }
-                } catch (NumberFormatException ignored) {}
+                } catch (ignored: NumberFormatException) {
+                }
             }
-        });
+        }
 
-        appendToActivePanel(boardSelect);
+        appendToActivePanel(boardSelect)
     }
 
-    private Component relativeFrame() {
-        if (tileEditorFrame != null) return tileEditorFrame;
-        return editor.getFrameForRelativePositioning();
+    private fun relativeFrame(): Component {
+        val frame = tileEditorFrame
+        if (frame != null) return frame
+        return editor.frameForRelativePositioning
     }
 
-    private void editorText() {
-        ColourSelector.createColourSelector(editor, tile.getCol(), relativeFrame(), e -> {
-            tile.setCol(Integer.parseInt(e.getActionCommand()));
-            callback.callback(tile);
-        }, ColourSelector.CHAR);
+    private fun editorText() {
+        createColourSelector(editor, tile!!.col, relativeFrame(), { e: ActionEvent ->
+            tile.col = e.actionCommand.toInt()
+            callback.callback(tile)
+        }, ColourSelector.CHAR)
     }
-    private void editorObject() {
+
+    private fun editorObject() {
         // Objects get char selector (for P1) followed by code editor
-        ColourSelector.createColourSelector(editor, currentStat.getP1(), relativeFrame(), e -> {
-            currentStat.setP1(Integer.parseInt(e.getActionCommand()));
+        createColourSelector(editor, currentStat!!.p1, relativeFrame(), { e: ActionEvent ->
+            currentStat!!.p1 = e.actionCommand.toInt()
             // If this is a buffer object, don't open the code editor
             if (tileX == -1 && tileY == -1 && !editExempt) {
-                callback.callback(tile);
-                return;
+                callback.callback(tile)
+                return@createColourSelector
             }
-            codeEditor(currentStat, e1 -> {
-                if (e1.getActionCommand().equals("update")) {
-                    var source = (CodeEditor) e1.getSource();
-                    currentStat.setCode(source.getCode());
+            codeEditor(currentStat) { e1: ActionEvent ->
+                if (e1.actionCommand == "update") {
+                    val source = e1.source as CodeEditor
+                    currentStat!!.code = source.code
                 }
-                callback.callback(tile);
-            });
-        }, ColourSelector.CHAR);
+                callback.callback(tile)
+            }
+        }, ColourSelector.CHAR)
     }
-    private void editorScroll() {
+
+    private fun editorScroll() {
         // If this is a buffer object, don't open the editor
-        if (tileX == -1 && tileY == -1 && !editExempt) return;
-        codeEditor(currentStat, e -> {
-            var source = (CodeEditor) e.getSource();
-
-            currentStat.setCode(source.getCode());
-            callback.callback(tile);
-        });
-    }
-
-    private boolean editorOther() {
-        if (constructOtherDialog()) {
-            createGUI();
-            setTitle();
-
-            var buttonHolder = new JPanel(new FlowLayout());
-            var buttons = new JPanel(new BorderLayout());
-            otherEditorPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
-            buttons.setBorder(BorderFactory.createEmptyBorder(4, 8, 8, 8));
-            tileEditorFrame.getContentPane().setLayout(new BorderLayout());
-            tileEditorFrame.getContentPane().add(otherEditorPanel, BorderLayout.CENTER);
-            tileEditorFrame.getContentPane().add(buttonHolder, BorderLayout.SOUTH);
-            buttonHolder.add(buttons);
-
-            buttons.add(okButton(), BorderLayout.WEST);
-            buttons.add(cancelButton(), BorderLayout.EAST);
-
-            finaliseGUI();
-            return true;
-        } else {
-            return false;
+        if (tileX == -1 && tileY == -1 && !editExempt) return
+        codeEditor(currentStat) { e: ActionEvent ->
+            val source = e.source as CodeEditor
+            currentStat!!.code = source.code
+            callback.callback(tile)
         }
     }
-    private boolean isModified() {
-        return !tile.equals(originalTile);
+
+    private fun editorOther(): Boolean {
+        if (constructOtherDialog()) {
+            createGUI()
+            setTitle()
+
+            val buttonHolder = JPanel(FlowLayout())
+            val buttons = JPanel(BorderLayout())
+            otherEditorPanel!!.border = BorderFactory.createEmptyBorder(8, 8, 4, 8)
+            buttons.border = BorderFactory.createEmptyBorder(4, 8, 8, 8)
+            tileEditorFrame!!.contentPane.layout = BorderLayout()
+            tileEditorFrame!!.contentPane.add(otherEditorPanel, BorderLayout.CENTER)
+            tileEditorFrame!!.contentPane.add(buttonHolder, BorderLayout.SOUTH)
+            buttonHolder.add(buttons)
+
+            buttons.add(okButton(), BorderLayout.WEST)
+            buttons.add(cancelButton(), BorderLayout.EAST)
+
+            finaliseGUI()
+            return true
+        } else {
+            return false
+        }
     }
 
-    private void createGUI() {
-        tileEditorFrame = new JDialog();
-        Util.addPromptedEscClose(tileEditorFrame, tileEditorFrame.getRootPane(), () -> {
-            if (isModified()) {
-                int confirm = JOptionPane.showOptionDialog(relativeFrame(), "Are you sure you want to discard changes to this stat?", "Are you sure?", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null, null, null);
-                return confirm != JOptionPane.NO_OPTION;
+    private val isModified: Boolean
+        get() = !tile!!.equals(originalTile)
+
+    private fun createGUI() {
+        val frame : JDialog = JDialog()
+        tileEditorFrame = frame
+        Util.addPromptedEscClose(frame, frame.rootPane) {
+            if (isModified) {
+                val confirm = JOptionPane.showOptionDialog(
+                    relativeFrame(),
+                    "Are you sure you want to discard changes to this stat?",
+                    "Are you sure?",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE,
+                    null,
+                    null,
+                    null
+                )
+                return@addPromptedEscClose confirm != JOptionPane.NO_OPTION
             }
-            return true;
-        });
-        tileEditorFrame.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
-        tileEditorFrame.setResizable(false);
-        tileEditorFrame.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+            true
+        }
+        tileEditorFrame!!.modalityType = Dialog.ModalityType.APPLICATION_MODAL
+        tileEditorFrame!!.isResizable = false
+        tileEditorFrame!!.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
     }
 
-    private void createAdvancedGUI() {
-        everyType = getEveryType();
-        createGUI();
-        upd();
+    private fun createAdvancedGUI() {
+        everyType = getEveryType()
+        createGUI()
+        upd()
     }
 
-    private void setTitle() {
-        tileEditorFrame.setTitle("Set " + ZType.getName(szzt, tile.getId()));
-        tileEditorFrame.setIconImage(getIcon());
+    private fun setTitle() {
+        tileEditorFrame!!.title = "Set " + ZType.getName(szzt, tile!!.id)
+        tileEditorFrame!!.setIconImage(icon)
     }
 
-    private KeyListener setKeystrokes(JList statList) {
-        KeyStroke k_PgUp = Util.getKeyStroke(editor.getGlobalEditor(), "PgUp");
-        KeyStroke k_PgDn = Util.getKeyStroke(editor.getGlobalEditor(), "PgDn");
+    private fun setKeystrokes(statList: JList<String?>): KeyListener {
+        val k_PgUp = Util.getKeyStroke(editor.globalEditor, "PgUp")
+        val k_PgDn = Util.getKeyStroke(editor.globalEditor, "PgDn")
 
-        return new KeyListener() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (keyMatches(e, k_PgUp)) {
-                    statList.setSelectedIndex(statList.getSelectedIndex() - 1);
-                    e.consume();
-                } else if (keyMatches(e, k_PgDn)) {
-                    statList.setSelectedIndex(statList.getSelectedIndex() + 1);
-                    e.consume();
+        return object : KeyListener {
+            override fun keyPressed(e: KeyEvent) {
+                if (Util.keyMatches(e, k_PgUp)) {
+                    statList.setSelectedIndex(statList.selectedIndex - 1)
+                    e.consume()
+                } else if (Util.keyMatches(e, k_PgDn)) {
+                    statList.selectedIndex = statList.selectedIndex + 1
+                    e.consume()
                 }
             }
 
-            @Override
-            public void keyTyped(KeyEvent e) { }
-            @Override
-            public void keyReleased(KeyEvent e) { }
-        };
+            override fun keyTyped(e: KeyEvent) {}
+            override fun keyReleased(e: KeyEvent) {}
+        }
     }
 
-    private void upd() {
-        String focusedElement = "";
+    private fun upd() {
+        var focusedElement = ""
         try {
-            JComponent focusedComponent = (JComponent) tileEditorFrame.getMostRecentFocusOwner();
+            val focusedComponent = tileEditorFrame!!.mostRecentFocusOwner as JComponent
             if (focusedComponent != null) {
-                focusedElement = focusedComponent.getToolTipText();
+                focusedElement = focusedComponent.toolTipText
             }
-        } catch (ClassCastException e) {
+        } catch (e: ClassCastException) {
         }
         if (statList != null) {
-            int statIdx = statList.getSelectedIndex();
-            if (statIdx > -1 && statIdx < tile.getStats().size()) {
-                ++internalTagTracker;
-                tile.getStats().get(statIdx).setInternalTag(internalTagTracker);
+            val statIdx = statList!!.selectedIndex
+            if (statIdx > -1 && statIdx < tile.stats.size) {
+                ++internalTagTracker
+                tile.stats[statIdx].internalTag = internalTagTracker
             }
         }
 
-        setTitle();
+        setTitle()
 
-        tileEditorFrame.getContentPane().removeAll();
-        tileEditorFrame.getContentPane().setLayout(new BorderLayout());
+        tileEditorFrame!!.contentPane.removeAll()
+        tileEditorFrame!!.contentPane.layout = BorderLayout()
 
-        if (tile.getId() != -1) {
-            JPanel tileControls = new JPanel();
-            tileControls.setBorder(BorderFactory.createTitledBorder("Edit tile:"));
-            JLabel tileTypeLabel = new JLabel("Type:");
-            JComboBox<String> tileTypeChoice = new JComboBox<>(everyType);
-            tileTypeChoice.setToolTipText("Change this tile's type");
-            tileTypeChoice.setSelectedIndex(tile.getId());
-            tileTypeChoice.addActionListener(e -> {
-                tile.setId(tileTypeChoice.getSelectedIndex());
-                upd();
-            });
-            JLabel tileColLabel = new JLabel("Colour:");
-            int selectorMode = ZType.isText(szzt, tile.getId()) ? ColourSelector.CHAR : ColourSelector.COLOUR;
-            JButton colSelectButton = createColButton(tile.getCol(), selectorMode, e -> {
-                tile.setCol(Integer.parseInt(e.getActionCommand()));
-                upd();
-            });
-            colSelectButton.setToolTipText("Change this tile's colour");
+        if (tile!!.id != -1) {
+            val tileControls = JPanel()
+            tileControls.border = BorderFactory.createTitledBorder("Edit tile:")
+            val tileTypeLabel = JLabel("Type:")
+            val tileTypeChoice = JComboBox(everyType)
+            tileTypeChoice.toolTipText = "Change this tile's type"
+            tileTypeChoice.selectedIndex = tile.id
+            tileTypeChoice.addActionListener { e: ActionEvent? ->
+                tile.id = tileTypeChoice.selectedIndex
+                upd()
+            }
+            val tileColLabel = JLabel("Colour:")
+            val selectorMode = if (ZType.isText(szzt, tile.id)) ColourSelector.CHAR else ColourSelector.COLOUR
+            val colSelectButton = createColButton(tile.col, selectorMode) { e: ActionEvent ->
+                tile.col = e.actionCommand.toInt()
+                upd()
+            }
+            colSelectButton.toolTipText = "Change this tile's colour"
 
-            tileControls.add(tileTypeLabel);
-            tileControls.add(tileTypeChoice);
-            tileControls.add(tileColLabel);
-            tileControls.add(colSelectButton);
-            tileEditorFrame.getContentPane().add(tileControls, BorderLayout.NORTH);
+            tileControls.add(tileTypeLabel)
+            tileControls.add(tileTypeChoice)
+            tileControls.add(tileColLabel)
+            tileControls.add(colSelectButton)
+            tileEditorFrame!!.contentPane.add(tileControls, BorderLayout.NORTH)
         }
 
-        JPanel statControls = new JPanel(new BorderLayout());
-        statControls.setBorder(BorderFactory.createTitledBorder("Edit stats:"));
+        val statControls = JPanel(BorderLayout())
+        statControls.border = BorderFactory.createTitledBorder("Edit stats:")
 
-        statList = new JList<>(getStats(tile.getStats()));
-        statList.setToolTipText("Select a stat to edit the properties of");
-        restoreSelectedIndex(statList);
-        var statListListener = new ListSelectionListener() {
-            @Override
-            public void valueChanged(ListSelectionEvent e) {
-                upd();
-            }
-        };
-        statList.addListSelectionListener(statListListener);
+        statList = JList(getStats(tile.stats))
+        statList!!.toolTipText = "Select a stat to edit the properties of"
+        restoreSelectedIndex(statList!!)
+        val statListListener = ListSelectionListener { upd() }
+        statList!!.addListSelectionListener(statListListener)
 
-        //statListButtons.add(addStatButton);
-        //statListButtons.add(delStatButton);
-        var statListScroll = new JScrollPane(statList);
-        statListScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        statListScroll.setPreferredSize(new Dimension(50, 0));
-        var selectedStatBounds = statList.getCellBounds(statList.getSelectedIndex(), statList.getSelectedIndex());
+        val statListScroll = JScrollPane(statList)
+        statListScroll.verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_ALWAYS
+        statListScroll.preferredSize = Dimension(50, 0)
+        val selectedStatBounds = statList!!.getCellBounds(statList!!.selectedIndex, statList!!.selectedIndex)
         if (selectedStatBounds != null) {
-            selectedStatBounds.grow(0, selectedStatBounds.height);
-            statList.scrollRectToVisible(selectedStatBounds);
+            selectedStatBounds.grow(0, selectedStatBounds.height)
+            statList!!.scrollRectToVisible(selectedStatBounds)
         }
 
-        statControls.add(statListScroll, BorderLayout.WEST);
+        statControls.add(statListScroll, BorderLayout.WEST)
 
-        JPanel statParamPanel = new JPanel(new GridLayout(5, 3));
-        statParamPanel.setBorder(BorderFactory.createEmptyBorder(4, 2, 4, 2));
-        fillStatParamPanel(statParamPanel, tile, statList.getSelectedIndex());
+        val statParamPanel = JPanel(GridLayout(5, 3))
+        statParamPanel.border = BorderFactory.createEmptyBorder(4, 2, 4, 2)
+        fillStatParamPanel(statParamPanel, tile, statList!!.selectedIndex)
 
-        statControls.add(statParamPanel, BorderLayout.CENTER);
+        statControls.add(statParamPanel, BorderLayout.CENTER)
 
-        JPanel statListButtons = new JPanel(new GridLayout(1, 3));
-        JButton addStatButton = new JButton("Add stat");
-        addStatButton.setToolTipText("Add a new stat");
-        addStatButton.addActionListener(e -> {
-            addStat(statList, statListListener, null);
-        });
-        JButton dupStatButton = new JButton("Clone stat");
-        dupStatButton.setToolTipText("Add a new stat, duplicating the currently selected stat");
-        dupStatButton.addActionListener(e -> {
-            addStat(statList, statListListener, tile.getStats().get(statList.getSelectedIndex()));
-        });
-        JButton delStatButton = new JButton("Delete stat");
-        delStatButton.setToolTipText("Delete the currently selected stat");
-        delStatButton.addActionListener(e -> {
-            delStat(statList, statListListener, statList.getSelectedIndex());
-        });
-        statListButtons.add(addStatButton);
+        val statListButtons = JPanel(GridLayout(1, 3))
+        val addStatButton = JButton("Add stat")
+        addStatButton.toolTipText = "Add a new stat"
+        addStatButton.addActionListener { e: ActionEvent? -> addStat(statList!!, statListListener, null) }
+        val dupStatButton = JButton("Clone stat")
+        dupStatButton.toolTipText = "Add a new stat, duplicating the currently selected stat"
+        dupStatButton.addActionListener { e: ActionEvent? ->
+            addStat(
+                statList!!, statListListener, tile.stats[statList!!.selectedIndex]
+            )
+        }
+        val delStatButton = JButton("Delete stat")
+        delStatButton.toolTipText = "Delete the currently selected stat"
+        delStatButton.addActionListener { e: ActionEvent? ->
+            delStat(
+                statList!!,
+                statListListener,
+                statList!!.selectedIndex
+            )
+        }
+        statListButtons.add(addStatButton)
 
-        JPanel bottomRow = new JPanel(new BorderLayout());
-        bottomRow.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        bottomRow.add(statListButtons, BorderLayout.WEST);
+        val bottomRow = JPanel(BorderLayout())
+        bottomRow.border = BorderFactory.createEmptyBorder(8, 8, 8, 8)
+        bottomRow.add(statListButtons, BorderLayout.WEST)
 
-        JPanel tileSubmitButtons = new JPanel(new GridLayout(1, 2));
-        tileSubmitButtons.add(okButton());
-        tileSubmitButtons.add(cancelButton());
-        bottomRow.add(tileSubmitButtons, BorderLayout.EAST);
+        val tileSubmitButtons = JPanel(GridLayout(1, 2))
+        tileSubmitButtons.add(okButton())
+        tileSubmitButtons.add(cancelButton())
+        bottomRow.add(tileSubmitButtons, BorderLayout.EAST)
 
-        if (tile.getStats().size() != 0) {
-            statListButtons.add(dupStatButton);
-            statListButtons.add(delStatButton);
+        if (!tile.stats.isEmpty()) {
+            statListButtons.add(dupStatButton)
+            statListButtons.add(delStatButton)
 
-            tileEditorFrame.getContentPane().add(statControls, BorderLayout.CENTER);
+            tileEditorFrame!!.contentPane.add(statControls, BorderLayout.CENTER)
         }
 
-        tileEditorFrame.getContentPane().add(bottomRow, BorderLayout.SOUTH);
-        var keyListener = setKeystrokes(statList);
-        restoreFocus(tileEditorFrame.getContentPane(), focusedElement, keyListener);
-        finaliseGUI();
+        tileEditorFrame!!.contentPane.add(bottomRow, BorderLayout.SOUTH)
+        val keyListener = setKeystrokes(statList!!)
+        restoreFocus(tileEditorFrame!!.contentPane, focusedElement, keyListener)
+        finaliseGUI()
     }
 
-    private JButton cancelButton() {
-        var button = new JButton("Cancel");
-        button.addActionListener(e -> tileEditorFrame.dispose());
-        return button;
+    private fun cancelButton(): JButton {
+        val button = JButton("Cancel")
+        button.addActionListener { e: ActionEvent? -> tileEditorFrame!!.dispose() }
+        return button
     }
 
-    private JButton okButton() {
-        var button = new JButton("OK");
-        button.addActionListener(e -> {
-            callback.callback(tile);
-            tileEditorFrame.dispose();
-        });
-        return button;
-    }
-
-    private void finaliseGUI() {
-        tileEditorFrame.pack();
-        tileEditorFrame.setLocationRelativeTo(editor.getFrameForRelativePositioning());
-        tileEditorFrame.setVisible(true);
-    }
-
-    private void addStat(JList<String> statList, ListSelectionListener statListListener, Stat copyFrom) {
-        Stat newStat;
-        if (copyFrom == null) {
-            newStat = new Stat(szzt);
-        } else {
-            newStat = copyFrom.clone();
+    private fun okButton(): JButton {
+        val button = JButton("OK")
+        button.addActionListener { e: ActionEvent? ->
+            callback.callback(tile)
+            tileEditorFrame!!.dispose()
         }
+        return button
+    }
+
+    private fun finaliseGUI() {
+        tileEditorFrame!!.pack()
+        tileEditorFrame!!.setLocationRelativeTo(editor.frameForRelativePositioning)
+        tileEditorFrame!!.isVisible = true
+    }
+
+    private fun addStat(statList: JList<String?>, statListListener: ListSelectionListener, copyFrom: Stat?) {
+        val t : Tile = tile!!
+        val newStat = copyFrom?.clone() ?: Stat(szzt)
         if (tileX != -1) {
-            newStat.setX(tileX + 1);
-            newStat.setY(tileY + 1);
+            newStat.x = tileX + 1
+            newStat.y = tileY + 1
         } else {
-            newStat.setX(-1);
-            newStat.setY(-1);
+            newStat.x = -1
+            newStat.y = -1
         }
-        newStat.setStatId(-1);
-        tile.addStat(newStat);
-        statList.removeListSelectionListener(statListListener);
-        statList.setListData(getStats(tile.getStats()));
-        statList.setSelectedIndex(tile.getStats().size() - 1);
-        upd();
+        newStat.statId = -1
+        t.addStat(newStat)
+        statList.removeListSelectionListener(statListListener)
+        statList.setListData(getStats(t.stats))
+        statList.selectedIndex = t.stats.size - 1
+        upd()
     }
 
-    private void delStat(JList<String> statList, ListSelectionListener statListListener, int statIdx) {
-        if (tile.getStats().get(statIdx).getStatId() == 0) {
-            JOptionPane.showMessageDialog(relativeFrame(), "You can't delete stat 0.");
-            return;
+    private fun delStat(statList: JList<String?>, statListListener: ListSelectionListener, statIdx: Int) {
+        val t : Tile = tile!!
+        if (t.stats[statIdx].statId == 0) {
+            JOptionPane.showMessageDialog(relativeFrame(), "You can't delete stat 0.")
+            return
         }
-        tile.delStat(statIdx);
-        statList.removeListSelectionListener(statListListener);
-        statList.setListData(getStats(tile.getStats()));
-        statList.setSelectedIndex(tile.getStats().size() - 1);
-        upd();
+        t.delStat(statIdx)
+        statList.removeListSelectionListener(statListListener)
+        statList.setListData(getStats(t.stats))
+        statList.selectedIndex = t.stats.size - 1
+        upd()
     }
 
-    private void restoreSelectedIndex(JList<String> statList) {
-        int statCount = tile.getStats().size();
-        if (statCount == 0) return;
-        for (int i = 0; i < statCount; i++) {
-            if (tile.getStats().get(i).getInternalTag() == internalTagTracker) {
-                statList.setSelectedIndex(i);
-                return;
+    private fun restoreSelectedIndex(statList: JList<String?>) {
+        val statCount = tile!!.stats.size
+        if (statCount == 0) return
+        for (i in 0 until statCount) {
+            if (tile.stats[i].internalTag == internalTagTracker) {
+                statList.selectedIndex = i
+                return
             }
         }
         if (selected != -1) {
-            for (int i = 0; i < statCount; i++) {
-                if (tile.getStats().get(i).getStatId() == selected) {
-                    statList.setSelectedIndex(i);
-                    return;
+            for (i in 0 until statCount) {
+                if (tile.stats[i].statId == selected) {
+                    statList.selectedIndex = i
+                    return
                 }
             }
         }
-        statList.setSelectedIndex(0);
+        statList.selectedIndex = 0
     }
 
-    private void restoreFocus(Container container, String focusedElement, KeyListener listener) {
-        var components = container.getComponents();
-        for (var component : components) {
-            if (component instanceof JComponent) {
-                var jcomponent = (JComponent) component;
-                jcomponent.addKeyListener(listener);
-                var tooltip = jcomponent.getToolTipText();
-                if (tooltip != null && tooltip.equals(focusedElement)) {
-                    jcomponent.requestFocusInWindow();
-                    return;
+    private fun restoreFocus(container: Container, focusedElement: String, listener: KeyListener) {
+        val components = container.components
+        for (component in components) {
+            if (component is JComponent) {
+                val jcomponent = component
+                jcomponent.addKeyListener(listener)
+                val tooltip = jcomponent.toolTipText
+                if (tooltip != null && tooltip == focusedElement) {
+                    jcomponent.requestFocusInWindow()
+                    return
                 }
             }
-            if (component instanceof Container) {
-                restoreFocus((Container) component, focusedElement, listener);
+            if (component is Container) {
+                restoreFocus(component, focusedElement, listener)
             }
         }
     }
 
 
-    private JButton createColButton(int col, int selectorMode, ActionListener actionListener) {
-        Image colSelectIcon;
-        if (selectorMode != ColourSelector.CHAR) {
-            colSelectIcon = editor.getCanvas().extractCharImage(0, col, 1, 1, false, "_#_");
+    private fun createColButton(col: Int, selectorMode: Int, actionListener: ActionListener): JButton {
+        val colSelectIcon: Image = if (selectorMode != ColourSelector.CHAR) {
+            editor.canvas.extractCharImage(0, col, 1, 1, false, "_#_")
         } else {
-            colSelectIcon = editor.getCanvas().extractCharImage(col, 0x8F, 1, 1, false, "_$_");
+            editor.canvas.extractCharImage(col, 0x8F, 1, 1, false, "_\$_")
         }
-        JButton button = new JButton(new ImageIcon(colSelectIcon));
-        button.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                ColourSelector.createColourSelector(editor, col, relativeFrame(), actionListener, selectorMode);
-            }
-        });
-        return button;
+        val button = JButton(ImageIcon(colSelectIcon))
+        button.addActionListener { e: ActionEvent? ->
+            createColourSelector(
+                editor,
+                col,
+                relativeFrame(),
+                actionListener,
+                selectorMode
+            )
+        }
+        return button
     }
 
-    private static final int MISSING_ITEM = Integer.MIN_VALUE;
-
-    private void fillStatParamPanel(JPanel panel, Tile tile, int selectedIndex) {
-        panel.removeAll();
-        if (selectedIndex == -1) return;
-        Stat stat = tile.getStats().get(selectedIndex);
+    private fun fillStatParamPanel(panel: JPanel, tile: Tile?, selectedIndex: Int) {
+        panel.removeAll()
+        if (selectedIndex == -1) return
+        val stat = tile!!.stats[selectedIndex]
         // Type: [        ] Col: [ ]
         // ------------------------------------
         //  Stat  | X      | P1     | Uid    |
@@ -721,318 +746,425 @@ public class TileEditor {
         // -------| StepX  | P3     | IP     |
         //  New   | StepY  | Follower| Code   |
         //          Cycle    Leader    Order
-        addPosSpin(panel, stat);
+        addPosSpin(panel, stat)
         //addInt8Spin(panel, "X:", stat.getX(), e -> stat.setX((Integer) ((JSpinner)e.getSource()).getValue()),
         //        "Edit stat's X position. Warning: this will not change the tile's position. Edit this only if you know what you are doing.");
-        addInt8Spin(panel, "P1:", stat.getP1(), e -> stat.setP1((Integer) ((JSpinner)e.getSource()).getValue()),
-                "Edit this stat's 1st parameter (function based on tile type)");
-        addUidSelect(panel, "Under type:", stat.getUid(), e -> {
-            @SuppressWarnings("unchecked")
-            var src = (JComboBox<String>) e.getSource();
-            stat.setUid(src.getSelectedIndex());
-            upd();
-        },  "Edit under type");
+        addInt8Spin(
+            panel, "P1:", stat.p1, { e: ChangeEvent ->
+                stat.p1 =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "Edit this stat's 1st parameter (function based on tile type)"
+        )
+        addUidSelect(panel, "Under type:", stat.uid, { e: ActionEvent ->
+            val src = e.source as JComboBox<String>
+            stat.uid = src.selectedIndex
+            upd()
+        }, "Edit under type")
         //addInt8Spin(panel, "Y:", stat.getY(), e -> stat.setY((Integer) ((JSpinner)e.getSource()).getValue()),
         //        "Edit stat's Y position. Warning: this will not change the tile's position. Edit this only if you know what you are doing.");
-        addInt16Spin(panel, "X-Step:", stat.getStepX(), e -> stat.setStepX((Integer) ((JSpinner)e.getSource()).getValue()),
-                "Edit this stat's X-Step (function based on tile type)");
-        addInt8Spin(panel, "P2:", stat.getP2(), e -> stat.setP2((Integer) ((JSpinner)e.getSource()).getValue()),
-                "Edit this stat's 2nd parameter (function based on tile type)");
-        addUcoBtn(panel, "Under colour:", stat, e -> {
-            stat.setUco(Integer.parseInt(e.getActionCommand()));
-            upd();
-        }, "Edit the colour of the tile under this stat");
-        addInt16Spin(panel, "Y-Step:", stat.getStepY(), e -> stat.setStepY((Integer) ((JSpinner)e.getSource()).getValue()),
-                "Edit this stat's Y-Step (function based on tile type)");
-        addInt8Spin(panel, "P3:", stat.getP3(), e -> stat.setP3((Integer) ((JSpinner)e.getSource()).getValue()),
-                "Edit this stat's 3rd parameter (function based on tile type)");
-        addInt16Spin(panel, "Instr. Ptr:", stat.getIp(), e -> stat.setIp((Integer) ((JSpinner)e.getSource()).getValue()),
-                "Edit this stat's instruction pointer (-1 means ended)");
-        addInt16Spin(panel, "Cycle:", stat.getCycle(), e -> stat.setCycle((Integer) ((JSpinner)e.getSource()).getValue()),
-                "Edit this stat's cycle");
-        addInt16SpinStatSel(panel, "Follower:", stat.getFollower(), e -> stat.setFollower((Integer) ((JSpinner)e.getSource()).getValue()),
-                "follower");
-        addCodeSelect(panel, stat);
-        addInt16Spin(panel, "Order:", stat.getOrder(), e -> stat.setOrder((Integer) ((JSpinner)e.getSource()).getValue()),
-                "Edit this stat's order (lower means its stat ID will be reduced)");
-        addInt16SpinStatSel(panel, "Leader:", stat.getLeader(), e -> stat.setLeader((Integer) ((JSpinner)e.getSource()).getValue()),
-                "leader");
-        addStatFlags(panel, stat);
+        addInt16Spin(
+            panel, "X-Step:", stat.stepX, { e: ChangeEvent ->
+                stat.stepX =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "Edit this stat's X-Step (function based on tile type)"
+        )
+        addInt8Spin(
+            panel, "P2:", stat.p2, { e: ChangeEvent ->
+                stat.p2 =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "Edit this stat's 2nd parameter (function based on tile type)"
+        )
+        addUcoBtn(panel, "Under colour:", stat, { e: ActionEvent ->
+            stat.uco = e.actionCommand.toInt()
+            upd()
+        }, "Edit the colour of the tile under this stat")
+        addInt16Spin(
+            panel, "Y-Step:", stat.stepY, { e: ChangeEvent ->
+                stat.stepY =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "Edit this stat's Y-Step (function based on tile type)"
+        )
+        addInt8Spin(
+            panel, "P3:", stat.p3, { e: ChangeEvent ->
+                stat.p3 =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "Edit this stat's 3rd parameter (function based on tile type)"
+        )
+        addInt16Spin(
+            panel, "Instr. Ptr:", stat.ip, { e: ChangeEvent ->
+                stat.ip =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "Edit this stat's instruction pointer (-1 means ended)"
+        )
+        addInt16Spin(
+            panel, "Cycle:", stat.cycle, { e: ChangeEvent ->
+                stat.cycle =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "Edit this stat's cycle"
+        )
+        addInt16SpinStatSel(
+            panel, "Follower:", stat.follower, { e: ChangeEvent ->
+                stat.follower =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "follower"
+        )
+        addCodeSelect(panel, stat)
+        addInt16Spin(
+            panel, "Order:", stat.order, { e: ChangeEvent ->
+                stat.order =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "Edit this stat's order (lower means its stat ID will be reduced)"
+        )
+        addInt16SpinStatSel(
+            panel, "Leader:", stat.leader, { e: ChangeEvent ->
+                stat.leader =
+                    ((e.source as JSpinner).value as Int)
+            },
+            "leader"
+        )
+        addStatFlags(panel, stat)
     }
 
-    private void addCodeSelect(JPanel panel, Stat stat) {
-        var selectPanel = new JPanel(new BorderLayout());
-        selectPanel.setBorder(BorderFactory.createEmptyBorder(0, 2, 0, 2));
-        JButton codeButton, bindButton;
-        ActionListener listener = e -> {
-            if (e.getActionCommand().equals("update")) {
-                var source = (CodeEditor) e.getSource();
-                stat.setCode(source.getCode());
+    private fun addCodeSelect(panel: JPanel, stat: Stat) {
+        val selectPanel = JPanel(BorderLayout())
+        selectPanel.border = BorderFactory.createEmptyBorder(0, 2, 0, 2)
+        val codeButton: JButton
+        val bindButton: JButton
+        val listener = ActionListener { e: ActionEvent ->
+            if (e.actionCommand == "update") {
+                val source = e.source as CodeEditor
+                stat.code = source.code
             }
-            upd();
-        };
-        if (stat.getCodeLength() >= 0) {
+            upd()
+        }
+        if (stat.codeLength >= 0) {
             if (tileX == -1 && tileY == -1) {
-                codeButton = new JButton("View code (" + stat.getCodeLength() + ")");
-                codeButton.setToolTipText("View the code attached to this buffer stat (read-only)");
+                codeButton = JButton("View code (" + stat.codeLength + ")")
+                codeButton.toolTipText = "View the code attached to this buffer stat (read-only)"
             } else {
-                codeButton = new JButton("Edit code (" + stat.getCodeLength() + ")");
-                codeButton.setToolTipText("Edit the code attached to this stat");
+                codeButton = JButton("Edit code (" + stat.codeLength + ")")
+                codeButton.toolTipText = "Edit the code attached to this stat"
             }
-            codeButton.addActionListener(e -> {
-                codeEditor(stat, listener);
-            });
-            bindButton = new JButton("Bind");
-            bindButton.setToolTipText("Bind this stat's code to another");
-            bindButton.addActionListener(e -> {
-                int confirm = JOptionPane.OK_OPTION;
-                if (stat.getCodeLength() > 0) {
-                    confirm = JOptionPane.showConfirmDialog(relativeFrame(), "This will delete this object's code. Are you sure?", "Are you sure?", JOptionPane.OK_CANCEL_OPTION);
+            codeButton.addActionListener { e: ActionEvent? -> codeEditor(stat, listener) }
+            bindButton = JButton("Bind")
+            bindButton.toolTipText = "Bind this stat's code to another"
+            bindButton.addActionListener { e: ActionEvent? ->
+                var confirm = JOptionPane.OK_OPTION
+                if (stat.codeLength > 0) {
+                    confirm = JOptionPane.showConfirmDialog(
+                        relativeFrame(),
+                        "This will delete this object's code. Are you sure?",
+                        "Are you sure?",
+                        JOptionPane.OK_CANCEL_OPTION
+                    )
                 }
                 if (confirm == JOptionPane.OK_OPTION) {
-                    new StatSelector(editor, board, e1 -> {
-                        ((StatSelector)(e1.getSource())).close();
-                        int val = StatSelector.getStatIdx(e1.getActionCommand());
-                        if (val != stat.getStatId()) {
-                            stat.setCodeLength(-val);
+                    StatSelector(editor, board, { e1: ActionEvent ->
+                        (e1.source as StatSelector).close()
+                        val `val` = getStatIdx(e1.actionCommand)
+                        if (`val` != stat.statId) {
+                            stat.codeLength = -`val`
                         }
-                        upd();
-                    }, new String[]{"Select"},null,null);
+                        upd()
+                    }, arrayOf("Select"), null, null)
                 }
-            });
+            }
         } else {
-            codeButton = new JButton("View code (#" + -stat.getCodeLength() + ")");
-            codeButton.setToolTipText("View the code attached to the bound stat (read-only)");
-            codeButton.addActionListener(e -> {
-                codeEditor(stat, listener);
-            });
-            bindButton = new JButton("Unbind");
-            bindButton.setToolTipText("Break this object's bind");
-            bindButton.addActionListener(e -> {
-                stat.setCodeLength(0);
-                upd();
-            });
+            codeButton = JButton("View code (#" + -stat.codeLength + ")")
+            codeButton.toolTipText = "View the code attached to the bound stat (read-only)"
+            codeButton.addActionListener { e: ActionEvent? -> codeEditor(stat, listener) }
+            bindButton = JButton("Unbind")
+            bindButton.toolTipText = "Break this object's bind"
+            bindButton.addActionListener { e: ActionEvent? ->
+                stat.codeLength = 0
+                upd()
+            }
         }
-        selectPanel.add(codeButton, BorderLayout.CENTER);
-        selectPanel.add(bindButton, BorderLayout.EAST);
-        panel.add(selectPanel);
+        selectPanel.add(codeButton, BorderLayout.CENTER)
+        selectPanel.add(bindButton, BorderLayout.EAST)
+        panel.add(selectPanel)
     }
 
-    private void codeEditor(Stat stat, ActionListener listener) {
-        Stat followStat = stat;
-        HashSet<Integer> followedStats = new HashSet<>();
-        boolean success = false;
-        int depth = 0;
-        for (;;) {
-            if (followedStats.contains(followStat.getStatId())) break;
-            followedStats.add(followStat.getStatId());
-            int codeLen = followStat.getCodeLength();
+    private fun codeEditor(stat: Stat?, listener: ActionListener) {
+        var followStat = stat
+        val followedStats = HashSet<Int>()
+        var success = false
+        var depth = 0
+        while (true) {
+            if (followedStats.contains(followStat!!.statId)) break
+            followedStats.add(followStat.statId)
+            val codeLen = followStat.codeLength
             if (codeLen >= 0) {
-                success = true;
-                break;
+                success = true
+                break
             } else {
-                int boundTo = -codeLen;
-                if (boundTo < board.getStatCount()) {
-                    followStat = board.getStat(boundTo);
-                    depth++;
+                val boundTo = -codeLen
+                if (boundTo < board.statCount) {
+                    followStat = board.getStat(boundTo)
+                    depth++
                 } else {
-                    break;
+                    break
                 }
             }
         }
         if (success) {
-            String txt;
-            if (stat.getStatId() == -1) {
-                txt = "tat";
+            val txt = if (stat!!.statId == -1) {
+                "tat"
             } else {
-                txt = String.format("tat #%d", stat.getStatId());
+                String.format("tat #%d", stat.statId)
             }
             if (depth > 0) {
-                new CodeEditor(getIcon(), followStat, editor, listener, true, String.format("S%s, bound to stat #%d (read only)", txt, followStat.getStatId()));
+                CodeEditor(
+                    icon,
+                    followStat!!,
+                    editor,
+                    listener,
+                    true,
+                    String.format("S%s, bound to stat #%d (read only)", txt, followStat.statId)
+                )
             } else {
-                boolean readOnly = false;
-                String caption;
+                var readOnly = false
+                val caption: String
                 if (tileX == -1 && tileY == -1 && !editExempt) {
                     // Buffer stats get a readonly code editor
-                    readOnly = true;
-                    caption = String.format("Viewing code of s%s (This stat exists only in the buffer. Editing disabled.)", txt);
+                    readOnly = true
+                    caption = String.format(
+                        "Viewing code of s%s (This stat exists only in the buffer. Editing disabled.)",
+                        txt
+                    )
                 } else {
-                    caption = String.format("Editing code of s%s", txt);
+                    caption = String.format("Editing code of s%s", txt)
                 }
-                new CodeEditor(getIcon(), followStat, editor, listener, readOnly, caption);
+                CodeEditor(icon, followStat!!, editor, listener, readOnly, caption)
             }
         } else {
-            JOptionPane.showMessageDialog(relativeFrame(), "Unable to reach this object's code.", "Unable to reach code", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(
+                relativeFrame(),
+                "Unable to reach this object's code.",
+                "Unable to reach code",
+                JOptionPane.ERROR_MESSAGE
+            )
         }
     }
 
-    private Image getIcon() {
-        var chr = ZType.getChar(szzt, tile);
-        var col = ZType.getColour(szzt, tile);
-        var editorIcon = editor.getCanvas().extractCharImage(chr, col, 4, 4, false, "$");
-        return editorIcon;
+    private val icon: Image
+        get() {
+            val chr = ZType.getChar(szzt, tile)
+            val col = ZType.getColour(szzt, tile)
+            return editor.canvas.extractCharImage(chr, col, 4, 4, false, "$")
+        }
+
+    private fun addUcoBtn(panel: JPanel, label: String, stat: Stat, actionListener: ActionListener, tooltip: String) {
+        val initVal = stat.uco
+        val selectPanel = JPanel(BorderLayout())
+        selectPanel.border = BorderFactory.createEmptyBorder(0, 2, 0, 2)
+        selectPanel.add(JLabel(label), BorderLayout.WEST)
+        val selectorMode = if (ZType.isText(szzt, stat.uid)) ColourSelector.CHAR else ColourSelector.COLOUR
+        val btn = createColButton(initVal, selectorMode, actionListener)
+        btn.toolTipText = tooltip
+        selectPanel.add(btn, BorderLayout.EAST)
+        panel.add(selectPanel)
     }
 
-    private void addUcoBtn(JPanel panel, String label, Stat stat, ActionListener actionListener, String tooltip) {
-        int initVal = stat.getUco();
-        var selectPanel = new JPanel(new BorderLayout());
-        selectPanel.setBorder(BorderFactory.createEmptyBorder(0, 2, 0, 2));
-        selectPanel.add(new JLabel(label), BorderLayout.WEST);
-        int selectorMode = ZType.isText(szzt, stat.getUid()) ? ColourSelector.CHAR : ColourSelector.COLOUR;
-        var btn = createColButton(initVal, selectorMode, actionListener);
-        btn.setToolTipText(tooltip);
-        selectPanel.add(btn, BorderLayout.EAST);
-        panel.add(selectPanel);
+    private fun addInt8Spin(
+        panel: JPanel,
+        label: String,
+        initVal: Int,
+        changeListener: ChangeListener,
+        tooltip: String
+    ) {
+        addSpin(panel, label, initVal, changeListener, 0, 255, false, tooltip)
     }
 
-    private void addInt8Spin(JPanel panel, String label, int initVal, ChangeListener changeListener, String tooltip) {
-        addSpin(panel, label, initVal, changeListener, 0, 255, false, tooltip);
+    private fun addInt16Spin(
+        panel: JPanel,
+        label: String,
+        initVal: Int,
+        changeListener: ChangeListener,
+        tooltip: String
+    ) {
+        addSpin(panel, label, initVal, changeListener, -32768, 32767, false, tooltip)
     }
-    private void addInt16Spin(JPanel panel, String label, int initVal, ChangeListener changeListener, String tooltip) {
-        addSpin(panel, label, initVal, changeListener, -32768, 32767, false, tooltip);
+
+    private fun addInt16SpinStatSel(
+        panel: JPanel,
+        label: String,
+        initVal: Int,
+        changeListener: ChangeListener,
+        tooltip: String
+    ) {
+        addSpin(panel, label, initVal, changeListener, -32768, 32767, true, tooltip)
     }
-    private void addInt16SpinStatSel(JPanel panel, String label, int initVal, ChangeListener changeListener, String tooltip) {
-        addSpin(panel, label, initVal, changeListener, -32768, 32767, true, tooltip);
+
+    private fun addUidSelect(
+        panel: JPanel,
+        label: String,
+        initVal: Int,
+        actionListener: ActionListener,
+        tooltip: String
+    ) {
+        val selectPanel = JPanel(BorderLayout())
+        selectPanel.border = BorderFactory.createEmptyBorder(0, 2, 0, 2)
+        selectPanel.add(JLabel(label), BorderLayout.WEST)
+        val select = JComboBox(everyType)
+        select.toolTipText = tooltip
+        select.selectedIndex = initVal
+        select.addActionListener(actionListener)
+        selectPanel.add(select, BorderLayout.EAST)
+        panel.add(selectPanel)
     }
-    private void addUidSelect(JPanel panel, String label, int initVal, ActionListener actionListener, String tooltip) {
-        var selectPanel = new JPanel(new BorderLayout());
-        selectPanel.setBorder(BorderFactory.createEmptyBorder(0, 2, 0, 2));
-        selectPanel.add(new JLabel(label), BorderLayout.WEST);
-        var select = new JComboBox<>(everyType);
-        select.setToolTipText(tooltip);
-        select.setSelectedIndex(initVal);
-        select.addActionListener(actionListener);
-        selectPanel.add(select, BorderLayout.EAST);
-        panel.add(selectPanel);
-    }
-    private void addSpin(JPanel panel, String label, int initVal, ChangeListener changeListener, int min, int max, boolean statSel, String tooltip) {
-        var spinPanel = new JPanel(new BorderLayout());
-        spinPanel.setBorder(BorderFactory.createEmptyBorder(0, 2, 0, 2));
-        spinPanel.add(new JLabel(label), BorderLayout.WEST);
-        var spinner = new JSpinner(new SpinnerNumberModel(initVal, min, max, 1));
+
+    private fun addSpin(
+        panel: JPanel,
+        label: String,
+        initVal: Int,
+        changeListener: ChangeListener,
+        min: Int,
+        max: Int,
+        statSel: Boolean,
+        tooltip: String
+    ) {
+        val spinPanel = JPanel(BorderLayout())
+        spinPanel.border = BorderFactory.createEmptyBorder(0, 2, 0, 2)
+        spinPanel.add(JLabel(label), BorderLayout.WEST)
+        val spinner = JSpinner(SpinnerNumberModel(initVal, min, max, 1))
         if (!statSel) {
-            spinner.setToolTipText(tooltip);
+            spinner.toolTipText = tooltip
         } else {
-            spinner.setToolTipText(String.format("Edit this stat's %s (used by centipedes. -1 means no %s)", tooltip, tooltip));
+            spinner.toolTipText =
+                String.format("Edit this stat's %s (used by centipedes. -1 means no %s)", tooltip, tooltip)
         }
-        spinner.addChangeListener(changeListener);
+        spinner.addChangeListener(changeListener)
         if (!statSel) {
-            spinPanel.add(spinner, BorderLayout.EAST);
+            spinPanel.add(spinner, BorderLayout.EAST)
         } else {
-            JPanel spinPanelSel = new JPanel(new BorderLayout());
-            var spinPanelSearch = new JButton("\uD83D\uDD0D");
-            spinPanelSearch.addActionListener(e -> {
-                new StatSelector(editor, board, e1 -> {
-                    ((StatSelector)(e1.getSource())).close();
-                    int val = StatSelector.getStatIdx(e1.getActionCommand());
-                    spinner.setValue(val);
-                }, new String[]{"Select"},null,null);
-            });
-            spinPanelSearch.setToolTipText(String.format("Find a %s", tooltip));
-            spinPanelSel.add(spinPanelSearch, BorderLayout.WEST);
-            spinPanelSel.add(spinner, BorderLayout.EAST);
-            spinPanel.add(spinPanelSel, BorderLayout.EAST);
+            val spinPanelSel = JPanel(BorderLayout())
+            val spinPanelSearch = JButton("\uD83D\uDD0D")
+            spinPanelSearch.addActionListener { e: ActionEvent? ->
+                StatSelector(editor, board, { e1: ActionEvent ->
+                    (e1.source as StatSelector).close()
+                    val `val` = getStatIdx(e1.actionCommand)
+                    spinner.value = `val`
+                }, arrayOf("Select"), null, null)
+            }
+            spinPanelSearch.toolTipText = String.format("Find a %s", tooltip)
+            spinPanelSel.add(spinPanelSearch, BorderLayout.WEST)
+            spinPanelSel.add(spinner, BorderLayout.EAST)
+            spinPanel.add(spinPanelSel, BorderLayout.EAST)
         }
-        panel.add(spinPanel);
+        panel.add(spinPanel)
     }
-    private void addPosSpin(JPanel panel, Stat stat) {
-        var spinPanelOuter = new JPanel(new BorderLayout());
-        var toolTip = "<html>Edit stat's location. Warning: this will not move the tile itself, only the stat. <b>Edit this only if you know what you are doing.</b></html>";
 
-        spinPanelOuter.add(new JLabel("Location:"), BorderLayout.WEST);
-        JSpinner xSpinner, ySpinner;
-        var bgColour = new Color(0xFFCCCC);
-        if (stat.getX() >= 0) {
-            xSpinner = new JSpinner(new SpinnerNumberModel(stat.getX(), 0, 255, 1));
-            ySpinner = new JSpinner(new SpinnerNumberModel(stat.getY(), 0, 255, 1));
+    private fun addPosSpin(panel: JPanel, stat: Stat) {
+        val spinPanelOuter = JPanel(BorderLayout())
+        val toolTip =
+            "<html>Edit stat's location. Warning: this will not move the tile itself, only the stat. <b>Edit this only if you know what you are doing.</b></html>"
+
+        spinPanelOuter.add(JLabel("Location:"), BorderLayout.WEST)
+        val xSpinner: JSpinner
+        val ySpinner: JSpinner
+        val bgColour = Color(0xFFCCCC)
+        if (stat.x >= 0) {
+            xSpinner = JSpinner(SpinnerNumberModel(stat.x, 0, 255, 1))
+            ySpinner = JSpinner(SpinnerNumberModel(stat.y, 0, 255, 1))
         } else {
-            var model = new AbstractSpinnerModel() {
-
-                @Override
-                public Object getValue() {
-                    return "N/A";
+            val model: AbstractSpinnerModel = object : AbstractSpinnerModel() {
+                override fun getValue(): Any {
+                    return "N/A"
                 }
 
-                @Override
-                public void setValue(Object value) { }
+                override fun setValue(value: Any) {}
 
-                @Override
-                public Object getNextValue() {
-                    return null;
+                override fun getNextValue(): Any? {
+                    return null
                 }
 
-                @Override
-                public Object getPreviousValue() {
-                    return null;
+                override fun getPreviousValue(): Any? {
+                    return null
                 }
-            };
-            xSpinner = new JSpinner(model);
-            ySpinner = new JSpinner(model);
-            xSpinner.setEnabled(false);
-            ySpinner.setEnabled(false);
+            }
+            xSpinner = JSpinner(model)
+            ySpinner = JSpinner(model)
+            xSpinner.isEnabled = false
+            ySpinner.isEnabled = false
         }
-        xSpinner.getEditor().getComponent(0).setBackground(bgColour);
-        ySpinner.getEditor().getComponent(0).setBackground(bgColour);
-        xSpinner.addChangeListener(e -> stat.setX((int)xSpinner.getValue()));
-        ySpinner.addChangeListener(e -> stat.setY((int)ySpinner.getValue()));
-        xSpinner.setToolTipText(toolTip);
-        ySpinner.setToolTipText(toolTip);
+        xSpinner.editor.getComponent(0).background = bgColour
+        ySpinner.editor.getComponent(0).background = bgColour
+        xSpinner.addChangeListener { e: ChangeEvent? -> stat.x = xSpinner.value as Int }
+        ySpinner.addChangeListener { e: ChangeEvent? -> stat.y = ySpinner.value as Int }
+        xSpinner.toolTipText = toolTip
+        ySpinner.toolTipText = toolTip
 
-        var spinPanelInner = new JPanel(new BorderLayout());
-        spinPanelOuter.add(spinPanelInner, BorderLayout.EAST);
-        spinPanelInner.add(xSpinner, BorderLayout.WEST);
-        spinPanelInner.add(ySpinner, BorderLayout.EAST);
-        panel.add(spinPanelOuter);
+        val spinPanelInner = JPanel(BorderLayout())
+        spinPanelOuter.add(spinPanelInner, BorderLayout.EAST)
+        spinPanelInner.add(xSpinner, BorderLayout.WEST)
+        spinPanelInner.add(ySpinner, BorderLayout.EAST)
+        panel.add(spinPanelOuter)
     }
-    private void addStatFlags(JPanel panel, Stat stat) {
-        var flagPanel = new JPanel(new BorderLayout());
-        var flagValues = new boolean[]{stat.isAutobind(), stat.isSpecifyId(), stat.isPlayer(), stat.isFlag4()};
-        var flagNames = new String[]{"Autobind", "Set ID", "Player", "4"};
-        var tooltips = new String[]{
-                "Stat will automatically bind to other stats with the same code",
-                "The Order field will be treated as a stat ID and this stat will be given that ID, if possible",
-                "This is set to indicate that this is the real player, not a clone",
-                "Flag #4"};
-        var actions = new ActionListener[]{
-                e -> stat.setAutobind(((JCheckBox)e.getSource()).isSelected()),
-                e -> stat.setSpecifyId(((JCheckBox)e.getSource()).isSelected()),
-                e -> stat.setIsPlayer(((JCheckBox)e.getSource()).isSelected()),
-                e -> stat.setFlag4(((JCheckBox)e.getSource()).isSelected())};
 
-        var currentPanel = flagPanel;
+    private fun addStatFlags(panel: JPanel, stat: Stat) {
+        val flagPanel = JPanel(BorderLayout())
+        val flagValues = booleanArrayOf(stat.isAutobind, stat.isSpecifyId, stat.isPlayer, stat.isFlag4)
+        val flagNames = arrayOf("Autobind", "Set ID", "Player", "4")
+        val tooltips = arrayOf(
+            "Stat will automatically bind to other stats with the same code",
+            "The Order field will be treated as a stat ID and this stat will be given that ID, if possible",
+            "This is set to indicate that this is the real player, not a clone",
+            "Flag #4"
+        )
+        val actions = arrayOf(
+            ActionListener { e: ActionEvent -> stat.isAutobind = (e.source as JCheckBox).isSelected },
+            ActionListener { e: ActionEvent -> stat.isSpecifyId = (e.source as JCheckBox).isSelected },
+            ActionListener { e: ActionEvent -> stat.isPlayer = (e.source as JCheckBox).isSelected },
+            ActionListener { e: ActionEvent -> stat.isFlag4 = (e.source as JCheckBox).isSelected })
+
+        var currentPanel = flagPanel
         //var checkBoxFont = new Font(Font.SANS_SERIF, Font.PLAIN, 8);
-        int numBoxesToDraw = 3;
-        for (int i = 0; i < numBoxesToDraw; i++) {
-            var cb = new JCheckBox(flagNames[i], flagValues[i]);
-            if (i == 2) cb.setEnabled(false);
-            //cb.setVerticalTextPosition(SwingConstants.TOP);
-            //cb.setHorizontalTextPosition(SwingConstants.CENTER);
-            //cb.setFont(checkBoxFont);
-            cb.setToolTipText(tooltips[i]);
-            cb.addActionListener(actions[i]);
-            var newPanel = new JPanel(new BorderLayout());
-            currentPanel.add(cb, BorderLayout.WEST);
-            currentPanel.add(newPanel, BorderLayout.CENTER);
-            currentPanel = newPanel;
+        val numBoxesToDraw = 3
+        for (i in 0 until numBoxesToDraw) {
+            val cb = JCheckBox(flagNames[i], flagValues[i])
+            if (i == 2) cb.isEnabled = false
+            cb.toolTipText = tooltips[i]
+            cb.addActionListener(actions[i])
+            val newPanel = JPanel(BorderLayout())
+            currentPanel.add(cb, BorderLayout.WEST)
+            currentPanel.add(newPanel, BorderLayout.CENTER)
+            currentPanel = newPanel
         }
 
-        panel.add(flagPanel);
+        panel.add(flagPanel)
     }
 
-    private String[] getStats(List<Stat> stats) {
-        var statList = new String[stats.size()];
-        for (int i = 0; i < stats.size(); i++) {
-            int statId = stats.get(i).getStatId();
-            statList[i] = statId == -1 ? "(new)" : String.valueOf(statId);
+    private fun getStats(stats: List<Stat>?): Array<String?> {
+        val statList = arrayOfNulls<String>(stats!!.size)
+        for (i in stats.indices) {
+            val statId = stats[i].statId
+            statList[i] = if (statId == -1) "(new)" else statId.toString()
         }
-        return statList;
+        return statList
     }
 
-    private String[] getEveryType() {
-        String[] allTypes = new String[256];
-        for (int i = 0; i < 256; i++) {
-            allTypes[i] = ZType.getName(szzt, i);
+    private fun getEveryType(): Array<String?> {
+        val allTypes = arrayOfNulls<String>(256)
+        for (i in 0..255) {
+            allTypes[i] = ZType.getName(szzt, i)
         }
-        return allTypes;
+        return allTypes
+    }
+
+    companion object {
+        private var internalTagTracker = 0
+        private const val PARAM_P1 = 1
+        private const val PARAM_P2 = 2
+        private const val PARAM_P3 = 3
     }
 }

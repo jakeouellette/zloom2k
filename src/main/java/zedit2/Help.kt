@@ -1,85 +1,87 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import javax.swing.event.HyperlinkEvent;
-import javax.swing.event.HyperlinkListener;
-import java.awt.*;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.awt.Desktop
+import java.awt.Dimension
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
+import java.io.IOException
+import java.net.MalformedURLException
+import java.net.URISyntaxException
+import java.net.URL
+import javax.swing.JDialog
+import javax.swing.JEditorPane
+import javax.swing.JScrollPane
+import javax.swing.event.HyperlinkEvent
 
-public class Help {
-    private static Help helpInstance;
-    private JDialog dialog;
-    private String currentFile;
-    public Help(WorldEditor editor) {
+class Help(editor: WorldEditor) {
+    private var dialog: JDialog? = null
+    private var currentFile: String? = null
+
+    init {
         if (helpInstance != null) {
-            helpInstance.dialog.toFront();
+            helpInstance!!.dialog!!.toFront()
         } else {
-            openHelp(editor);
+            openHelp(editor)
         }
     }
 
-    private void openHelp(WorldEditor editor) {
-        var canvas = editor.getCanvas();
-        dialog = new JDialog();
-        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        dialog.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent e) {
-                helpInstance = null;
+    private fun openHelp(editor: WorldEditor) {
+        val canvas = editor.canvas
+        dialog = JDialog()
+        dialog!!.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
+        dialog!!.addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent) {
+                helpInstance = null
             }
-        });
+        })
 
-        JEditorPane editorPane = new JEditorPane();
-        JScrollPane scrollPane = new JScrollPane(editorPane);
-        editorPane.setEditable(false);
-        URL url = null;
+        val editorPane = JEditorPane()
+        val scrollPane = JScrollPane(editorPane)
+        editorPane.isEditable = false
+        var url: URL? = null
         try {
-            url = Main.class.getClassLoader().getResource("help/index.html");
-            currentFile = url.getFile();
-            editorPane.setPage(url);
-            int w = editor.getGlobalEditor().getInt("HELPBROWSER_WIDTH");
-            int h = editor.getGlobalEditor().getInt("HELPBROWSER_HEIGHT");
-            editorPane.setPreferredSize(new Dimension(w, h));
-            dialog.setTitle("ZEdit2 help");
-            dialog.setIconImage(canvas.extractCharImage('?', 0x9F, 1, 1, false, "$"));
-            editorPane.addHyperlinkListener(new HyperlinkListener() {
-                @Override
-                public void hyperlinkUpdate(HyperlinkEvent e) {
-                    if (e.getEventType().equals(HyperlinkEvent.EventType.ACTIVATED)) {
-                        try {
-                            if (e.getURL().toString().startsWith("http")) {
-                                Desktop.getDesktop().browse(e.getURL().toURI());
-                            } else {
-                                var ref = e.getURL().getRef();
-                                System.out.println("ref: " + ref);
-                                if (!e.getURL().getFile().equals(currentFile)) {
-                                    System.out.println("Loading page");
-                                    editorPane.setPage(e.getURL());
-                                }
-                                editorPane.scrollToReference(ref);
-
+            url = Main::class.java.classLoader.getResource("help/index.html")
+            currentFile = url.file
+            editorPane.page = url
+            val w = editor.globalEditor.getInt("HELPBROWSER_WIDTH")
+            val h = editor.globalEditor.getInt("HELPBROWSER_HEIGHT")
+            editorPane.preferredSize = Dimension(w, h)
+            dialog!!.title = "ZEdit2 help"
+            dialog!!.setIconImage(canvas.extractCharImage('?'.code, 0x9F, 1, 1, false, "$"))
+            editorPane.addHyperlinkListener { e ->
+                if (e.eventType == HyperlinkEvent.EventType.ACTIVATED) {
+                    try {
+                        if (e.url.toString().startsWith("http")) {
+                            Desktop.getDesktop().browse(e.url.toURI())
+                        } else {
+                            val ref = e.url.ref
+                            println("ref: $ref")
+                            if (e.url.file != currentFile) {
+                                println("Loading page")
+                                editorPane.page = e.url
                             }
-                        } catch (IOException | URISyntaxException ignored) {
+                            editorPane.scrollToReference(ref)
                         }
+                    } catch (ignored: IOException) {
+                    } catch (ignored: URISyntaxException) {
                     }
                 }
-            });
-            dialog.add(scrollPane);
-            dialog.pack();
-            dialog.setLocationRelativeTo(editor.getFrameForRelativePositioning());
-            dialog.setVisible(true);
-            helpInstance = this;
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
+            }
+            dialog!!.add(scrollPane)
+            dialog!!.pack()
+            dialog!!.setLocationRelativeTo(editor.frameForRelativePositioning)
+            dialog!!.isVisible = true
+            helpInstance = this
+        } catch (e: MalformedURLException) {
+            e.printStackTrace()
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
 
         //var res = Main.class.getResource("help/test.html");
+    }
+
+    companion object {
+        private var helpInstance: Help? = null
     }
 }

@@ -1,39 +1,28 @@
-package zedit2;
+package zedit2
 
-import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.Transferable;
-import java.awt.datatransfer.UnsupportedFlavorException;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.Transferable
+import java.awt.datatransfer.UnsupportedFlavorException
+import java.io.IOException
 
-public class StringsSelection implements Transferable {
-    private final List<String> strings;
-    public static final DataFlavor flavor = new DataFlavor(List.class, "application/x-array-of-strings");
-
-    public StringsSelection(List<String> strings) {
-        this.strings = strings;
+class StringsSelection(val strings: List<String>) : Transferable {
+    override fun getTransferDataFlavors(): Array<DataFlavor> {
+        return arrayOf(flavor)
     }
 
-    @Override
-    public DataFlavor[] getTransferDataFlavors() {
-        return new DataFlavor[]{flavor};
+    override fun isDataFlavorSupported(flavor: DataFlavor): Boolean {
+        return (Companion.flavor.equals(flavor))
     }
 
-    @Override
-    public boolean isDataFlavorSupported(DataFlavor flavor) {
-        return (this.flavor.equals(flavor));
-    }
-
-    @Override
-    public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException, IOException {
+    @Throws(UnsupportedFlavorException::class, IOException::class)
+    override fun getTransferData(flavor: DataFlavor): Any {
         if (!isDataFlavorSupported(flavor)) {
-            throw new UnsupportedFlavorException(flavor);
+            throw UnsupportedFlavorException(flavor)
         }
-        return strings;
+        return strings
     }
 
-    public List<String> getStrings() {
-        return strings;
+    companion object {
+        val flavor: DataFlavor = DataFlavor(MutableList::class.java, "application/x-array-of-strings")
     }
 }

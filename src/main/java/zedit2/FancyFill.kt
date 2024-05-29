@@ -1,732 +1,741 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import javax.swing.event.ChangeListener;
-import java.awt.*;
-import java.awt.event.*;
-import java.util.*;
+import zedit2.Clip.Companion.decode
+import java.awt.BorderLayout
+import java.awt.GridLayout
+import java.awt.event.*
+import java.util.*
+import javax.swing.*
+import javax.swing.event.ChangeEvent
+import javax.swing.event.ChangeListener
+import kotlin.math.*
 
-import static zedit2.Util.pair;
+class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<ByteArray>) :
+    JDialog(editor.frame, "Gradient Fill") {
+    private val rng = Random()
+    private val vertLabel: JLabel
+    private val horizLabel: JLabel
+    private val angleLabel: JLabel
+    private val repeatLabel: JLabel
+    private val xsLabel: JLabel
+    private val ysLabel: JLabel
+    private val diffLabel: JLabel
+    private val tsengLabel: JLabel
+    private val invertLabel: JLabel
+    private val horizInput: JSpinner
+    private val vertInput: JSpinner
+    private val angleInput: JSpinner
+    private val repeatInput: JSpinner
+    private val xsInput: JSpinner
+    private val ysInput: JSpinner
+    private val diffInput: JSpinner
+    private val invertChk: JCheckBox
+    private val tsengInput: JSpinner
+    private val sliderStart: JSpinner
+    private val sliderEnd: JSpinner
+    private val gradientCombo: JComboBox<String>
+    private val btnLinear: JRadioButton
+    private val btnBox: JRadioButton
+    private val btnRadial: JRadioButton
+    private val btnConic: JRadioButton
+    private val btnSlime: JRadioButton
+    private val filled: Array<ByteArray>
+    private val listener: ActionListener
+    private val editor: WorldEditor
 
-public class FancyFill extends JDialog {
-    private final Random rng = new Random();
-    private final JLabel vertLabel;
-    private final JLabel horizLabel;
-    private final JLabel angleLabel;
-    private final JLabel repeatLabel;
-    private final JLabel xsLabel;
-    private final JLabel ysLabel;
-    private final JLabel diffLabel;
-    private final JLabel tsengLabel;
-    private final JLabel invertLabel;
-    private final JSpinner horizInput;
-    private final JSpinner vertInput;
-    private final JSpinner angleInput;
-    private final JSpinner repeatInput;
-    private final JSpinner xsInput;
-    private final JSpinner ysInput;
-    private final JSpinner diffInput;
-    private final JCheckBox invertChk;
-    private final JSpinner tsengInput;
-    private final JSpinner sliderStart;
-    private final JSpinner sliderEnd;
-    private final JComboBox<String> gradientCombo;
-    private final JRadioButton btnLinear;
-    private final JRadioButton btnBox;
-    private final JRadioButton btnRadial;
-    private final JRadioButton btnConic;
-    private final JRadioButton btnSlime;
-    private final byte[][] filled;
-    private final ActionListener listener;
-    private WorldEditor editor;
+    lateinit var xs: IntArray
+    lateinit var ys: IntArray
+    lateinit var tiles: Array<Tile?>
+    lateinit private var gradientTiles: Array<Tile>
+    private var minX = 0
+    private var minY = 0
+    private var maxX = 0
+    private var maxY = 0
 
-    private int[] xPositions;
-    private int[] yPositions;
-    private Tile[] tileFills;
-    private Tile[] gradientTiles;
-    private int minX, minY, maxX, maxY;
+    private var fillMode = 0
 
-    private int fillMode;
+    private var linearMin = 0.0
+    private var linearMax = 0.0
+    private var closeCmd: String
+    private var tseng = 0.0
+    private var tsengMatr: Array<DoubleArray>? = null
 
-    private static final int LINEAR = 0;
-    private static final int BOX = 1;
-    private static final int RADIAL = 2;
-    private static final int CONIC = 3;
-    private static final int SLIME = 4;
-    private double linearMin;
-    private double linearMax;
-    private String closeCmd;
-    private double tseng = 0.0;
-    private double tsengMatr[][] = null;
+    private var tsengAvail = false
 
-    private boolean tsengAvail;
-
-    public FancyFill(WorldEditor editor, ActionListener listener, byte[][] filled) {
-        super(editor.getFrame(), "Gradient Fill");
-        tsengCheck();
+    init {
+        tsengCheck()
 
         //gradRev();
-        Util.addEscClose(this, getRootPane());
+        Util.addEscClose(this, getRootPane())
 
-        this.editor = editor;
-        this.filled = filled;
-        this.listener = listener;
-        genList(filled);
-        closeCmd = "undo";
-        setModalityType(JDialog.ModalityType.APPLICATION_MODAL);
-        setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        var cp = getContentPane();
-        cp.setLayout(new BorderLayout());
-        var gradientStyleBox = new JPanel(new GridLayout(1, 0));
-        gradientStyleBox.setBorder(BorderFactory.createTitledBorder("Gradient style"));
-        btnLinear = new JRadioButton("Linear");
-        btnBox = new JRadioButton("Box");
-        btnRadial = new JRadioButton("Radial");
-        btnConic = new JRadioButton("Conical");
-        btnSlime = new JRadioButton("Slime");
-        ButtonGroup styleGroup = new ButtonGroup();
-        styleGroup.add(btnLinear);
-        styleGroup.add(btnBox);
-        styleGroup.add(btnRadial);
-        styleGroup.add(btnConic);
-        styleGroup.add(btnSlime);
-        gradientStyleBox.add(btnLinear);
-        gradientStyleBox.add(btnBox);
-        gradientStyleBox.add(btnRadial);
-        gradientStyleBox.add(btnConic);
-        gradientStyleBox.add(btnSlime);
+        this.editor = editor
+        this.filled = filled
+        this.listener = listener
+        genList(filled)
+        closeCmd = "undo"
+        modalityType = ModalityType.APPLICATION_MODAL
+        defaultCloseOperation = DISPOSE_ON_CLOSE
+        val cp = contentPane
+        cp.layout = BorderLayout()
+        val gradientStyleBox = JPanel(GridLayout(1, 0))
+        gradientStyleBox.border = BorderFactory.createTitledBorder("Gradient style")
+        btnLinear = JRadioButton("Linear")
+        btnBox = JRadioButton("Box")
+        btnRadial = JRadioButton("Radial")
+        btnConic = JRadioButton("Conical")
+        btnSlime = JRadioButton("Slime")
+        val styleGroup = ButtonGroup()
+        styleGroup.add(btnLinear)
+        styleGroup.add(btnBox)
+        styleGroup.add(btnRadial)
+        styleGroup.add(btnConic)
+        styleGroup.add(btnSlime)
+        gradientStyleBox.add(btnLinear)
+        gradientStyleBox.add(btnBox)
+        gradientStyleBox.add(btnRadial)
+        gradientStyleBox.add(btnConic)
+        gradientStyleBox.add(btnSlime)
 
-        btnLinear.setSelected(true);
-        cp.add(gradientStyleBox, BorderLayout.NORTH);
+        btnLinear.isSelected = true
+        cp.add(gradientStyleBox, BorderLayout.NORTH)
 
-        var gradientBox = new JPanel(new BorderLayout());
-        gradientBox.setBorder(BorderFactory.createTitledBorder("Gradient"));
-        var comboBoxRenderer = new FancyFillRenderer(editor);
-        gradientCombo = new JComboBox<String>();
+        val gradientBox = JPanel(BorderLayout())
+        gradientBox.border = BorderFactory.createTitledBorder("Gradient")
+        val comboBoxRenderer = FancyFillRenderer(editor)
+        gradientCombo = JComboBox()
 
-        var ge = editor.getGlobalEditor();
-        var preSelectedKey = getPreselectKey();
-        int preSelectedIdx = -1;
-        String preSelectedGrad = ge.getString(preSelectedKey);
+        val ge = editor.globalEditor
+        val preSelectedKey = preselectKey
+        var preSelectedIdx = -1
+        val preSelectedGrad = ge.getString(preSelectedKey)
 
-        var grads = new ArrayList<String>();
-        for (int i = 0;; i++) {
-            var key = String.format(editor.prefix() + "GRAD_%d", i);
-            if (ge.isKey(key)) {
-                var grad = ge.getString(key);
-                if (preSelectedGrad != null && preSelectedGrad.equals(grad)) {
-                    preSelectedIdx = grads.size();
+        val grads = ArrayList<String>()
+        run {
+            var i = 0
+            while (true) {
+                val key = String.format(editor.prefix() + "GRAD_%d", i)
+                if (ge.isKey(key)) {
+                    val grad = ge.getString(key)
+                    if (preSelectedGrad != null && preSelectedGrad == grad) {
+                        preSelectedIdx = grads.size
+                    }
+                    if (grad == null) {
+                        throw RuntimeException("Unexpected null grad for $key")
+                    }
+                    grads.add(grad)
+                } else {
+                    break
                 }
-                grads.add(grad);
-            } else {
-                break;
+                i++
             }
         }
-        int bufMax = ge.getInt(editor.prefix()+"BUF_MAX", 0);
-        for (int i = 0; i <= bufMax; i++) {
-            var encodedBuffer = ge.getString(String.format("%sBUF_%d", editor.prefix(), i));
-            if (encodedBuffer == null) continue;
-            var clip = Clip.decode(encodedBuffer);
-            if (clip.getH() != 1) continue;
-            if (clip.getW() == 1) continue;
-            grads.add(encodedBuffer);
+        val bufMax = ge.getInt(editor.prefix() + "BUF_MAX", 0)
+        for (i in 0..bufMax) {
+            val encodedBuffer = ge.getString(String.format("%sBUF_%d", editor.prefix(), i)) ?: continue
+            val clip = decode(encodedBuffer)
+            if (clip.h != 1) continue
+            if (clip.w == 1) continue
+            grads.add(encodedBuffer)
         }
 
         if (preSelectedIdx == -1) {
             if (preSelectedGrad != null) {
-                gradientCombo.addItem(preSelectedGrad);
+                gradientCombo.addItem(preSelectedGrad)
             }
-            preSelectedIdx = 0;
+            preSelectedIdx = 0
         }
-        for (var grad : grads) {
-            gradientCombo.addItem(grad);
+        for (grad in grads) {
+            gradientCombo.addItem(grad)
         }
-        gradientCombo.setSelectedIndex(preSelectedIdx);
+        gradientCombo.selectedIndex = preSelectedIdx
 
-        gradientCombo.setRenderer(comboBoxRenderer);
-        gradientBox.add(gradientCombo);
+        gradientCombo.setRenderer(comboBoxRenderer)
+        gradientBox.add(gradientCombo)
 
-        gradientCombo.setToolTipText("Which gradient pattern to use. # x 1 blocks in your buffer can also be used.");
+        gradientCombo.toolTipText = "Which gradient pattern to use. # x 1 blocks in your buffer can also be used."
 
-        var middleLeftPanel = new JPanel(new BorderLayout());
-        middleLeftPanel.add(gradientBox, BorderLayout.NORTH);
+        val middleLeftPanel = JPanel(BorderLayout())
+        middleLeftPanel.add(gradientBox, BorderLayout.NORTH)
 
-        var gradOptionsLeft = new JPanel(new GridLayout(1, 2));
-        sliderStart = new JSpinner(new SpinnerNumberModel(0.0, -10, 10, 0.01));
-        sliderEnd = new JSpinner(new SpinnerNumberModel(1.0, -10, 10, 0.01));
-        sliderStart.setPreferredSize(sliderStart.getMinimumSize());
-        sliderEnd.setPreferredSize(sliderEnd.getMinimumSize());
-        sliderStart.getModel().setValue(0.0);
-        sliderEnd.getModel().setValue(1.0);
-        sliderStart.setToolTipText("Gradient start point");
-        sliderEnd.setToolTipText("Gradient finish point");
-        var sliderStartBox = new JPanel(new BorderLayout());
-        var sliderEndBox = new JPanel(new BorderLayout());
-        sliderStartBox.add(sliderStart, BorderLayout.CENTER);
-        sliderEndBox.add(sliderEnd, BorderLayout.CENTER);
-        sliderStartBox.setBorder(BorderFactory.createTitledBorder("Start"));
-        sliderEndBox.setBorder(BorderFactory.createTitledBorder("Finish"));
-        gradOptionsLeft.add(sliderStartBox);
-        gradOptionsLeft.add(sliderEndBox);
+        val gradOptionsLeft = JPanel(GridLayout(1, 2))
+        sliderStart = JSpinner(SpinnerNumberModel(0.0, -10.0, 10.0, 0.01))
+        sliderEnd = JSpinner(SpinnerNumberModel(1.0, -10.0, 10.0, 0.01))
+        sliderStart.preferredSize = sliderStart.minimumSize
+        sliderEnd.preferredSize = sliderEnd.minimumSize
+        sliderStart.model.value = 0.0
+        sliderEnd.model.value = 1.0
+        sliderStart.toolTipText = "Gradient start point"
+        sliderEnd.toolTipText = "Gradient finish point"
+        val sliderStartBox = JPanel(BorderLayout())
+        val sliderEndBox = JPanel(BorderLayout())
+        sliderStartBox.add(sliderStart, BorderLayout.CENTER)
+        sliderEndBox.add(sliderEnd, BorderLayout.CENTER)
+        sliderStartBox.border = BorderFactory.createTitledBorder("Start")
+        sliderEndBox.border = BorderFactory.createTitledBorder("Finish")
+        gradOptionsLeft.add(sliderStartBox)
+        gradOptionsLeft.add(sliderEndBox)
 
-        sliderStart.setToolTipText("How far into the gradient to start (negative expands the space at the start)");
-        sliderEnd.setToolTipText("How far into the gradient to finish (>1 expands the space at the end)");
+        sliderStart.toolTipText = "How far into the gradient to start (negative expands the space at the start)"
+        sliderEnd.toolTipText = "How far into the gradient to finish (>1 expands the space at the end)"
 
-        middleLeftPanel.add(gradOptionsLeft, BorderLayout.SOUTH);
+        middleLeftPanel.add(gradOptionsLeft, BorderLayout.SOUTH)
 
-        cp.add(middleLeftPanel, BorderLayout.WEST);
+        cp.add(middleLeftPanel, BorderLayout.WEST)
 
-        var gradOptionsRight = new JPanel(new GridLayout(0, 4, 4, 4));
-        horizLabel = new JLabel("Horizontal:");
-        vertLabel = new JLabel("Vertical:");
-        angleLabel = new JLabel("Angle:");
-        repeatLabel = new JLabel("Repeats:");
-        xsLabel = new JLabel("X-Weight:");
-        ysLabel = new JLabel("Y-Weight:");
-        diffLabel = new JLabel("Diffusion:");
-        tsengLabel = new JLabel("Tseng:");
-        invertLabel = new JLabel("Invert:");
-        horizLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        vertLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        angleLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        repeatLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        xsLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        ysLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        diffLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        tsengLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        invertLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+        val gradOptionsRight = JPanel(GridLayout(0, 4, 4, 4))
+        horizLabel = JLabel("Horizontal:")
+        vertLabel = JLabel("Vertical:")
+        angleLabel = JLabel("Angle:")
+        repeatLabel = JLabel("Repeats:")
+        xsLabel = JLabel("X-Weight:")
+        ysLabel = JLabel("Y-Weight:")
+        diffLabel = JLabel("Diffusion:")
+        tsengLabel = JLabel("Tseng:")
+        invertLabel = JLabel("Invert:")
+        horizLabel.horizontalAlignment = SwingConstants.RIGHT
+        vertLabel.horizontalAlignment = SwingConstants.RIGHT
+        angleLabel.horizontalAlignment = SwingConstants.RIGHT
+        repeatLabel.horizontalAlignment = SwingConstants.RIGHT
+        xsLabel.horizontalAlignment = SwingConstants.RIGHT
+        ysLabel.horizontalAlignment = SwingConstants.RIGHT
+        diffLabel.horizontalAlignment = SwingConstants.RIGHT
+        tsengLabel.horizontalAlignment = SwingConstants.RIGHT
+        invertLabel.horizontalAlignment = SwingConstants.RIGHT
 
-        horizInput = new JSpinner(new SpinnerNumberModel(0.5, 0.0, 1.0, 0.01));
-        vertInput = new JSpinner(new SpinnerNumberModel(0.5, 0.0, 1.0, 0.01));
-        angleInput = new JSpinner(new SpinnerNumberModel(0, 0, 360, 1));
-        repeatInput = new JSpinner(new SpinnerNumberModel(0, 0, 100, 1));
-        xsInput = new JSpinner(new SpinnerNumberModel(0.8, 0.0, 10.0, 0.1));
-        ysInput = new JSpinner(new SpinnerNumberModel(1.4, 0.0, 10.0, 0.1));
-        diffInput = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 1.0, 0.002));
-        invertChk = new JCheckBox();
-        tsengInput = new JSpinner(new SpinnerNumberModel(0.1, 0.0, 1.0, 0.05));
+        horizInput = JSpinner(SpinnerNumberModel(0.5, 0.0, 1.0, 0.01))
+        vertInput = JSpinner(SpinnerNumberModel(0.5, 0.0, 1.0, 0.01))
+        angleInput = JSpinner(SpinnerNumberModel(0, 0, 360, 1))
+        repeatInput = JSpinner(SpinnerNumberModel(0, 0, 100, 1))
+        xsInput = JSpinner(SpinnerNumberModel(0.8, 0.0, 10.0, 0.1))
+        ysInput = JSpinner(SpinnerNumberModel(1.4, 0.0, 10.0, 0.1))
+        diffInput = JSpinner(SpinnerNumberModel(0.0, 0.0, 1.0, 0.002))
+        invertChk = JCheckBox()
+        tsengInput = JSpinner(SpinnerNumberModel(0.1, 0.0, 1.0, 0.05))
 
-        setTT(horizLabel, horizInput, "Horizontal epicentre of gradient fill");
-        setTT(vertLabel, vertInput, "Vertical epicentre of gradient fill");
-        setTT(angleLabel, angleInput, "Angle of linear fill, angle offset of conical fill");
-        setTT(repeatLabel, repeatInput, "Number of times to repeat the gradient");
-        setTT(xsLabel, xsInput, "Horizontal cost of fill operation");
-        setTT(ysLabel, ysInput, "Vertical cost of fill operation");
-        setTT(diffLabel, diffInput, "Amount of random variance to apply to the gradient");
-        setTT(invertLabel, invertChk, "Whether to invert (reverse) the gradient pattern");
-        setTT(tsengLabel, tsengInput, "Amount to Tseng-ify this gradient");
+        setTT(horizLabel, horizInput, "Horizontal epicentre of gradient fill")
+        setTT(vertLabel, vertInput, "Vertical epicentre of gradient fill")
+        setTT(angleLabel, angleInput, "Angle of linear fill, angle offset of conical fill")
+        setTT(repeatLabel, repeatInput, "Number of times to repeat the gradient")
+        setTT(xsLabel, xsInput, "Horizontal cost of fill operation")
+        setTT(ysLabel, ysInput, "Vertical cost of fill operation")
+        setTT(diffLabel, diffInput, "Amount of random variance to apply to the gradient")
+        setTT(invertLabel, invertChk, "Whether to invert (reverse) the gradient pattern")
+        setTT(tsengLabel, tsengInput, "Amount to Tseng-ify this gradient")
 
-        getConfigOpts();
+        configOpts
 
-        gradOptionsRight.add(horizLabel);
-        gradOptionsRight.add(horizInput);
-        gradOptionsRight.add(xsLabel);
-        gradOptionsRight.add(xsInput);
-        gradOptionsRight.add(vertLabel);
-        gradOptionsRight.add(vertInput);
-        gradOptionsRight.add(ysLabel);
-        gradOptionsRight.add(ysInput);
-        gradOptionsRight.add(angleLabel);
-        gradOptionsRight.add(angleInput);
-        gradOptionsRight.add(diffLabel);
-        gradOptionsRight.add(diffInput);
-        gradOptionsRight.add(repeatLabel);
-        gradOptionsRight.add(repeatInput);
-        gradOptionsRight.add(invertLabel);
-        gradOptionsRight.add(invertChk);
+        gradOptionsRight.add(horizLabel)
+        gradOptionsRight.add(horizInput)
+        gradOptionsRight.add(xsLabel)
+        gradOptionsRight.add(xsInput)
+        gradOptionsRight.add(vertLabel)
+        gradOptionsRight.add(vertInput)
+        gradOptionsRight.add(ysLabel)
+        gradOptionsRight.add(ysInput)
+        gradOptionsRight.add(angleLabel)
+        gradOptionsRight.add(angleInput)
+        gradOptionsRight.add(diffLabel)
+        gradOptionsRight.add(diffInput)
+        gradOptionsRight.add(repeatLabel)
+        gradOptionsRight.add(repeatInput)
+        gradOptionsRight.add(invertLabel)
+        gradOptionsRight.add(invertChk)
         if (tsengAvail) {
-            gradOptionsRight.add(tsengLabel);
-            gradOptionsRight.add(tsengInput);
+            gradOptionsRight.add(tsengLabel)
+            gradOptionsRight.add(tsengInput)
         }
 
-        cp.add(gradOptionsRight, BorderLayout.EAST);
+        cp.add(gradOptionsRight, BorderLayout.EAST)
 
-        setIconImage(editor.getCanvas().extractCharImage(176, 0x6e, 1, 1, false, "$"));
+        setIconImage(editor.canvas.extractCharImage(176, 0x6e, 1, 1, false, "$"))
 
-        var bottomPane = new JPanel(new BorderLayout());
-        var buttonPane = new JPanel(new GridLayout(1, 2, 4, 0));
-        var okBtn = new JButton("OK");
-        getRootPane().setDefaultButton(okBtn);
-        var cancelBtn = new JButton("Cancel");
-        okBtn.addActionListener(e -> {
-            closeCmd = "done";
-            setConfigOpts();
-            dispose();
-        });
-        cancelBtn.addActionListener(e -> {
-            closeCmd = "undo";
-            dispose();
-        });
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent e) {
-                updateListener(closeCmd);
+        val bottomPane = JPanel(BorderLayout())
+        val buttonPane = JPanel(GridLayout(1, 2, 4, 0))
+        val okBtn = JButton("OK")
+        getRootPane().defaultButton = okBtn
+        val cancelBtn = JButton("Cancel")
+        okBtn.addActionListener { e: ActionEvent? ->
+            closeCmd = "done"
+            setConfigOpts()
+            dispose()
+        }
+        cancelBtn.addActionListener { e: ActionEvent? ->
+            closeCmd = "undo"
+            dispose()
+        }
+        addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent) {
+                updateListener(closeCmd)
             }
-        });
-        buttonPane.add(okBtn);
-        buttonPane.add(cancelBtn);
-        buttonPane.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 4));
-        bottomPane.add(buttonPane, BorderLayout.EAST);
+        })
+        buttonPane.add(okBtn)
+        buttonPane.add(cancelBtn)
+        buttonPane.border = BorderFactory.createEmptyBorder(4, 0, 4, 4)
+        bottomPane.add(buttonPane, BorderLayout.EAST)
 
-        cp.add(bottomPane, BorderLayout.SOUTH);
-        setResizable(false);
+        cp.add(bottomPane, BorderLayout.SOUTH)
+        isResizable = false
 
-        pack();
+        pack()
 
-        setLocationRelativeTo(editor.getFrameForRelativePositioning());
+        setLocationRelativeTo(editor.frameForRelativePositioning)
 
-        ItemListener il = e -> updateContents();
-        ChangeListener cl = e -> updateContents();
-        btnLinear.addItemListener(il);
-        btnBox.addItemListener(il);
-        btnRadial.addItemListener(il);
-        btnConic.addItemListener(il);
-        btnSlime.addItemListener(il);
-        invertChk.addItemListener(il);
-        gradientCombo.addItemListener(il);
-        sliderStart.addChangeListener(cl);
-        sliderEnd.addChangeListener(cl);
-        horizInput.addChangeListener(cl);
-        vertInput.addChangeListener(cl);
-        angleInput.addChangeListener(cl);
-        repeatInput.addChangeListener(cl);
-        xsInput.addChangeListener(cl);
-        ysInput.addChangeListener(cl);
-        ysInput.addChangeListener(cl);
-        diffInput.addChangeListener(cl);
-        tsengInput.addChangeListener(cl);
+        val il = ItemListener { e: ItemEvent? -> updateContents() }
+        val cl = ChangeListener { e: ChangeEvent? -> updateContents() }
+        btnLinear.addItemListener(il)
+        btnBox.addItemListener(il)
+        btnRadial.addItemListener(il)
+        btnConic.addItemListener(il)
+        btnSlime.addItemListener(il)
+        invertChk.addItemListener(il)
+        gradientCombo.addItemListener(il)
+        sliderStart.addChangeListener(cl)
+        sliderEnd.addChangeListener(cl)
+        horizInput.addChangeListener(cl)
+        vertInput.addChangeListener(cl)
+        angleInput.addChangeListener(cl)
+        repeatInput.addChangeListener(cl)
+        xsInput.addChangeListener(cl)
+        ysInput.addChangeListener(cl)
+        ysInput.addChangeListener(cl)
+        diffInput.addChangeListener(cl)
+        tsengInput.addChangeListener(cl)
 
-        updateContents();
+        updateContents()
 
-        setVisible(true);
+        isVisible = true
     }
 
-    private void tsengCheck() {
-        tsengAvail = GlobalEditor.getGlobalEditor().getBoolean("AGH_MORE_DOBERMANS", false);
+    private fun tsengCheck() {
+        tsengAvail = GlobalEditor.getBoolean("AGH_MORE_DOBERMANS", false)
 
-        var calendar = Calendar.getInstance();
-        if (calendar.get(Calendar.MONTH) != Calendar.APRIL) return;
-        if (calendar.get(Calendar.DAY_OF_MONTH) != 1) return;
+        val calendar = Calendar.getInstance()
+        if (calendar[Calendar.MONTH] != Calendar.APRIL) return
+        if (calendar[Calendar.DAY_OF_MONTH] != 1) return
         // April fools!
-        tsengAvail = true;
+        tsengAvail = true
     }
 
-    private String getPreselectKey() {
-        return String.format("FILL_%s_SELECTED", editor.getWorldData().isSuperZZT() ? "SZZT" : "ZZT");
+    private val preselectKey: String
+        get() = String.format("FILL_%s_SELECTED", if (editor.worldData.isSuperZZT) "SZZT" else "ZZT")
+
+    private fun setTT(component1: JComponent, component2: JComponent, ttText: String) {
+        component1.toolTipText = ttText
+        component2.toolTipText = ttText
     }
 
-    private void setTT(JComponent component1, JComponent component2, String ttText) {
-        component1.setToolTipText(ttText);
-        component2.setToolTipText(ttText);
+    private fun setConfigOpts() {
+        val ge = editor.globalEditor
+        ge.setString("FILL_MODE", selectedFillMode)
+        ge.setDouble("FILL_START", sliderStart.value as Double)
+        ge.setDouble("FILL_FINISH", sliderEnd.value as Double)
+        ge.setDouble("FILL_HORIZ", horizInput.value as Double)
+        ge.setDouble("FILL_VERT", vertInput.value as Double)
+        ge.setInt("FILL_ANGLE", angleInput.value as Int)
+        ge.setInt("FILL_REPEATS", repeatInput.value as Int)
+        ge.setDouble("FILL_XWEIGHT", xsInput.value as Double)
+        ge.setDouble("FILL_YWEIGHT", ysInput.value as Double)
+        ge.setDouble("FILL_DIFFUSE", diffInput.value as Double)
+        ge.setBoolean("FILL_INVERT", invertChk.isSelected)
+        if (tsengAvail) ge.setDouble("FILL_TSENG", tsengInput.value as Double)
+        ge.setString(preselectKey, gradientCombo.selectedItem as String)
     }
 
-    private void setConfigOpts() {
-        var ge = editor.getGlobalEditor();
-        ge.setString("FILL_MODE", getSelectedFillMode());
-        ge.setDouble("FILL_START", (double) sliderStart.getValue());
-        ge.setDouble("FILL_FINISH", (double) sliderEnd.getValue());
-        ge.setDouble("FILL_HORIZ", (double) horizInput.getValue());
-        ge.setDouble("FILL_VERT", (double) vertInput.getValue());
-        ge.setInt("FILL_ANGLE", (int) angleInput.getValue());
-        ge.setInt("FILL_REPEATS", (int) repeatInput.getValue());
-        ge.setDouble("FILL_XWEIGHT", (double) xsInput.getValue());
-        ge.setDouble("FILL_YWEIGHT", (double) ysInput.getValue());
-        ge.setDouble("FILL_DIFFUSE", (double) diffInput.getValue());
-        ge.setBoolean("FILL_INVERT", invertChk.isSelected());
-        if (tsengAvail) ge.setDouble("FILL_TSENG", (double) tsengInput.getValue());
-        ge.setString(getPreselectKey(), (String) gradientCombo.getSelectedItem());
-    }
-
-    private void getConfigOpts() {
-        var ge = editor.getGlobalEditor();
-        setSelectedFillMode(ge.getString("FILL_MODE", "LINEAR"));
-        sliderStart.setValue(ge.getDouble("FILL_START", 0.0));
-        sliderEnd.setValue(ge.getDouble("FILL_FINISH", 1.0));
-        horizInput.setValue(ge.getDouble("FILL_HORIZ", 0.5));
-        vertInput.setValue(ge.getDouble("FILL_VERT", 0.5));
-        angleInput.setValue(ge.getInt("FILL_ANGLE", 0));
-        repeatInput.setValue(ge.getInt("FILL_REPEATS", 0));
-        xsInput.setValue(ge.getDouble("FILL_XWEIGHT", 0.8));
-        ysInput.setValue(ge.getDouble("FILL_YWEIGHT", 1.4));
-        diffInput.setValue(ge.getDouble("FILL_DIFFUSE", 0.0));
-        tsengInput.setValue(ge.getDouble("FILL_TSENG", 0.1));
-        invertChk.setSelected(ge.getBoolean("FILL_INVERT", false));
-    }
-
-    private void setSelectedFillMode(String fillMode) {
-        switch (fillMode) {
-            case "LINEAR":
-            default:
-                btnLinear.setSelected(true);
-                break;
-            case "BOX":
-                btnBox.setSelected(true);
-                break;
-            case "RADIAL":
-                btnRadial.setSelected(true);
-                break;
-            case "CONICAL":
-                btnConic.setSelected(true);
-                break;
-            case "SLIME":
-                btnSlime.setSelected(true);
-                break;
+    private val configOpts: Unit
+        get() {
+            val ge = editor.globalEditor
+            selectedFillMode = ge.getString("FILL_MODE", "LINEAR")
+            sliderStart.value = ge.getDouble("FILL_START", 0.0)
+            sliderEnd.value = ge.getDouble("FILL_FINISH", 1.0)
+            horizInput.value = ge.getDouble("FILL_HORIZ", 0.5)
+            vertInput.value = ge.getDouble("FILL_VERT", 0.5)
+            angleInput.value = ge.getInt("FILL_ANGLE", 0)
+            repeatInput.value = ge.getInt("FILL_REPEATS", 0)
+            xsInput.value = ge.getDouble("FILL_XWEIGHT", 0.8)
+            ysInput.value = ge.getDouble("FILL_YWEIGHT", 1.4)
+            diffInput.value = ge.getDouble("FILL_DIFFUSE", 0.0)
+            tsengInput.value = ge.getDouble("FILL_TSENG", 0.1)
+            invertChk.isSelected = ge.getBoolean("FILL_INVERT", false)
         }
-    }
 
-    private String getSelectedFillMode() {
-        if (btnLinear.isSelected()) return "LINEAR";
-        if (btnBox.isSelected()) return "BOX";
-        if (btnRadial.isSelected()) return "RADIAL";
-        if (btnConic.isSelected()) return "CONICAL";
-        if (btnSlime.isSelected()) return "SLIME";
-        throw new UnsupportedOperationException();
-    }
-
-    private void genList(byte[][] filled) {
-        int width = filled[0].length;
-        int height = filled.length;
-        int count = 0;
-        for (byte[] bytes : filled) {
-            for (byte b : bytes) {
-                count += b;
+    private var selectedFillMode: String
+        get() {
+            if (btnLinear.isSelected) return "LINEAR"
+            if (btnBox.isSelected) return "BOX"
+            if (btnRadial.isSelected) return "RADIAL"
+            if (btnConic.isSelected) return "CONICAL"
+            if (btnSlime.isSelected) return "SLIME"
+            throw UnsupportedOperationException()
+        }
+        private set(fillMode) {
+            when (fillMode) {
+                "LINEAR" -> btnLinear.isSelected = true
+                "BOX" -> btnBox.isSelected = true
+                "RADIAL" -> btnRadial.isSelected = true
+                "CONICAL" -> btnConic.isSelected = true
+                "SLIME" -> btnSlime.isSelected = true
+                else -> btnLinear.isSelected = true
             }
         }
-        xPositions = new int[count];
-        yPositions = new int[count];
-        tileFills = new Tile[count];
-        int i = 0;
-        maxX = Integer.MIN_VALUE;
-        maxY = Integer.MIN_VALUE;
-        minX = Integer.MAX_VALUE;
-        minY = Integer.MAX_VALUE;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                if (filled[y][x] == 1) {
-                    minX = Math.min(minX, x);
-                    minY = Math.min(minY, y);
-                    maxX = Math.max(maxX, x);
-                    maxY = Math.max(maxY, y);
-                    xPositions[i] = x;
-                    yPositions[i] = y;
-                    i++;
+
+    private fun genList(filled: Array<ByteArray>) {
+        val width = filled[0].size
+        val height = filled.size
+        var count = 0
+        for (bytes in filled) {
+            for (b in bytes) {
+                count += b.toInt()
+            }
+        }
+        xs = IntArray(count)
+        ys = IntArray(count)
+        tiles = arrayOfNulls(count)
+        var i = 0
+        maxX = Int.MIN_VALUE
+        maxY = Int.MIN_VALUE
+        minX = Int.MAX_VALUE
+        minY = Int.MAX_VALUE
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                if (filled[y][x].toInt() == 1) {
+                    minX = min(minX.toDouble(), x.toDouble()).toInt()
+                    minY = min(minY.toDouble(), y.toDouble()).toInt()
+                    maxX = max(maxX.toDouble(), x.toDouble()).toInt()
+                    maxY = max(maxY.toDouble(), y.toDouble()).toInt()
+                    xs[i] = x
+                    ys[i] = y
+                    i++
                 }
             }
         }
     }
 
-    private void updateContents() {
-        updateFillMode();
-        updateAccess();
-        updateFill();
-        updateListener("updateFill");
+    private fun updateContents() {
+        updateFillMode()
+        updateAccess()
+        updateFill()
+        updateListener("updateFill")
     }
 
-    private void updateListener(String command) {
-        ActionEvent e = new ActionEvent(this, ActionEvent.ACTION_PERFORMED, command);
-        listener.actionPerformed(e);
+    private fun updateListener(command: String) {
+        val e = ActionEvent(this, ActionEvent.ACTION_PERFORMED, command)
+        listener.actionPerformed(e)
     }
 
-    public int[] getXs() {
-        return xPositions;
-    }
-    public int[] getYs() {
-        return yPositions;
-    }
-    public Tile[] getTiles() {
-        return tileFills;
-    }
-
-    private void updateFillMode() {
-
-        if (btnLinear.isSelected()) {
-            fillMode = LINEAR;
-        } else if (btnBox.isSelected()) {
-            fillMode = BOX;
-        } else if (btnRadial.isSelected()) {
-            fillMode = RADIAL;
-        } else if (btnConic.isSelected()) {
-            fillMode = CONIC;
-        } else if (btnSlime.isSelected()) {
-            fillMode = SLIME;
+    private fun updateFillMode() {
+        if (btnLinear.isSelected) {
+            fillMode = LINEAR
+        } else if (btnBox.isSelected) {
+            fillMode = BOX
+        } else if (btnRadial.isSelected) {
+            fillMode = RADIAL
+        } else if (btnConic.isSelected) {
+            fillMode = CONIC
+        } else if (btnSlime.isSelected) {
+            fillMode = SLIME
         }
     }
 
-    private void calcTseng() {
-        tseng = 0.0;
-        tsengMatr = null;
+    private fun calcTseng() {
+        tseng = 0.0
+        tsengMatr = null
         if (tsengAvail) {
-            tseng = (double) tsengInput.getValue();
-            tsengMatr = new double[][]{{0.4, 0.0, 0.1, 0.0, 0.3, 0.0, 0.1, 0.0},
-                    {0.0, 0.9, 0.0, 0.5, 0.0, 0.9, 0.0, 0.6},
-                    {0.1, 0.0, 0.2, 0.0, 0.1, 0.0, 0.2, 0.0},
-                    {0.0, 0.8, 0.0, 1.0, 0.0, 0.7, 0.0, 0.9},
-                    {0.3, 0.0, 0.1, 0.0, 0.4, 0.0, 0.1, 0.0},
-                    {0.0, 0.9, 0.0, 0.6, 0.0, 0.9, 0.0, 0.5},
-                    {0.1, 0.0, 0.2, 0.0, 0.1, 0.0, 0.2, 0.0},
-                    {0.0, 0.7, 0.0, 0.9, 0.0, 0.8, 0.0, 1.0}};
+            tseng = tsengInput.value as Double
+            tsengMatr = arrayOf(
+                doubleArrayOf(0.4, 0.0, 0.1, 0.0, 0.3, 0.0, 0.1, 0.0),
+                doubleArrayOf(0.0, 0.9, 0.0, 0.5, 0.0, 0.9, 0.0, 0.6),
+                doubleArrayOf(0.1, 0.0, 0.2, 0.0, 0.1, 0.0, 0.2, 0.0),
+                doubleArrayOf(0.0, 0.8, 0.0, 1.0, 0.0, 0.7, 0.0, 0.9),
+                doubleArrayOf(0.3, 0.0, 0.1, 0.0, 0.4, 0.0, 0.1, 0.0),
+                doubleArrayOf(0.0, 0.9, 0.0, 0.6, 0.0, 0.9, 0.0, 0.5),
+                doubleArrayOf(0.1, 0.0, 0.2, 0.0, 0.1, 0.0, 0.2, 0.0),
+                doubleArrayOf(0.0, 0.7, 0.0, 0.9, 0.0, 0.8, 0.0, 1.0)
+            )
         }
     }
 
-    private void updateFill() {
-        updateGradientTiles();
+    private fun updateFill() {
+        updateGradientTiles()
 
-        calcTseng();
+        calcTseng()
 
         if (fillMode == SLIME) {
             // Special handling for slime fill
-            slimeFill();
-            return;
+            slimeFill()
+            return
         }
         if (fillMode == LINEAR) {
             // Precompute min/max for this angle
-            precomputeLinear();
+            precomputeLinear()
         }
 
-        for (int i = 0; i < xPositions.length; i++) {
-            int x = xPositions[i];
-            int y = yPositions[i];
-            double fx = doublePos(x, minX, maxX);
-            double fy = doublePos(y, minY, maxY);
+        for (i in xs.indices) {
+            val x = xs[i]
+            val y = ys[i]
+            val fx = doublePos(x, minX, maxX)
+            val fy = doublePos(y, minY, maxY)
 
-            double activationValue = translateXY(i, fx, fy);
-            boolean tsenged = false;
+            val activationValue = translateXY(i, fx, fy)
+            val tsenged = false
 
-            fillTile(i, activationValue, x, y);
+            fillTile(i, activationValue, x, y)
         }
     }
 
-    private void precomputeLinear() {
-        var intAng = (int) angleInput.getValue();
-        double min = Double.MAX_VALUE * 1.0;
-        double max = Double.MAX_VALUE * -1.0;
-        double t;
-        t = linearTranslate(0.0, 0.0, intAng);
-        min = Math.min(min, t); max = Math.max(max, t);
-        t = linearTranslate(0.0, 1.0, intAng);
-        min = Math.min(min, t); max = Math.max(max, t);
-        t = linearTranslate(1.0, 0.0, intAng);
-        min = Math.min(min, t); max = Math.max(max, t);
-        t = linearTranslate(1.0, 1.0, intAng);
-        min = Math.min(min, t); max = Math.max(max, t);
-        linearMin = min;
-        linearMax = max;
+    private fun precomputeLinear() {
+        val intAng = angleInput.value as Int
+        var min = Double.MAX_VALUE * 1.0
+        var max = Double.MAX_VALUE * -1.0
+        var t = linearTranslate(0.0, 0.0, intAng)
+        min = min(min, t)
+        max = max(max, t)
+        t = linearTranslate(0.0, 1.0, intAng)
+        min = min(min, t)
+        max = max(max, t)
+        t = linearTranslate(1.0, 0.0, intAng)
+        min = min(min, t)
+        max = max(max, t)
+        t = linearTranslate(1.0, 1.0, intAng)
+        min = min(min, t)
+        max = max(max, t)
+        linearMin = min
+        linearMax = max
     }
 
-    private void updateGradientTiles() {
-        String encodedBuffer = (String) gradientCombo.getSelectedItem();
-        gradientTiles = Clip.decode(encodedBuffer).getTiles();
+    private fun updateGradientTiles() {
+        val encodedBuffer = gradientCombo.selectedItem as String
+        gradientTiles = decode(encodedBuffer).tiles
     }
 
-    private double translateXY(int i, double fx, double fy) {
+    private fun translateXY(i: Int, fx: Double, fy: Double): Double {
         // Translate x and y into an activation value
-        var horizontal = (double) horizInput.getValue();
-        var vertical = (double) vertInput.getValue();
-        var intAng = (int) angleInput.getValue();
-        var normAng = 1.0 * intAng / 360.0;
-        switch (fillMode) {
-            case BOX: {
-                double x = 1.0 - Math.abs(fx - horizontal) * 2.0;
-                double y = 1.0 - Math.abs(fy - vertical) * 2.0;
-                double v = Math.min(x, y);
-                return v;
+        val horizontal = horizInput.value as Double
+        val vertical = vertInput.value as Double
+        val intAng = angleInput.value as Int
+        val normAng = 1.0 * intAng / 360.0
+        when (fillMode) {
+            BOX -> {
+                val x = 1.0 - abs(fx - horizontal) * 2.0
+                val y = 1.0 - abs(fy - vertical) * 2.0
+                val v = min(x, y)
+                return v
             }
-            case RADIAL: {
-                double x = fx - horizontal;
-                double y = fy - vertical;
-                double v = 1.0 - (double) Math.sqrt(x * x + y * y);
-                return v;
-            }
-            case CONIC: {
-                double x = fx - horizontal;
-                double y = fy - vertical;
-                double a = (double) ((Math.atan2(y, x) + Math.PI) / (Math.PI * 2.0));
 
-                double v = (a + normAng) % 1.0;
-                return v;
+            RADIAL -> {
+                val x = fx - horizontal
+                val y = fy - vertical
+                val v = 1.0 - sqrt(x * x + y * y)
+                return v
             }
-            case LINEAR: {
-                double v = linearTranslate(fx, fy, intAng);
-                double diff = linearMax - linearMin;
-                if (diff < 0.000001) {
-                    v = 0.5;
+
+            CONIC -> {
+                val x = fx - horizontal
+                val y = fy - vertical
+
+                val v = (((atan2(y, x) + Math.PI) / (Math.PI * 2.0)) + normAng) % 1.0
+                return v
+            }
+
+            LINEAR -> {
+                var v = linearTranslate(fx, fy, intAng)
+                val diff = linearMax - linearMin
+                v = if (diff < 0.000001) {
+                    0.5
                 } else {
-                    v = (v - linearMin) / diff;
+                    (v - linearMin) / diff
                 }
 
-                return v;
+                return v
             }
         }
-        throw new RuntimeException("Unsupported fill mode");
+        throw RuntimeException("Unsupported fill mode")
     }
 
-    private double linearTranslate(double fx, double fy, int angAdd) {
-        switch (angAdd) {
-            case 0:
-            case 360:
-                return fx;
-            case 90:
-                return 1.0 - fy;
-            case 180:
-                return 1.0 - fx;
-            case 270:
-                return fy;
-            default:
-                double linearAng = (Math.PI * angAdd / 180.0);
-                double dx = fx - 0.5;
-                double dy = fy - 0.5;
-                double mag = Math.sqrt(dx * dx + dy * dy);
-                double ang = Math.atan2(dy, dx);
-                ang += linearAng;
-                return Math.cos(ang) * mag + 0.5;
+    private fun linearTranslate(fx: Double, fy: Double, angAdd: Int): Double {
+        when (angAdd) {
+            0, 360 -> return fx
+            90 -> return 1.0 - fy
+            180 -> return 1.0 - fx
+            270 -> return fy
+            else -> {
+                val linearAng = (Math.PI * angAdd / 180.0)
+                val dx = fx - 0.5
+                val dy = fy - 0.5
+                val mag = sqrt(dx * dx + dy * dy)
+                var ang = atan2(dy, dx)
+                ang += linearAng
+                return cos(ang) * mag + 0.5
+            }
         }
     }
 
-    private void fillTile(int i, double val, int x, int y) {
+    private fun fillTile(i: Int, `val`: Double, x: Int, y: Int) {
         // For now, compress the value into the gradient range and pick something
-        val = Util.clamp(val, 0.0, 1.0);
-        double diffusion = (double) diffInput.getValue();
-        val += rng.nextGaussian() * diffusion;
+        var `val` = `val`
+        `val` = Util.clamp(`val`, 0.0, 1.0)
+        val diffusion = diffInput.value as Double
+        `val` += rng.nextGaussian() * diffusion
 
         // 0 repeats: 0.0 -> 1.0
         // 1 repeats: 0.0 -> 1.0 -> 0.0
         // 2 repeats: 0.0 -> 1.0 -> 0.0 -> 1.0
+        `val` *= (repeatInput.value as Int + 1).toDouble()
+        `val` = 1.0 - abs((`val` % 2.0) - 1.0)
 
-        val *= ((int) repeatInput.getValue() + 1);
-        val = 1.0 - Math.abs((val % 2.0) - 1.0);
+        val min = sliderStart.value as Double
+        val max = sliderEnd.value as Double
+        val rmin = min(min, max)
+        val rmax = max(min, max)
+        val rdiff = rmax - rmin
+        `val` = `val` * rdiff + rmin
+        `val` = Util.clamp(`val`, 0.0, 1.0)
 
-        double min = (double) sliderStart.getValue();
-        double max = (double) sliderEnd.getValue();
-        double rmin = Math.min(min, max);
-        double rmax = Math.max(min, max);
-        double rdiff = rmax - rmin;
-        val = val * rdiff + rmin;
-        val = Util.clamp(val, 0.0, 1.0);
-
-        boolean tsenged = false;
+        var tsenged = false
         if (tsengMatr != null) {
-            double r = rng.nextDouble() * 0.1 + tseng;
-            if (tsengMatr[x % 8][y % 8] > 1.1 - r) {
-                tsenged = true;
+            val r = rng.nextDouble() * 0.1 + tseng
+            if (tsengMatr!![x % 8][y % 8] > 1.1 - r) {
+                tsenged = true
             }
         }
 
-        if (invertChk.isSelected() ^ tsenged) val = 1.0 - val;
+        if (invertChk.isSelected xor tsenged) `val` = 1.0 - `val`
 
-        int idx = (int)(val * gradientTiles.length);
-        if (idx == gradientTiles.length) idx--;
-        tileFills[i] = gradientTiles[idx];
+        var idx = (`val` * gradientTiles.size).toInt()
+        if (idx == gradientTiles.size) idx--
+        tiles[i] = gradientTiles[idx]
     }
 
-    private double doublePos(int val, int min, int max) {
-        if (val == min && val == max) return 0.5;
-        return 1.0 * (val - min) / (max - min);
+    private fun doublePos(`val`: Int, min: Int, max: Int): Double {
+        if (`val` == min && `val` == max) return 0.5
+        return 1.0 * (`val` - min) / (max - min)
     }
 
-    private void slimeFill() {
-        int width = filled[0].length;
-        int height = filled.length;
-        float[][] slimeArea = new float[height][width];
-        for (var slimeRow : slimeArea) {
-            Arrays.fill(slimeRow, Float.MAX_VALUE);
+    private fun slimeFill() {
+        val width = filled[0].size
+        val height = filled.size
+        val slimeArea = Array(height) { FloatArray(width) }
+        for (slimeRow in slimeArea) {
+            Arrays.fill(slimeRow, Float.MAX_VALUE)
         }
-        ArrayDeque<ArrayList<Integer>> queue = new ArrayDeque<>();
+        val queue = ArrayDeque<ArrayList<Int>>()
         // Initialise all edges at 0.0f
-        for (int i = 0; i < xPositions.length; i++) {
-            int x = xPositions[i];
-            int y = yPositions[i];
+        for (i in xs.indices) {
+            val x = xs[i]
+            val y = ys[i]
             if (isEdge(x, y, width, height)) {
-                slimeArea[y][x] = 0.0f;
-                queue.add(pair(x, y));
+                slimeArea[y][x] = 0.0f
+                queue.add(Util.pair(x, y))
             }
         }
 
-        float xScale = (float) ((double) xsInput.getValue());
-        float yScale = (float) ((double) ysInput.getValue());
-        float max = 0.0f;
+        val xScale = (xsInput.value as Double).toFloat()
+        val yScale = (ysInput.value as Double).toFloat()
+        var max = 0.0f
 
         while (!queue.isEmpty()) {
-            var pos = queue.pop();
-            int x = pos.get(0);
-            int y = pos.get(1);
-            float val = slimeArea[y][x];
-            max = Math.max(max, slimeExpand(x + 1, y, width, height, val + xScale, queue, slimeArea));
-            max = Math.max(max, slimeExpand(x - 1, y, width, height, val + xScale, queue, slimeArea));
-            max = Math.max(max, slimeExpand(x, y + 1, width, height, val + yScale, queue, slimeArea));
-            max = Math.max(max, slimeExpand(x, y - 1, width, height, val + yScale, queue, slimeArea));
+            val pos = queue.pop()
+            val x = pos[0]
+            val y = pos[1]
+            val `val` = slimeArea[y][x]
+            max = max(max.toDouble(), slimeExpand(x + 1, y, width, height, `val` + xScale, queue, slimeArea).toDouble())
+                .toFloat()
+            max = max(max.toDouble(), slimeExpand(x - 1, y, width, height, `val` + xScale, queue, slimeArea).toDouble())
+                .toFloat()
+            max = max(max.toDouble(), slimeExpand(x, y + 1, width, height, `val` + yScale, queue, slimeArea).toDouble())
+                .toFloat()
+            max = max(max.toDouble(), slimeExpand(x, y - 1, width, height, `val` + yScale, queue, slimeArea).toDouble())
+                .toFloat()
         }
-        for (int i = 0; i < xPositions.length; i++) {
-            int x = xPositions[i];
-            int y = yPositions[i];
-            float v = slimeArea[y][x];
-            if (max >= 0.000001) {
-                v = v / max;
+        for (i in xs.indices) {
+            val x = xs[i]
+            val y = ys[i]
+            var v = slimeArea[y][x]
+            v = if (max >= 0.000001) {
+                v / max
             } else {
-                v = 0.0f;
+                0.0f
             }
-            fillTile(i, v, x, y);
+            fillTile(i, v.toDouble(), x, y)
         }
     }
 
-    private float slimeExpand(int x, int y, int width, int height, float v, ArrayDeque<ArrayList<Integer>> queue, float[][] slimeArea) {
-        if (x < 0 || y < 0 || x >= width || y >= height) return 0.0f;
-        if (filled[y][x] == 0) return 0.0f;
+    private fun slimeExpand(
+        x: Int,
+        y: Int,
+        width: Int,
+        height: Int,
+        v: Float,
+        queue: ArrayDeque<ArrayList<Int>>,
+        slimeArea: Array<FloatArray>
+    ): Float {
+        if (x < 0 || y < 0 || x >= width || y >= height) return 0.0f
+        if (filled[y][x].toInt() == 0) return 0.0f
         if (v < slimeArea[y][x]) {
-            slimeArea[y][x] = v;
-            queue.add(pair(x, y));
-            return v;
+            slimeArea[y][x] = v
+            queue.add(Util.pair(x, y))
+            return v
         }
-        return 0.0f;
+        return 0.0f
     }
 
-    private boolean isEdge(int x, int y, int width, int height) {
+    private fun isEdge(x: Int, y: Int, width: Int, height: Int): Boolean {
 //        if (x == 0 || y == 0 || x == width - 1 || y == height - 1) {
 //            return true;
 //        }
-        if (y < height - 1 && filled[y + 1][x] == 0) return true;
-        if (y > 0 && filled[y - 1][x] == 0) return true;
-        if (x > 0 && filled[y][x - 1] == 0) return true;
-        if (x < width - 1 && filled[y][x + 1] == 0) return true;
-        return false;
+        if (y < height - 1 && filled[y + 1][x].toInt() == 0) return true
+        if (y > 0 && filled[y - 1][x].toInt() == 0) return true
+        if (x > 0 && filled[y][x - 1].toInt() == 0) return true
+        if (x < width - 1 && filled[y][x + 1].toInt() == 0) return true
+        return false
     }
 
 
-    private void updateAccess() {
-        switch (fillMode) {
-            case LINEAR:
-                setState(horizLabel, horizInput, false);
-                setState(vertLabel, vertInput, false);
-                setState(angleLabel, angleInput, true);
-                setState(xsLabel, xsInput, false);
-                setState(ysLabel, ysInput, false);
-            break;
-            case BOX:
-            case RADIAL:
-                setState(horizLabel, horizInput, true);
-                setState(vertLabel, vertInput, true);
-                setState(angleLabel, angleInput, false);
-                setState(xsLabel, xsInput, false);
-                setState(ysLabel, ysInput, false);
-                break;
-            case CONIC:
-                setState(horizLabel, horizInput, true);
-                setState(vertLabel, vertInput, true);
-                setState(angleLabel, angleInput, true);
-                setState(xsLabel, xsInput, false);
-                setState(ysLabel, ysInput, false);
-                break;
-            case SLIME:
-                setState(horizLabel, horizInput, false);
-                setState(vertLabel, vertInput, false);
-                setState(angleLabel, angleInput, false);
-                setState(xsLabel, xsInput, true);
-                setState(ysLabel, ysInput, true);
-            break;
+    private fun updateAccess() {
+        when (fillMode) {
+            LINEAR -> {
+                setState(horizLabel, horizInput, false)
+                setState(vertLabel, vertInput, false)
+                setState(angleLabel, angleInput, true)
+                setState(xsLabel, xsInput, false)
+                setState(ysLabel, ysInput, false)
+            }
+
+            BOX, RADIAL -> {
+                setState(horizLabel, horizInput, true)
+                setState(vertLabel, vertInput, true)
+                setState(angleLabel, angleInput, false)
+                setState(xsLabel, xsInput, false)
+                setState(ysLabel, ysInput, false)
+            }
+
+            CONIC -> {
+                setState(horizLabel, horizInput, true)
+                setState(vertLabel, vertInput, true)
+                setState(angleLabel, angleInput, true)
+                setState(xsLabel, xsInput, false)
+                setState(ysLabel, ysInput, false)
+            }
+
+            SLIME -> {
+                setState(horizLabel, horizInput, false)
+                setState(vertLabel, vertInput, false)
+                setState(angleLabel, angleInput, false)
+                setState(xsLabel, xsInput, true)
+                setState(ysLabel, ysInput, true)
+            }
         }
     }
 
-    private void setState(JLabel lbl, JSpinner spin, boolean state) {
-        lbl.setEnabled(state);
-        spin.setEnabled(state);
+    private fun setState(lbl: JLabel, spin: JSpinner, state: Boolean) {
+        lbl.isEnabled = state
+        spin.isEnabled = state
+    }
+
+    companion object {
+        private const val LINEAR = 0
+        private const val BOX = 1
+        private const val RADIAL = 2
+        private const val CONIC = 3
+        private const val SLIME = 4
     }
 }

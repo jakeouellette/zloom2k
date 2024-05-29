@@ -1,152 +1,140 @@
-package zedit2;
+package zedit2
 
-import java.util.Arrays;
+import zedit2.CP437.toBytes
 
-public class SZZTBoard extends Board {
-    private int cameraX, cameraY;
+class SZZTBoard : Board {
 
-    private static final int BOARD_W = 96;
-    private static final int BOARD_H = 80;
+    constructor(worldData: ByteArray, boardOffset: Int) : super() {
+        val boardName = Util.readPascalString(
+            worldData[boardOffset + 2], worldData,
+            boardOffset + 3, boardOffset + 63
+        )
 
-    public SZZTBoard(byte[] worldData, int boardOffset) throws WorldCorruptedException {
+        setName(boardName)
+        val boardPropertiesOffset = decodeRLE(worldData, boardOffset + 63)
 
-        super();
-        var boardName = Util.readPascalString(worldData[boardOffset + 2], worldData,
-                boardOffset + 3, boardOffset + 63);
+        setShots(Util.getInt8(worldData, boardPropertiesOffset + 0))
+        setExit(0, Util.getInt8(worldData, boardPropertiesOffset + 1))
+        setExit(1, Util.getInt8(worldData, boardPropertiesOffset + 2))
+        setExit(2, Util.getInt8(worldData, boardPropertiesOffset + 3))
+        setExit(3, Util.getInt8(worldData, boardPropertiesOffset + 4))
+        setRestartOnZap(worldData[boardPropertiesOffset + 5].toInt() == 1)
 
-        setName(boardName);
-        var boardPropertiesOffset = decodeRLE(worldData, boardOffset + 63);
+        setPlayerX(Util.getInt8(worldData, boardPropertiesOffset + 6))
+        setPlayerY(Util.getInt8(worldData, boardPropertiesOffset + 7))
+        cameraX = Util.getInt16(worldData, boardPropertiesOffset + 8)
+        cameraY = Util.getInt16(worldData, boardPropertiesOffset + 10)
+        setTimeLimit(Util.getInt16(worldData, boardPropertiesOffset + 12).toShort().toInt())
+        setStats(worldData, boardPropertiesOffset + 28, 0)
 
-        setShots(Util.getInt8(worldData, boardPropertiesOffset + 0));
-        setExit(0, Util.getInt8(worldData, boardPropertiesOffset + 1));
-        setExit(1, Util.getInt8(worldData, boardPropertiesOffset + 2));
-        setExit(2, Util.getInt8(worldData, boardPropertiesOffset + 3));
-        setExit(3, Util.getInt8(worldData, boardPropertiesOffset + 4));
-        setRestartOnZap(worldData[boardPropertiesOffset + 5] == 1);
-
-        setPlayerX(Util.getInt8(worldData, boardPropertiesOffset + 6));
-        setPlayerY(Util.getInt8(worldData, boardPropertiesOffset + 7));
-        setCameraX(Util.getInt16(worldData, boardPropertiesOffset + 8));
-        setCameraY(Util.getInt16(worldData, boardPropertiesOffset + 10));
-        setTimeLimit((short) Util.getInt16(worldData, boardPropertiesOffset + 12));
-        setStats(worldData, boardPropertiesOffset + 28, 0);
-
-        clearDirty();
-    }
-    public SZZTBoard() {}
-
-    public SZZTBoard(String name) {
-        initialise();
-        setName(CP437.toBytes(name));
-        setShots(255);
-        Stat playerStat = new Stat(true);
-        playerStat.setCycle(1);
-        playerStat.setIsPlayer(true);
-        Tile player = new Tile(ZType.PLAYER, 0x1F, playerStat);
-        setTile(48, 40, player);
+        clearDirty()
     }
 
-    @Override
-    public void write(CompatWarning warning, byte[] worldData, int boardOffset) {
-        int boardSize = getCurrentSize();
-        Util.setInt16(worldData, boardOffset, boardSize - 2);
-        if (getName().length > 60) {
-            warning.warn(1, "has a name that is >60 characters and will be truncated.");
+    constructor()
+
+    constructor(name: String?) {
+        initialise()
+        setName(toBytes(name!!))
+        setShots(255)
+        val playerStat = Stat(true)
+        playerStat.cycle = 1
+        playerStat.isPlayer = true
+        val player = Tile(ZType.PLAYER, 0x1F, playerStat)
+        setTile(48, 40, player)
+    }
+
+    override fun write(warning: CompatWarning?, worldData: ByteArray, boardOffset: Int) {
+        val boardSize = currentSize
+        Util.setInt16(worldData, boardOffset, boardSize - 2)
+        if (getName().size > 60) {
+            warning!!.warn(1, "has a name that is >60 characters and will be truncated.")
         }
-        Util.writePascalString(getName(), worldData, boardOffset + 2, boardOffset + 3, boardOffset + 63);
-        var boardPropertiesOffset = encodeRLE(worldData, boardOffset + 63);
-        Util.setInt8(worldData, boardPropertiesOffset + 0, getShots());
-        Util.setInt8(worldData, boardPropertiesOffset + 1, getExit(0));
-        Util.setInt8(worldData, boardPropertiesOffset + 2, getExit(1));
-        Util.setInt8(worldData, boardPropertiesOffset + 3, getExit(2));
-        Util.setInt8(worldData, boardPropertiesOffset + 4, getExit(3));
-        Util.setInt8(worldData, boardPropertiesOffset + 5, isRestartOnZap() ? 1 : 0);
-        Util.setInt8(worldData, boardPropertiesOffset + 6, getPlayerX());
-        Util.setInt8(worldData, boardPropertiesOffset + 7, getPlayerY());
-        Util.setInt16(worldData, boardPropertiesOffset + 8, getCameraX());
-        Util.setInt16(worldData, boardPropertiesOffset + 10, getCameraY());
-        Util.setInt16(worldData, boardPropertiesOffset + 12, getTimeLimit());
-        writeStats(warning, worldData, boardPropertiesOffset + 28);
+        Util.writePascalString(getName(), worldData, boardOffset + 2, boardOffset + 3, boardOffset + 63)
+        val boardPropertiesOffset = encodeRLE(worldData, boardOffset + 63)
+        Util.setInt8(worldData, boardPropertiesOffset + 0, getShots())
+        Util.setInt8(worldData, boardPropertiesOffset + 1, getExit(0))
+        Util.setInt8(worldData, boardPropertiesOffset + 2, getExit(1))
+        Util.setInt8(worldData, boardPropertiesOffset + 3, getExit(2))
+        Util.setInt8(worldData, boardPropertiesOffset + 4, getExit(3))
+        Util.setInt8(worldData, boardPropertiesOffset + 5, if (isRestartOnZap()) 1 else 0)
+        Util.setInt8(worldData, boardPropertiesOffset + 6, getPlayerX())
+        Util.setInt8(worldData, boardPropertiesOffset + 7, getPlayerY())
+        Util.setInt16(worldData, boardPropertiesOffset + 8, cameraX)
+        Util.setInt16(worldData, boardPropertiesOffset + 10, cameraY)
+        Util.setInt16(worldData, boardPropertiesOffset + 12, getTimeLimit())
+        writeStats(warning!!, worldData, boardPropertiesOffset + 28)
     }
 
-    @Override
-    public Board clone() {
-        SZZTBoard other = new SZZTBoard();
-        cloneInto(other);
-        other.cameraX = cameraX;
-        other.cameraY = cameraY;
-        return other;
+    override fun clone(): Board {
+        val other = SZZTBoard()
+        cloneInto(other)
+        other.cameraX = cameraX
+        other.cameraY = cameraY
+        return other
     }
 
-    @Override
-    public boolean isSuperZZT() {
-        return true;
+    override val isSuperZZT: Boolean
+        get() = true
+
+    override var isDark: Boolean
+        get() = false
+        set(dark) {}
+    override var message: ByteArray
+        get() = ByteArray(0)
+        set(message) {}
+
+    override var cameraX: Int = 0
+        get() = field
+        set(value) {
+            field = value
+            setDirty()
+        }
+
+    override var cameraY:Int = 0
+        get() = field
+        set(value) {
+            field = value
+            setDirty()
+        }
+
+    // TODO(jakeouellette): I don't set Dirty on these.
+    override var width: Int = 0
+        get() = field
+        set(value) {
+            field = value
+        }
+
+    override var height:Int = 0
+        get() = field
+        set(value) {
+            field = value
+        }
+
+    override val currentSize: Int
+        get() {
+            var size = 63 // header
+            size += rLESize // rle data
+            size += 30 // board properties
+            size += statsSize
+            return size
+        }
+
+    override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, x: Int, y: Int) {
+        cols!![pos] = SZZTType.getColour(this, x, y).toByte()
+        chars!![pos] = SZZTType.getChar(this, x, y).toByte()
     }
 
-    @Override
-    public int getWidth() {
-        return BOARD_W;
-    }
-    @Override
-    public int getHeight() {
-        return BOARD_H;
-    }
-    @Override
-    public boolean isDark() {
-        return false;
-    }
-    @Override
-    public void setDark(boolean dark) { }
-    @Override
-    public byte[] getMessage() {
-        return new byte[0];
-    }
-    @Override
-    public void setMessage(byte[] message) { }
+    override fun isEqualTo(other: Board): Boolean {
+        if (other !is SZZTBoard) return false
+        if (!super.isEqualTo(other)) return false
 
-    @Override
-    public int getCameraX() {
-        return cameraX;
-    }
-    @Override
-    public int getCameraY() {
-        return cameraY;
-    }
-    @Override
-    public void setCameraX(int x) {
-        cameraX = x;
-        setDirty();
-    }
-    @Override
-    public void setCameraY(int y) {
-        cameraY = y;
-        setDirty();
+        val szztOther = other
+        if (cameraX != szztOther.cameraX) return false
+        return cameraY == szztOther.cameraY
     }
 
-    @Override
-    public int getCurrentSize() {
-        int size = 63; // header
-        size += getRLESize(); // rle data
-        size += 30; // board properties
-        size += getStatsSize();
-        return size;
-    }
-
-    @Override
-    protected void drawCharacter(byte[] cols, byte[] chars, int pos, int x, int y) {
-        cols[pos] = (byte) SZZTType.getColour(this, x, y);
-        chars[pos] = (byte) SZZTType.getChar(this, x, y);
-    }
-
-    @Override
-    public boolean isEqualTo(Board other) {
-        if (!(other instanceof SZZTBoard)) return false;
-        if (!super.isEqualTo(other)) return false;
-
-        SZZTBoard szztOther = (SZZTBoard)other;
-        if (cameraX != szztOther.cameraX) return false;
-        if (cameraY != szztOther.cameraY) return false;
-
-        return true;
+    companion object {
+        val width: Int = 96
+        val height: Int = 80
     }
 }

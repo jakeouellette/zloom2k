@@ -1,329 +1,356 @@
-package zedit2;
+package zedit2
 
-import javax.imageio.ImageIO;
-import javax.swing.*;
-import javax.swing.border.BevelBorder;
-import javax.swing.event.*;
-import java.awt.*;
-import java.awt.datatransfer.*;
-import java.awt.event.*;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.regex.Pattern;
+import zedit2.CP437.font
+import zedit2.CP437.toBytes
+import zedit2.CP437.toUnicode
+import zedit2.ColourSelector.Companion.createColourSelector
+import zedit2.GlobalEditor.updateTimestamp
+import zedit2.SZZTWorldData.Companion.createWorld
+import zedit2.Settings.Companion.board
+import zedit2.Settings.Companion.boardExits
+import zedit2.Settings.Companion.world
+import zedit2.StatSelector.Companion.getOption
+import zedit2.StatSelector.Companion.getStatIdx
+import zedit2.Util.addKeybind
+import zedit2.Util.clamp
+import zedit2.Util.evalConfigDir
+import zedit2.Util.getExtensionless
+import zedit2.Util.getKeyStroke
+import zedit2.Util.keyStrokeString
+import zedit2.Util.pair
+import zedit2.WorldData.Companion.loadWorld
+import java.awt.*
+import java.awt.datatransfer.Clipboard
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.Transferable
+import java.awt.datatransfer.UnsupportedFlavorException
+import java.awt.event.*
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.*
+import java.util.Timer
+import java.util.regex.Pattern
+import javax.imageio.ImageIO
+import javax.swing.*
+import javax.swing.border.BevelBorder
+import javax.swing.event.*
+import javax.swing.filechooser.FileFilter
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sqrt
 
-import static zedit2.Util.pair;
+class WorldEditor @JvmOverloads constructor(
+    val globalEditor: GlobalEditor, path: File?, var worldData: WorldData = loadWorld(
+        path!!
+    )
+) : KeyActionReceiver, KeyListener, WindowFocusListener, PopupMenuListener, MenuListener {
+    private var path: File? = null
+    var boardIdx: Int = 0
+    private var currentBoard: Board? = null
+    var boards: ArrayList<Board> = ArrayList()
+        private set
+    private val undoList = HashMap<Int, ArrayList<Board>>()
+    private val undoPositions = HashMap<Int, Int>()
+    private var zoom: Double
+    private var cursorX = 0
+    private var cursorY = 0
+    private var centreView = false
+    private var blockStartX = -1
+    private var blockStartY = -1
+    private var moveBlockW = 0
+    private var moveBlockH = 0
+    private var moveBlockX = 0
+    private var moveBlockY = 0
+    private var boardW = 0
+    private var boardH = 0
+    private val atlases = HashMap<Int, Atlas>()
+    private var currentAtlas: Atlas? = null
+    private var gridW = 0
+    private var gridH = 0
+    private lateinit var grid: Array<IntArray>
+    var width: Int = 0
+        private set
+    var height: Int = 0
+        private set
+    private var drawing = false
+    private var textEntry = false
+    private var textEntryX = 0
+    private var fancyFillDialog = false
 
-public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusListener, PopupMenuListener, MenuListener {
-    private GlobalEditor globalEditor;
-    private File path = null;
-    private WorldData worldData = null;
-    int currentBoardIdx = 0;
-    private Board currentBoard = null;
-    private ArrayList<Board> boards = new ArrayList<>();
-    private HashMap<Integer, ArrayList<Board>> undoList = new HashMap<>();
-    private HashMap<Integer, Integer> undoPositions = new HashMap<>();
-    public static final int BLINK_DELAY = 267;
+    private val voidsDrawn = HashSet<ArrayList<Int>>()
+    private var redraw = false
+    private var redraw_x1 = 0
+    private var redraw_x2 = 0
+    private var redraw_y1 = 0
+    private var redraw_y2 = 0
+    private var redraw_width = 0
+    private var redraw_height = 0
+    private val deleteOnClose = HashSet<File>()
 
-    private double zoom;
-    private int cursorX, cursorY;
-    private boolean centreView;
-    private int blockStartX = -1, blockStartY = -1;
-    private int moveBlockW, moveBlockH;
-    private int moveBlockX, moveBlockY;
-    private int boardW, boardH;
-    private HashMap<Integer, Atlas> atlases = new HashMap<>();
-    private Atlas currentAtlas;
-    private int gridW, gridH;
-    private int[][] grid;
-    private int width, height;
-    private boolean drawing, textEntry;
-    private int textEntryX;
-    private boolean fancyFillDialog = false;
+    lateinit var canvas: DosCanvas
+        private set
+    private var bufferPane: JPanel? = null
+    private var bufferPaneContents: JPanel? = null
+    private var infoBox: JTextArea? = null
+    lateinit var frame: JFrame
+    private lateinit var canvasScrollPane: JScrollPane
+    private var menuBar: JMenuBar? = null
+    private var editingModePane: EditingModePane? = null
 
-    private HashSet<ArrayList<Integer>> voidsDrawn = new HashSet<>();
-    private boolean redraw;
-    private int redraw_x1, redraw_x2, redraw_y1, redraw_y2;
-    private int redraw_width, redraw_height;
-    private HashSet<File> deleteOnClose = new HashSet<>();
+    private var currentlyShowing = SHOW_NOTHING
 
-    private DosCanvas canvas;
-    private JPanel bufferPane;
-    private JPanel bufferPaneContents;
-    private JTextArea infoBox;
-    private JFrame frame;
-    private JScrollPane canvasScrollPane;
-    private JMenuBar menuBar;
-    private EditingModePane editingModePane;
+    private val blinkingImageIcons = ArrayList<BlinkingImageIcon>()
 
-    private static final int PUT_DEFAULT = 1;
-    private static final int PUT_PUSH_DOWN = 2;
-    private static final int PUT_REPLACE_BOTH = 3;
+    private var mouseScreenX = 0
+    private var mouseScreenY = 0
+    private var mousePosX = 0
+    private var mousePosY = 0
+    private var mouseX = 0
+    private var mouseY = 0
+    private var oldMousePosX = -1
+    private var oldMousePosY = -1
+    private val fmenus = HashMap<Int, JMenu>()
+    private var recentFilesMenu: JMenu? = null
 
-    public static final int SHOW_NOTHING = 0;
-    public static final int SHOW_STATS = 1;
-    public static final int SHOW_OBJECTS = 2;
-    public static final int SHOW_INVISIBLES = 3;
-    public static final int SHOW_EMPTIES = 4;
-    public static final int SHOW_EMPTEXTS = 5;
-    public static final int SHOW_FAKES = 6;
-    private int currentlyShowing = SHOW_NOTHING;
+    private val testThreads = ArrayList<Thread>()
 
-    private ArrayList<BlinkingImageIcon> blinkingImageIcons = new ArrayList<>();
+    private var currentBufferManager: BufferManager? = null
+    private var mouseState = 0
+    private var undoDirty = false
 
-    private int mouseScreenX = 0, mouseScreenY = 0;
-    private int mousePosX = 0, mousePosY = 0;
-    private int mouseX, mouseY;
-    private int oldMousePosX = -1, oldMousePosY = -1;
-    private HashMap<Integer, JMenu> fmenus = new HashMap<>();
-    private JMenu recentFilesMenu;
+    private var popupOpen = false
 
-    private ArrayList<Thread> testThreads = new ArrayList<>();
+    constructor(globalEditor: GlobalEditor, szzt: Boolean) : this(
+        globalEditor,
+        null,
+        if (szzt) createWorld() else ZZTWorldData.createWorld()
+    )
 
-    private BufferManager currentBufferManager = null;
-    private int mouseState = 0;
-    private boolean undoDirty = false;
-
-    private boolean popupOpen = false;
-    private boolean validGracePeriod = false;
-
-    public WorldEditor(GlobalEditor globalEditor, boolean szzt) throws IOException, WorldCorruptedException {
-        this(globalEditor, null, szzt ? SZZTWorldData.createWorld() : ZZTWorldData.createWorld());
+    init {
+        globalEditor.editorOpened()
+        this.zoom = globalEditor.getDouble("ZOOM")
+        createGUI()
+        loadWorld(path, worldData)
+        afterUpdate()
     }
 
-    public WorldEditor(GlobalEditor globalEditor, File path) throws IOException, WorldCorruptedException {
-        this(globalEditor, path, WorldData.loadWorld(path));
-    }
-
-    public WorldEditor(GlobalEditor globalEditor, File path, WorldData worldData) throws IOException, WorldCorruptedException {
-        this.globalEditor = globalEditor;
-        this.globalEditor.editorOpened();
-        this.zoom = globalEditor.getDouble("ZOOM");
-        createGUI();
-        loadWorld(path, worldData);
-        afterUpdate();
-    }
-
-    private void openWorld(File path) throws IOException, WorldCorruptedException
-    {
+    @Throws(IOException::class, WorldCorruptedException::class)
+    private fun openWorld(path: File) {
         if (oneWorldAtATime()) {
             if (promptOnClose()) {
-                loadWorld(path, WorldData.loadWorld(path));
-                invalidateCache();
-                afterModification();
+                loadWorld(path, loadWorld(path))
+                invalidateCache()
+                afterModification()
             }
         } else {
-            new WorldEditor(globalEditor, path);
+            WorldEditor(globalEditor, path)
         }
     }
 
-    private void newWorld(boolean szzt) throws IOException {
+    @Throws(IOException::class)
+    private fun newWorld(szzt: Boolean) {
         try {
             if (oneWorldAtATime()) {
                 if (promptOnClose()) {
-                    var newWorld = szzt ? SZZTWorldData.createWorld() : ZZTWorldData.createWorld();
-                    loadWorld(null, newWorld);
-                    invalidateCache();
-                    afterModification();
+                    val newWorld = if (szzt) createWorld() else ZZTWorldData.createWorld()
+                    loadWorld(null, newWorld)
+                    invalidateCache()
+                    afterModification()
                 }
             } else {
-                new WorldEditor(globalEditor, szzt);
+                WorldEditor(globalEditor, szzt)
             }
-        } catch (WorldCorruptedException e) {
-            throw new RuntimeException("This should not happen.");
+        } catch (e: WorldCorruptedException) {
+            throw RuntimeException("This should not happen.")
         }
     }
 
 
-    public WorldData getWorldData() {
-        return worldData;
-    }
-    public ArrayList<Board> getBoards() {
-        return boards;
-    }
-    public DosCanvas getCanvas() {
-        return canvas;
-    }
-
-    private void loadWorld(File path, WorldData worldData) throws WorldCorruptedException {
+    @Throws(WorldCorruptedException::class)
+    private fun loadWorld(path: File?, worldData: WorldData) {
         if (path != null) {
-            globalEditor.setDefaultDirectory(path);
+            globalEditor.defaultDirectory = path
         }
-        this.path = path;
-        globalEditor.addToRecent(path);
-        this.worldData = worldData;
-        boards.clear();
-        atlases.clear();
+        this.path = path
+        globalEditor.addToRecent(path)
+        this.worldData = worldData
+        boards.clear()
+        atlases.clear()
         try {
-            canvas.setCP(null, null);
-        } catch (IOException ignored) { }
-
-        for (int i = 0; i <= worldData.getNumBoards(); i++) {
-            boards.add(worldData.getBoard(i));
+            canvas!!.setCP(null, null)
+        } catch (ignored: IOException) {
         }
 
-        var cb = worldData.getCurrentBoard();
-        boardW = boards.get(0).getWidth();
-        boardH = boards.get(0).getHeight();
-        cursorX = boards.get(cb).getStat(0).getX() - 1;
-        cursorY = boards.get(cb).getStat(0).getY() - 1;
-        centreView = true;
+        for (i in 0..worldData.numBoards) {
+            boards.add(worldData.getBoard(i))
+        }
 
-        updateMenu();
-        changeBoard(cb);
+        val cb = worldData.currentBoard
+        boardW = boards[0]!!.width
+        boardH = boards[0]!!.height
+        cursorX = boards[cb]!!.getStat(0)!!.x - 1
+        cursorY = boards[cb]!!.getStat(0)!!.y - 1
+        centreView = true
+
+        updateMenu()
+        changeBoard(cb)
     }
-    public void changeToIndividualBoard(int newBoardIdx) {
-        setCurrentBoard(newBoardIdx);
-        atlases.remove(newBoardIdx);
-        currentAtlas = null;
-        gridW = 1;
-        gridH = 1;
-        cursorX %= boardW;
-        cursorY %= boardH;
-        canvas.setCursor(cursorX, cursorY);
-        width = boardW * gridW;
-        height = boardH * gridH;
-        grid = new int[1][1];
-        grid[0][0] = newBoardIdx;
-        invalidateCache();
-        afterModification();
-        canvas.revalidate();
+
+    fun changeToIndividualBoard(newBoardIdx: Int) {
+        setCurrentBoard(newBoardIdx)
+        atlases.remove(newBoardIdx)
+        currentAtlas = null
+        gridW = 1
+        gridH = 1
+        cursorX %= boardW
+        cursorY %= boardH
+        canvas!!.setCursor(cursorX, cursorY)
+        width = boardW * gridW
+        height = boardH * gridH
+        grid = Array(1) { IntArray(1) }
+        grid[0][0] = newBoardIdx
+        invalidateCache()
+        afterModification()
+        canvas!!.revalidate()
     }
-    private void setCurrentBoard(int newBoardIdx) {
-        currentBoardIdx = newBoardIdx;
-        if (currentBoardIdx == -1) {
-            currentBoard = null;
+
+    private fun setCurrentBoard(newBoardIdx: Int) {
+        boardIdx = newBoardIdx
+        currentBoard = if (boardIdx == -1) {
+            null
         } else {
-            currentBoard = boards.get(currentBoardIdx);
+            boards[boardIdx]
         }
     }
-    public void changeBoard(int newBoardIdx) {
-        // Search the atlas for this board
-        var atlas = atlases.get(newBoardIdx);
-        if (atlas != null) {
-            var gridPos = searchInAtlas(atlas, newBoardIdx);
-            int x = gridPos.get(0);
-            int y = gridPos.get(1);
-            cursorX = (cursorX % boardW) + x * boardW;
-            cursorY = (cursorY % boardH) + y * boardH;
-            canvas.setCursor(cursorX, cursorY);
-            setCurrentBoard(newBoardIdx);
-            if (atlas != currentAtlas) {
-                gridW = atlas.getW();
-                gridH = atlas.getH();
-                grid = atlas.getGrid();
-                width = boardW * gridW;
-                height = boardH * gridH;
 
-                currentAtlas = atlas;
-                invalidateCache();
-                afterModification();
-                canvas.revalidate();
+    fun changeBoard(newBoardIdx: Int) {
+        // Search the atlas for this board
+        val atlas = atlases[newBoardIdx]
+        if (atlas != null) {
+            val gridPos = checkNotNull(searchInAtlas(atlas, newBoardIdx))
+            val x = gridPos[0]
+            val y = gridPos[1]
+            cursorX = (cursorX % boardW) + x * boardW
+            cursorY = (cursorY % boardH) + y * boardH
+            canvas!!.setCursor(cursorX, cursorY)
+            setCurrentBoard(newBoardIdx)
+            if (atlas != currentAtlas) {
+                gridW = atlas.w
+                gridH = atlas.h
+                grid = atlas.grid
+                width = boardW * gridW
+                height = boardH * gridH
+
+                currentAtlas = atlas
+                invalidateCache()
+                afterModification()
+                canvas!!.revalidate()
             }
 
-            var rect = new Rectangle(canvas.getCharW(x * boardW),
-                    canvas.getCharH(y * boardH),
-                    canvas.getCharW(boardW),
-                    canvas.getCharH(boardH));
-            canvas.scrollRectToVisible(rect);
-
+            val rect = Rectangle(
+                canvas!!.getCharW(x * boardW),
+                canvas!!.getCharH(y * boardH),
+                canvas!!.getCharW(boardW),
+                canvas!!.getCharH(boardH)
+            )
+            canvas!!.scrollRectToVisible(rect)
         } else {
             // No atlas, switch to individual board
-            changeToIndividualBoard(newBoardIdx);
+            changeToIndividualBoard(newBoardIdx)
         }
     }
 
-    private void resetUndoList() {
-        undoList.clear();
-        undoPositions.clear();
-        for (var row : grid) {
-            for (int boardIdx : row) {
+    private fun resetUndoList() {
+        undoList.clear()
+        undoPositions.clear()
+        for (row in grid) {
+            for (boardIdx in row) {
                 if (boardIdx != -1) {
-                    var boardUndoList = new ArrayList<Board>();
-                    boardUndoList.add(boards.get(boardIdx).clone());
-                    undoList.put(boardIdx, boardUndoList);
-                    undoPositions.put(boardIdx, 0);
+                    val boardUndoList = ArrayList<Board>()
+                    boardUndoList.add(boards[boardIdx]!!.clone())
+                    undoList[boardIdx] = boardUndoList
+                    undoPositions[boardIdx] = 0
                 }
             }
         }
     }
 
-    private void operationUndo() {
-        undo(false);
+    private fun operationUndo() {
+        undo(false)
     }
 
-    private void operationRedo() {
-        undo(true);
+    private fun operationRedo() {
+        undo(true)
     }
 
-    private void undo(boolean redo) {
+    private fun undo(redo: Boolean) {
         // Find most recent timestamp value in the undos
-        long mostRecentTimestamp = redo ? Long.MAX_VALUE : Long.MIN_VALUE;
+        var mostRecentTimestamp = if (redo) Long.MAX_VALUE else Long.MIN_VALUE
 
-        ArrayList<Integer> boardsToUndo = new ArrayList<>();
-        for (var row : grid) {
-            for (int boardIdx : row) {
+        val boardsToUndo = ArrayList<Int>()
+        for (row in grid) {
+            for (boardIdx in row) {
                 if (boardIdx != -1) {
-                    ArrayList<Board> undoBoards = undoList.get(boardIdx);
-                    if (undoBoards == null) continue;
-                    int undoPos = undoPositions.get(boardIdx);
-                    int newUndoPos = undoPos + (redo ? 1 : -1);
-                    if (newUndoPos < 0) continue;
-                    if (newUndoPos >= undoBoards.size()) continue;
-                    long undoTimestamp = undoBoards.get(newUndoPos).getDirtyTimestamp();
+                    val undoBoards = undoList[boardIdx] ?: continue
+                    val undoPos = undoPositions[boardIdx]!!
+                    val newUndoPos = undoPos + (if (redo) 1 else -1)
+                    if (newUndoPos < 0) continue
+                    if (newUndoPos >= undoBoards.size) continue
+                    val undoTimestamp = undoBoards[newUndoPos].dirtyTimestamp
                     if ((!redo && undoTimestamp > mostRecentTimestamp) ||
-                            (redo && undoTimestamp < mostRecentTimestamp)) {
-                        mostRecentTimestamp = undoTimestamp;
-                        boardsToUndo.clear();
+                        (redo && undoTimestamp < mostRecentTimestamp)
+                    ) {
+                        mostRecentTimestamp = undoTimestamp
+                        boardsToUndo.clear()
                     }
                     if (undoTimestamp == mostRecentTimestamp) {
-                        boardsToUndo.add(boardIdx);
+                        boardsToUndo.add(boardIdx)
                     }
                 }
             }
         }
 
         if (boardsToUndo.isEmpty()) {
-            String operationName = redo ? "Redo" : "Undo";
-            editingModePane.display(Color.RED, 1500, "Can't " + operationName);
+            val operationName = if (redo) "Redo" else "Undo"
+            editingModePane!!.display(Color.RED, 1500, "Can't $operationName")
         } else {
-            for (int boardIdx : boardsToUndo) {
-                int undoPos = undoPositions.get(boardIdx) + (redo ? 1 : -1);
-                undoPositions.put(boardIdx, undoPos);
-                Board undoBoard = undoList.get(boardIdx).get(undoPos);
-                boards.set(boardIdx, undoBoard.clone());
+            for (boardIdx in boardsToUndo) {
+                val undoPos = undoPositions[boardIdx]!! + (if (redo) 1 else -1)
+                undoPositions[boardIdx] = undoPos
+                val undoBoard = undoList[boardIdx]!![undoPos]
+                boards[boardIdx] = undoBoard.clone()
             }
-            invalidateCache();
-            afterModification();
+            invalidateCache()
+            afterModification()
         }
     }
 
-    private void addUndo()
-    {
-        undoDirty = false;
+    private fun addUndo() {
+        undoDirty = false
 
-        for (var row : grid) {
-            for (int boardIdx : row) {
+        for (row in grid) {
+            for (boardIdx in row) {
                 if (boardIdx != -1) {
-                    ArrayList<Board> undoBoards = undoList.get(boardIdx);
-                    int undoPos = -1;
-                    boolean addTo = true;
+                    var undoBoards = undoList[boardIdx]
+                    var undoPos = -1
+                    var addTo = true
                     if (undoBoards == null) {
-                        undoBoards = new ArrayList<Board>();
-                        undoList.put(boardIdx, undoBoards);
+                        undoBoards = ArrayList()
+                        undoList[boardIdx] = undoBoards
                     } else {
-                        undoPos = undoPositions.get(boardIdx);
+                        undoPos = undoPositions[boardIdx]!!
 
-                        Board undoBoard = undoBoards.get(undoPos);
-                        if (boards.get(boardIdx).timestampEquals(undoBoard)) {
-                            addTo = false;
+                        val undoBoard = undoBoards[undoPos]
+                        if (boards[boardIdx]!!.timestampEquals(undoBoard)) {
+                            addTo = false
                         }
                         //System.out.println("Current board timestamp: " + boards.get(boardIdx).getDirtyTimestamp());
                         //System.out.println("Undo board timestamp: " + undoBoard.getDirtyTimestamp());
@@ -333,18 +360,18 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
                     if (addTo) {
                         // Seems this board was modified.
                         // First, cut off everything after the current undo position
-                        while (undoBoards.size() > undoPos + 1) {
-                            undoBoards.remove(undoPos + 1);
+                        while (undoBoards.size > undoPos + 1) {
+                            undoBoards.removeAt(undoPos + 1)
                         }
                         // Now add this board to the undo list
-                        undoBoards.add(boards.get(boardIdx).clone());
+                        undoBoards.add(boards[boardIdx]!!.clone())
                         // Too many?
-                        int undoBufferSize = globalEditor.getInt("UNDO_BUFFER_SIZE", 100);
-                        if (undoBoards.size() > undoBufferSize) {
-                            undoBoards.remove(0);
+                        val undoBufferSize = globalEditor.getInt("UNDO_BUFFER_SIZE", 100)
+                        if (undoBoards.size > undoBufferSize) {
+                            undoBoards.removeAt(0)
                         }
                         // Update the undo position
-                        undoPositions.put(boardIdx, undoBoards.size() - 1);
+                        undoPositions[boardIdx] = undoBoards.size - 1
                         //System.out.println("New undo list length for board " + boardIdx + ": " + undoBoards.size());
                     }
                 }
@@ -352,678 +379,709 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
         }
     }
 
-    private ArrayList<Integer> searchInAtlas(Atlas atlas, int idx) {
-        for (int y = 0; y < atlas.getH(); y++) {
-            for (int x = 0; x < atlas.getW(); x++) {
-                if (atlas.getGrid()[y][x] == idx) {
-                    return pair(x, y);
+    private fun searchInAtlas(atlas: Atlas, idx: Int): ArrayList<Int>? {
+        for (y in 0 until atlas.h) {
+            for (x in 0 until atlas.w) {
+                if (atlas.grid[y][x] == idx) {
+                    return pair(x, y)
                 }
             }
         }
-        return null;
+        return null
     }
 
-    private void invalidateCache() {
-        voidsDrawn.clear();
-        redraw_width = 0;
-        redraw_height = 0;
+    private fun invalidateCache() {
+        voidsDrawn.clear()
+        redraw_width = 0
+        redraw_height = 0
     }
 
-    private void addRedraw(int x1, int y1, int x2, int y2)
-    {
+    private fun addRedraw(x1: Int, y1: Int, x2: Int, y2: Int) {
         // Expand the range by 1 to handle lines
-        x1--;
-        y1--;
-        x2++;
-        y2++;
+        var x1 = x1
+        var y1 = y1
+        var x2 = x2
+        var y2 = y2
+        x1--
+        y1--
+        x2++
+        y2++
 
         if (!redraw) {
-            redraw_x1 = x1;
-            redraw_y1 = y1;
-            redraw_x2 = x2;
-            redraw_y2 = y2;
-            redraw = true;
+            redraw_x1 = x1
+            redraw_y1 = y1
+            redraw_x2 = x2
+            redraw_y2 = y2
+            redraw = true
         } else {
-            redraw_x1 = Math.min(redraw_x1, x1);
-            redraw_y1 = Math.min(redraw_y1, y1);
-            redraw_x2 = Math.max(redraw_x2, x2);
-            redraw_y2 = Math.max(redraw_y2, y2);
+            redraw_x1 = min(redraw_x1.toDouble(), x1.toDouble()).toInt()
+            redraw_y1 = min(redraw_y1.toDouble(), y1.toDouble()).toInt()
+            redraw_x2 = max(redraw_x2.toDouble(), x2.toDouble()).toInt()
+            redraw_y2 = max(redraw_y2.toDouble(), y2.toDouble()).toInt()
         }
     }
 
-    private void drawBoard() {
+    private fun drawBoard() {
         if (width != redraw_width || height != redraw_height) {
-            canvas.setDimensions(width, height);
-            redraw_width = width;
-            redraw_height = height;
-            redraw_x1 = 0;
-            redraw_y1 = 0;
-            redraw_x2 = width - 1;
-            redraw_y2 = height - 1;
-            redraw = true;
+            canvas!!.setDimensions(width, height)
+            redraw_width = width
+            redraw_height = height
+            redraw_x1 = 0
+            redraw_y1 = 0
+            redraw_x2 = width - 1
+            redraw_y2 = height - 1
+            redraw = true
         }
-        canvas.setZoom(worldData.isSuperZZT() ? zoom * 2 : zoom, zoom);
-        canvas.setAtlas(currentAtlas, boardW, boardH, globalEditor.getBoolean("ATLAS_GRID", true));
+        canvas!!.setZoom(if (worldData!!.isSuperZZT) zoom * 2 else zoom, zoom)
+        canvas!!.setAtlas(currentAtlas, boardW, boardH, globalEditor.getBoolean("ATLAS_GRID", true))
         if (redraw) {
-            for (int y = 0; y < gridH; y++) {
-                for (int x = 0; x < gridW; x++) {
-                    int boardIdx = grid[y][x];
+            for (y in 0 until gridH) {
+                for (x in 0 until gridW) {
+                    val boardIdx = grid[y][x]
                     if (boardIdx != -1) {
-                        int x1 = Math.max(x * boardW, redraw_x1);
-                        int x2 = Math.min(x * boardW + (boardW - 1), redraw_x2);
-                        int y1 = Math.max(y * boardH, redraw_y1);
-                        int y2 = Math.min(y * boardH + (boardH - 1), redraw_y2);
+                        val x1 = max((x * boardW).toDouble(), redraw_x1.toDouble()).toInt()
+                        val x2 = min((x * boardW + (boardW - 1)).toDouble(), redraw_x2.toDouble())
+                            .toInt()
+                        val y1 = max((y * boardH).toDouble(), redraw_y1.toDouble()).toInt()
+                        val y2 = min((y * boardH + (boardH - 1)).toDouble(), redraw_y2.toDouble())
+                            .toInt()
                         if (x2 >= x1 && y2 >= y1) {
-                            boards.get(boardIdx).drawToCanvas(canvas, x * boardW, y * boardH,
-                                    x1 - x * boardW, y1 - y * boardH, x2 - x * boardW, y2 - y * boardH,
-                                    currentlyShowing);
+                            boards[boardIdx]!!.drawToCanvas(
+                                canvas!!, x * boardW, y * boardH,
+                                x1 - x * boardW, y1 - y * boardH, x2 - x * boardW, y2 - y * boardH,
+                                currentlyShowing
+                            )
                         }
                     } else {
-                        var voidCoord = pair(x, y);
+                        val voidCoord = pair(x, y)
                         if (!voidsDrawn.contains(voidCoord)) {
-                            canvas.drawVoid(x * boardW, y * boardH, boardW, boardH);
-                            voidsDrawn.add(voidCoord);
+                            canvas!!.drawVoid(x * boardW, y * boardH, boardW, boardH)
+                            voidsDrawn.add(voidCoord)
                         }
-
                     }
                 }
             }
         }
-        canvas.repaint();
-        redraw = false;
+        canvas!!.repaint()
+        redraw = false
     }
 
-    private void createGUI() throws IOException {
-        frame = new JFrame();
-        disableAlt();
+    @Throws(IOException::class)
+    private fun createGUI() {
+        frame = JFrame()
+        disableAlt()
 
         /**/ //frame.setUndecorated(true);
-
-        frame.addKeyListener(this);
-        frame.addWindowFocusListener(this);
+        frame!!.addKeyListener(this)
+        frame!!.addWindowFocusListener(this)
 
         //var ico = ImageIO.read(new File("zediticon.png"));
-        var ico = ImageIO.read(new ByteArrayInputStream(Data.ZEDITICON_PNG));
-        frame.setIconImage(ico);
-        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        frame.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent e) {
-                globalEditor.editorClosed();
+        val ico = ImageIO.read(ByteArrayInputStream(Data.ZEDITICON_PNG))
+        frame!!.iconImage = ico
+        frame!!.defaultCloseOperation = JFrame.DO_NOTHING_ON_CLOSE
+        frame!!.addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent) {
+                globalEditor.editorClosed()
             }
-            public void windowClosing(WindowEvent e) {
-                tryClose();
-            }
-        });
 
-        menuBar = new JMenuBar();
-        createMenu();
-        frame.setJMenuBar(menuBar);
-        { // Remove F10
-            var im = menuBar.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-            for (var k : im.allKeys()) {
-                if (k.getKeyCode() == KeyEvent.VK_F10) {
-                    im.remove(k);
+            override fun windowClosing(e: WindowEvent) {
+                tryClose()
+            }
+        })
+
+        menuBar = JMenuBar()
+        createMenu()
+        frame!!.jMenuBar = menuBar
+        run {
+            // Remove F10
+            val im = menuBar!!.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+            for (k in im.allKeys()) {
+                if (k.keyCode == KeyEvent.VK_F10) {
+                    im.remove(k)
                 }
             }
         }
-        canvas = new DosCanvas(this, zoom);
-        canvas.setBlinkMode(globalEditor.getBoolean("BLINKING", true));
-        addKeybinds(frame.getLayeredPane());
+        canvas = DosCanvas(this, zoom)
+        canvas!!.setBlinkMode(globalEditor.getBoolean("BLINKING", true))
+        addKeybinds(frame!!.layeredPane)
 
         //drawBoard();
-        canvasScrollPane = new JScrollPane(canvas);
-        canvasScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
-        canvasScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        canvasScrollPane = JScrollPane(canvas)
+        canvasScrollPane!!.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS
+        canvasScrollPane!!.verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_ALWAYS
 
-        JPanel controlPane = new JPanel(new BorderLayout());
+        val controlPane = JPanel(BorderLayout())
 
-        infoBox = new JTextArea(3, 20);
-        infoBox.setBorder(BorderFactory.createBevelBorder(BevelBorder.LOWERED));
-        infoBox.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-        //infoBox.setFont(CP437.getFont());
-        infoBox.setEditable(false);
-        infoBox.setFocusable(false);
+        infoBox = JTextArea(3, 20)
+        infoBox!!.border = BorderFactory.createBevelBorder(BevelBorder.LOWERED)
+        infoBox!!.font = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+        //infoBox.setFont(CP437.INSTANCE.getFont());
+        infoBox!!.isEditable = false
+        infoBox!!.isFocusable = false
 
-        bufferPane = new JPanel(new BorderLayout());
+        bufferPane = JPanel(BorderLayout())
 
-        editingModePane = new EditingModePane();
-        editingModePane.setOpaque(false);
+        editingModePane = EditingModePane()
+        editingModePane!!.isOpaque = false
 
         //infoBox.setPreferredSize(new Dimension(80, 40));
-        var controlScrollPane = new JScrollPane(bufferPane);
-        controlScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        val controlScrollPane = JScrollPane(bufferPane)
+        controlScrollPane.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
 
-        controlPane.add(infoBox, BorderLayout.NORTH);
-        controlPane.add(controlScrollPane, BorderLayout.CENTER);
-        controlPane.add(editingModePane, BorderLayout.SOUTH);
-
-
-        var splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controlPane, canvasScrollPane);
+        controlPane.add(infoBox, BorderLayout.NORTH)
+        controlPane.add(controlScrollPane, BorderLayout.CENTER)
+        controlPane.add(editingModePane, BorderLayout.SOUTH)
 
 
-        var timer = new java.util.Timer(true);
-        timer.schedule(new TimerTask() {
-            private boolean blinkState = false;
-            @Override
-            public void run() {
-                //if (!globalEditor.getBoolean("BLINKING", true)) return;
-                SwingUtilities.invokeLater(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (!popupOpen) frame.requestFocusInWindow();
-                        blinkState = !blinkState;
-                        canvas.setBlink(blinkState);
-                        for (var icon : blinkingImageIcons) {
-                            icon.blink(blinkState);
-                        }
-                        bufferPane.repaint();
+        val splitPane = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controlPane, canvasScrollPane)
+
+
+        val timer = Timer(true)
+        timer.schedule(object : TimerTask() {
+            private var blinkState = false
+            override fun run() {
+                SwingUtilities.invokeLater {
+                    if (!popupOpen) frame!!.requestFocusInWindow()
+                    blinkState = !blinkState
+                    canvas!!.setBlink(blinkState)
+                    for (icon in blinkingImageIcons) {
+                        icon.blink(blinkState)
                     }
-                });
+                    bufferPane!!.repaint()
+                }
             }
-        }, BLINK_DELAY, BLINK_DELAY);
+        }, BLINK_DELAY.toLong(), BLINK_DELAY.toLong())
 
-        frame.getContentPane().add(splitPane);
-        frame.pack();
-        frame.setLocationRelativeTo(null);
+        frame!!.contentPane.add(splitPane)
+        frame!!.pack()
+        frame!!.setLocationRelativeTo(null)
         /**/ //frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
-        frame.setVisible(true);
+        frame!!.isVisible = true
     }
 
-    private void closeEditor() {
-        frame.dispose();
+    private fun closeEditor() {
+        frame!!.dispose()
     }
 
-    private void tryClose() {
+    private fun tryClose() {
         if (promptOnClose()) {
-            closeEditor();
+            closeEditor()
         }
     }
 
-    private boolean isDirty() {
-        if (worldData.isDirty()) return true;
-        for (Board board : boards) {
-            if (board.isDirty()) {
-                return true;
+    private val isDirty: Boolean
+        get() {
+            if (worldData!!.isDirty) return true
+            for (board in boards) {
+                if (board!!.isDirty) {
+                    return true
+                }
             }
+            return false
         }
-        return false;
-    }
 
-    private boolean promptOnClose() {
-        if (isDirty()) {
-            int result = JOptionPane.showConfirmDialog(frame, "Save changes before closing?",
-                    "Close world", JOptionPane.YES_NO_CANCEL_OPTION);
+    private fun promptOnClose(): Boolean {
+        if (isDirty) {
+            val result = JOptionPane.showConfirmDialog(
+                frame, "Save changes before closing?",
+                "Close world", JOptionPane.YES_NO_CANCEL_OPTION
+            )
             if (result == JOptionPane.YES_OPTION) {
-                return menuSaveAs();
+                return menuSaveAs()
             }
-            if (result != JOptionPane.NO_OPTION) {
-                return false;
-            }
+            return result == JOptionPane.NO_OPTION
         } else {
-            if (globalEditor.getBoolean("PROMPT_ON_CLOSE", true) == false) return true;
-            int result = JOptionPane.showConfirmDialog(frame, "Close world?",
-                    "Close world", JOptionPane.YES_NO_OPTION);
-            return result == JOptionPane.YES_OPTION;
+            if (!globalEditor.getBoolean("PROMPT_ON_CLOSE", true)) return true
+            val result = JOptionPane.showConfirmDialog(
+                frame, "Close world?",
+                "Close world", JOptionPane.YES_NO_OPTION
+            )
+            return result == JOptionPane.YES_OPTION
         }
-        return true;
     }
 
-    private boolean saveTo(File path) {
-        var worldCopy = worldData.clone();
+    private fun saveTo(path: File): Boolean {
+        val worldCopy = worldData!!.clone()
         if (saveGame(path, worldCopy)) {
-            for (var board : boards) {
-                board.clearDirty();
+            for (board in boards) {
+                board!!.clearDirty()
             }
-            worldCopy.setDirty(false);
-            worldData = worldCopy;
-            return true;
+            worldCopy.isDirty = false
+            worldData = worldCopy
+            return true
         }
-        return false;
+        return false
     }
 
-    private boolean saveGame(File path, WorldData worldCopy) {
-        var warning = new CompatWarning(worldData.isSuperZZT());
+    private fun saveGame(path: File, worldCopy: WorldData): Boolean {
+        val warning = CompatWarning(worldData!!.isSuperZZT)
 
         // Update world name, if necessary
-        String oldWorldName = new String(worldCopy.getName());
-        String oldFileName = this.path == null ? "" : Util.getExtensionless(this.path.toString());
-        if (oldWorldName.length() == 0 || oldWorldName.equalsIgnoreCase(oldFileName)) {
-            String newWorldName =  Util.getExtensionless(path.toString()).toUpperCase();
-            worldCopy.setName(newWorldName.getBytes());
+        val oldWorldName = String(worldCopy.name)
+        val oldFileName = if (this.path == null) "" else getExtensionless(this.path.toString())
+        if (oldWorldName.isEmpty() || oldWorldName.equals(oldFileName, ignoreCase = true)) {
+            val newWorldName = getExtensionless(path.toString()).uppercase(Locale.getDefault())
+            worldCopy.name = newWorldName.toByteArray()
         }
 
-        if (boards.size() > 254 && !worldData.isSuperZZT()) {
-            warning.warn(1, "World has >254 boards, which may cause problems in Weave 3.");
-        } else if (boards.size() > 33 && worldData.isSuperZZT()) {
-            warning.warn(1, "World has >33 boards, which may cause problems in vanilla Super ZZT.");
+        if (boards.size > 254 && !worldData!!.isSuperZZT) {
+            warning.warn(1, "World has >254 boards, which may cause problems in Weave 3.")
+        } else if (boards.size > 33 && worldData!!.isSuperZZT) {
+            warning.warn(1, "World has >33 boards, which may cause problems in vanilla Super ZZT.")
         }
 
-        for (int boardIdx = 0; boardIdx < boards.size(); boardIdx++) {
-            var board = boards.get(boardIdx);
-            warning.setPrefix(String.format("Board %d (%s) ",  boardIdx, CP437.toUnicode(board.getName())));
-            if (board.isDirty()) {
-                worldCopy.setBoard(warning, boardIdx, board);
+        for (boardIdx in boards.indices) {
+            val board = boards[boardIdx]
+            warning.setPrefix(String.format("Board %d (%s) ", boardIdx, toUnicode(board!!.getName())))
+            if (board.isDirty) {
+                worldCopy.setBoard(warning, boardIdx, board)
             }
         }
-        worldCopy.terminateWorld(boards.size());
-        warning.setPrefix("");
-        if (worldCopy.getSize() > 450*1024) {
-            warning.warn(1, "World is over 450kb, which may cause memory problems in ZZT.");
+        worldCopy.terminateWorld(boards.size)
+        warning.setPrefix("")
+        if (worldCopy.size > 450 * 1024) {
+            warning.warn(1, "World is over 450kb, which may cause memory problems in ZZT.")
         }
 
-        if (warning.getWarningLevel() == 2) {
-            JOptionPane.showMessageDialog(frame, warning.getMessages(2),
-                    "Compatibility error", JOptionPane.ERROR_MESSAGE);
-            return false;
-        } else if (warning.getWarningLevel() == 1) {
-            int result = JOptionPane.showConfirmDialog(frame, warning.getMessages(1),
-                    "Compatibility warning",  JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (result != JOptionPane.OK_OPTION) return false;
+        if (warning.warningLevel == 2) {
+            JOptionPane.showMessageDialog(
+                frame, warning.getMessages(2),
+                "Compatibility error", JOptionPane.ERROR_MESSAGE
+            )
+            return false
+        } else if (warning.warningLevel == 1) {
+            val result = JOptionPane.showConfirmDialog(
+                frame, warning.getMessages(1),
+                "Compatibility warning", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE
+            )
+            if (result != JOptionPane.OK_OPTION) return false
         }
 
         try {
-            worldCopy.write(path);
-        } catch (IOException o) {
-            JOptionPane.showMessageDialog(frame, "Failed to write to file",
-                    "File error", JOptionPane.ERROR_MESSAGE);
+            worldCopy.write(path)
+        } catch (o: IOException) {
+            JOptionPane.showMessageDialog(
+                frame, "Failed to write to file",
+                "File error", JOptionPane.ERROR_MESSAGE
+            )
         }
 
-        return true;
+        return true
     }
 
-    private JFileChooser getFileChooser(String[] exts, String desc) {
-        var fileChooser = new JFileChooser();
-        var filter = new javax.swing.filechooser.FileFilter() {
-            @Override
-            public boolean accept(File f) {
-                if (f.isDirectory()) return true;
-                String name = f.getName();
-                int extPos = name.lastIndexOf('.');
+    private fun getFileChooser(exts: Array<String>, desc: String): JFileChooser {
+        val fileChooser = JFileChooser()
+        val filter: FileFilter = object : FileFilter() {
+            override fun accept(f: File): Boolean {
+                if (f.isDirectory) return true
+                val name = f.name
+                val extPos = name.lastIndexOf('.')
                 if (extPos != -1) {
-                    String ext = name.substring(extPos + 1);
-                    for (var validExt : exts) {
-                        if (ext.equalsIgnoreCase(validExt)) return true;
+                    val ext = name.substring(extPos + 1)
+                    for (validExt in exts) {
+                        if (ext.equals(validExt, ignoreCase = true)) return true
                     }
                 }
-                return false;
+                return false
             }
 
-            @Override
-            public String getDescription() {
-                return desc;
+            override fun getDescription(): String {
+                return desc
             }
-        };
-        fileChooser.setFileFilter(filter);
-        fileChooser.setCurrentDirectory(globalEditor.getDefaultDirectory());
+        }
+        fileChooser.fileFilter = filter
+        fileChooser.currentDirectory = globalEditor.defaultDirectory
         //fileChooser.setCurrentDirectory(new File("C:\\Users\\" + System.getProperty("user.name") + "\\Dropbox\\YHWH\\zzt\\zzt\\"));
-        return fileChooser;
+        return fileChooser
     }
 
-    private boolean menuSave() {
+    private fun menuSave() {
         if (path != null) {
-            boolean r = saveTo(path);
-            if (r) editingModePane.display(Color.ORANGE, 1500, "Saved World");
-            afterUpdate();
-            return r;
+            val r = saveTo(path!!)
+            if (r) editingModePane!!.display(Color.ORANGE, 1500, "Saved World")
+            afterUpdate()
+        } else {
+            menuSaveAs()
         }
-        else return menuSaveAs();
     }
 
-    private boolean menuSaveAs() {
-        var fileChooser = getFileChooser(new String[]{"zzt", "szt", "sav"}, "ZZT/Super ZZT world and save files");
-        if (path != null) fileChooser.setSelectedFile(path);
+    private fun menuSaveAs(): Boolean {
+        val fileChooser = getFileChooser(arrayOf("zzt", "szt", "sav"), "ZZT/Super ZZT world and save files")
+        if (path != null) fileChooser.selectedFile = path
 
-        int result = fileChooser.showSaveDialog(frame);
+        val result = fileChooser.showSaveDialog(frame)
         if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+            val file = fileChooser.selectedFile
             if (saveTo(file)) {
-                updateDefaultDir(file);
-                path = file;
-                globalEditor.setDefaultDirectory(path);
-                globalEditor.addToRecent(path);
-                updateMenu();
-                afterUpdate();
-                editingModePane.display(Color.ORANGE, 1500, "Saved World");
-                return true;
+                updateDefaultDir(file)
+                path = file
+                globalEditor.defaultDirectory = path!!
+                globalEditor.addToRecent(path)
+                updateMenu()
+                afterUpdate()
+                editingModePane!!.display(Color.ORANGE, 1500, "Saved World")
+                return true
             }
         }
-        return false;
+        return false
     }
 
-    private void menuOpenWorld() {
-        var fileChooser = getFileChooser(new String[]{"zzt", "szt", "sav"}, "ZZT/Super ZZT world and save files");
+    private fun menuOpenWorld() {
+        val fileChooser = getFileChooser(arrayOf("zzt", "szt", "sav"), "ZZT/Super ZZT world and save files")
 
-        int result = fileChooser.showOpenDialog(frame);
+        val result = fileChooser.showOpenDialog(frame)
         if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+            val file = fileChooser.selectedFile
             try {
-                updateDefaultDir(file);
-                openWorld(file);
-            } catch (IOException | WorldCorruptedException e) {
-                JOptionPane.showMessageDialog(frame, e, "Error loading world", JOptionPane.ERROR_MESSAGE);
+                updateDefaultDir(file)
+                openWorld(file)
+            } catch (e: IOException) {
+                JOptionPane.showMessageDialog(frame, e, "Error loading world", JOptionPane.ERROR_MESSAGE)
+            } catch (e: WorldCorruptedException) {
+                JOptionPane.showMessageDialog(frame, e, "Error loading world", JOptionPane.ERROR_MESSAGE)
             }
         }
     }
 
-    private void menuImportWorld() {
-        var fileChooser = getFileChooser(new String[]{"zzt", "szt", "sav"}, "ZZT/Super ZZT world and save files");
+    private fun menuImportWorld() {
+        val fileChooser = getFileChooser(arrayOf("zzt", "szt", "sav"), "ZZT/Super ZZT world and save files")
 
-        int result = fileChooser.showOpenDialog(frame);
+        val result = fileChooser.showOpenDialog(frame)
         if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+            val file = fileChooser.selectedFile
             try {
-                updateDefaultDir(file);
-                var worldData = WorldData.loadWorld(file);
-                if (worldData.isSuperZZT() != this.worldData.isSuperZZT()) {
-                    throw new RuntimeException("Error: ZZT / Super ZZT mismatch");
+                updateDefaultDir(file)
+                val worldData = loadWorld(file)
+                if (worldData.isSuperZZT != this.worldData!!.isSuperZZT) {
+                    throw RuntimeException("Error: ZZT / Super ZZT mismatch")
                 }
-                for (int i = 0; i <= worldData.getNumBoards(); i++) {
-                    var board = worldData.getBoard(i);
-                    board.setDirty();
-                    boards.add(board);
+                for (i in 0..worldData.numBoards) {
+                    val board = worldData.getBoard(i)
+                    board!!.setDirty()
+                    boards.add(board)
                 }
-            } catch (IOException | RuntimeException | WorldCorruptedException e) {
-                JOptionPane.showMessageDialog(frame, e, "Error importing world", JOptionPane.ERROR_MESSAGE);
+            } catch (e: IOException) {
+                JOptionPane.showMessageDialog(frame, e, "Error importing world", JOptionPane.ERROR_MESSAGE)
+            } catch (e: RuntimeException) {
+                JOptionPane.showMessageDialog(frame, e, "Error importing world", JOptionPane.ERROR_MESSAGE)
+            } catch (e: WorldCorruptedException) {
+                JOptionPane.showMessageDialog(frame, e, "Error importing world", JOptionPane.ERROR_MESSAGE)
             }
         }
     }
 
-    private void menuLoadCharset() {
-        var fileChooser = getFileChooser(new String[]{"chr", "com"}, "Character set");
-        int result = fileChooser.showOpenDialog(frame);
+    private fun menuLoadCharset() {
+        val fileChooser = getFileChooser(arrayOf("chr", "com"), "Character set")
+        val result = fileChooser.showOpenDialog(frame)
         if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+            val file = fileChooser.selectedFile
             try {
-                canvas.setCharset(file);
-                updateDefaultDir(file);
-            } catch (IOException | RuntimeException e) {
-                JOptionPane.showMessageDialog(frame, e, "Error loading char set", JOptionPane.ERROR_MESSAGE);
+                canvas!!.setCharset(file)
+                updateDefaultDir(file)
+            } catch (e: IOException) {
+                JOptionPane.showMessageDialog(frame, e, "Error loading char set", JOptionPane.ERROR_MESSAGE)
+            } catch (e: RuntimeException) {
+                JOptionPane.showMessageDialog(frame, e, "Error loading char set", JOptionPane.ERROR_MESSAGE)
             }
         }
     }
-    private void menuLoadPalette() {
-        var fileChooser = getFileChooser(new String[]{"pal"}, "Palette");
-        int result = fileChooser.showOpenDialog(frame);
+
+    private fun menuLoadPalette() {
+        val fileChooser = getFileChooser(arrayOf("pal"), "Palette")
+        val result = fileChooser.showOpenDialog(frame)
         if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+            val file = fileChooser.selectedFile
             try {
-                canvas.setPalette(file);
-                updateDefaultDir(file);
-            } catch (IOException | RuntimeException e) {
-                JOptionPane.showMessageDialog(frame, e, "Error loading palette", JOptionPane.ERROR_MESSAGE);
+                canvas!!.setPalette(file)
+                updateDefaultDir(file)
+            } catch (e: IOException) {
+                JOptionPane.showMessageDialog(frame, e, "Error loading palette", JOptionPane.ERROR_MESSAGE)
+            } catch (e: RuntimeException) {
+                JOptionPane.showMessageDialog(frame, e, "Error loading palette", JOptionPane.ERROR_MESSAGE)
             }
         }
     }
-    private void menuDefaultCharsetPalette() {
+
+    private fun menuDefaultCharsetPalette() {
         try {
-            canvas.setCharset(null);
-            canvas.setPalette(null);
-        } catch (IOException ignored) {}
+            canvas!!.setCharset(null)
+            canvas!!.setPalette(null)
+        } catch (ignored: IOException) {
+        }
     }
 
-    private void updateDefaultDir(File file) {
+    private fun updateDefaultDir(file: File?) {
         if (file != null) {
-            globalEditor.setDefaultDirectory(file);
+            globalEditor.defaultDirectory = file
         }
     }
 
-    private void menuBoardList() {
-        new BoardManager(this, boards);
+    private fun menuBoardList() {
+        BoardManager(this, boards)
     }
 
-    private void menuNewWorld(boolean szzt) {
+    private fun menuNewWorld(szzt: Boolean) {
         try {
-            newWorld(szzt);
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(frame, e, "Error creating new world", JOptionPane.ERROR_MESSAGE);
+            newWorld(szzt)
+        } catch (e: IOException) {
+            JOptionPane.showMessageDialog(frame, e, "Error creating new world", JOptionPane.ERROR_MESSAGE)
         }
     }
 
-    private void menuExportBoard() {
-        if (currentBoard == null) return;
-        var fileChooser = getFileChooser(new String[]{"brd"}, "ZZT/Super ZZT .BRD files");
-        int result = fileChooser.showSaveDialog(frame);
+    private fun menuExportBoard() {
+        if (currentBoard == null) return
+        val fileChooser = getFileChooser(arrayOf("brd"), "ZZT/Super ZZT .BRD files")
+        val result = fileChooser.showSaveDialog(frame)
         if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+            val file = fileChooser.selectedFile
             try {
-                updateDefaultDir(file);
-                currentBoard.saveTo(file);
-            } catch (IOException e) {
-                JOptionPane.showMessageDialog(frame, e, "Error exporting board", JOptionPane.ERROR_MESSAGE);
+                updateDefaultDir(file)
+                currentBoard!!.saveTo(file)
+            } catch (e: IOException) {
+                JOptionPane.showMessageDialog(frame, e, "Error exporting board", JOptionPane.ERROR_MESSAGE)
             }
         }
     }
 
-    private void menuImportBoard() {
-        var fileChooser = getFileChooser(new String[]{"brd"}, "ZZT/Super ZZT .BRD files");
-        int result = fileChooser.showOpenDialog(frame);
+    private fun menuImportBoard() {
+        val fileChooser = getFileChooser(arrayOf("brd"), "ZZT/Super ZZT .BRD files")
+        val result = fileChooser.showOpenDialog(frame)
         if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+            val file = fileChooser.selectedFile
             try {
-                currentBoard.loadFrom(file);
-                updateDefaultDir(file);
-                changeBoard(currentBoardIdx);
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(frame, e, "Error loading board", JOptionPane.ERROR_MESSAGE);
+                currentBoard!!.loadFrom(file)
+                updateDefaultDir(file)
+                changeBoard(boardIdx)
+            } catch (e: Exception) {
+                JOptionPane.showMessageDialog(frame, e, "Error loading board", JOptionPane.ERROR_MESSAGE)
             }
         }
     }
-    private void menuImportBoards() {
-        var fileChooser = getFileChooser(new String[]{"brd"}, "ZZT/Super ZZT .BRD files (Files that begin with numbers will be loaded to that index)");
-        fileChooser.setMultiSelectionEnabled(true);
-        int result = fileChooser.showOpenDialog(frame);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File[] files = fileChooser.getSelectedFiles();
 
-            ArrayList<File> boardsToLoad = new ArrayList<>();
-            for (Board board : boards) {
-                boardsToLoad.add(null);
+    private fun menuImportBoards() {
+        val fileChooser = getFileChooser(
+            arrayOf("brd"),
+            "ZZT/Super ZZT .BRD files (Files that begin with numbers will be loaded to that index)"
+        )
+        fileChooser.isMultiSelectionEnabled = true
+        val result = fileChooser.showOpenDialog(frame)
+        if (result == JFileChooser.APPROVE_OPTION) {
+            val files = fileChooser.selectedFiles
+
+            val boardsToLoad = ArrayList<File?>()
+            for (ignored in boards) {
+                boardsToLoad.add(null)
             }
 
-            for (File file : files) {
-                int boardNum = -1;
+            for (file in files) {
+                var boardNum = -1
                 try {
-                    boardNum = Integer.parseInt(file.getName().split("[^0-9]")[0]);
-                } catch (NumberFormatException | ArrayIndexOutOfBoundsException ignore) {
+                    boardNum =
+                        file.name.split("[^0-9]".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0].toInt()
+                } catch (ignore: NumberFormatException) {
+                } catch (ignore: ArrayIndexOutOfBoundsException) {
                 }
                 if (boardNum < 0 || boardNum > 255) {
                     // Load this into a null slot that's >= the current board count
-                    boolean placed = false;
-                    for (int idx = boards.size(); idx < boardsToLoad.size(); idx++) {
-                        if (boardsToLoad.get(idx) == null) {
-                            boardsToLoad.set(idx, file);
-                            placed = true;
-                            break;
+                    var placed = false
+                    for (idx in boards.size until boardsToLoad.size) {
+                        if (boardsToLoad[idx] == null) {
+                            boardsToLoad[idx] = file
+                            placed = true
+                            break
                         }
                     }
-                    if (!placed && boardsToLoad.size() < 256)
-                        boardsToLoad.add(file);
+                    if (!placed && boardsToLoad.size < 256) boardsToLoad.add(file)
                 } else {
-                    while (boardNum >= boardsToLoad.size()) {
-                        if (boardsToLoad.size() < 255) {
-                            boardsToLoad.add(null);
+                    while (boardNum >= boardsToLoad.size) {
+                        if (boardsToLoad.size < 255) {
+                            boardsToLoad.add(null)
                         }
                     }
-                    boardsToLoad.set(boardNum, file);
+                    boardsToLoad[boardNum] = file
                 }
             }
 
-            for (int idx = 0; idx < boardsToLoad.size(); idx++) {
-                File file = boardsToLoad.get(idx);
-                if (idx >= boards.size()) {
+            for (idx in boardsToLoad.indices) {
+                val file = boardsToLoad[idx]
+                if (idx >= boards.size) {
                     // Insert blank board here
-                    boards.add(blankBoard("-untitled"));
+                    boards.add(blankBoard("-untitled"))
                 }
                 if (file != null) {
                     try {
-                        boards.get(idx).loadFrom(file);
-                        if (idx == currentBoardIdx) {
-                            changeBoard(currentBoardIdx);
+                        boards[idx]!!.loadFrom(file)
+                        if (idx == boardIdx) {
+                            changeBoard(boardIdx)
                         }
-                    } catch (Exception e) {
-                        JOptionPane.showMessageDialog(frame, e, "Error loading board", JOptionPane.ERROR_MESSAGE);
+                    } catch (e: Exception) {
+                        JOptionPane.showMessageDialog(frame, e, "Error loading board", JOptionPane.ERROR_MESSAGE)
                     }
                 }
             }
         }
     }
 
-    private void operationBoardExits() {
-        Settings.boardExits(frame, currentBoard, boards, currentBoardIdx);
+    private fun operationBoardExits() {
+        boardExits(frame, currentBoard, boards, boardIdx)
     }
 
-    private boolean handleCheckbox(String key, Boolean setting) {
+    private fun handleCheckbox(key: String, setting: Boolean?): Boolean {
         if (setting == null) {
-            if (globalEditor.isKey(key)) {
-                return globalEditor.getBoolean(key);
+            return if (globalEditor.isKey(key)) {
+                globalEditor.getBoolean(key)
             } else {
-                return false;
+                false
             }
         } else {
-            globalEditor.setBoolean(key, setting);
-            return setting;
+            globalEditor.setBoolean(key, setting)
+            return setting
         }
     }
 
-    private boolean oneWorldAtATime() {
-        final String key = "ONE_WORLD_AT_A_TIME";
-        return globalEditor.isKey(key) && globalEditor.getBoolean(key);
+    private fun oneWorldAtATime(): Boolean {
+        val key = "ONE_WORLD_AT_A_TIME"
+        return globalEditor.isKey(key) && globalEditor.getBoolean(key)
     }
 
-    public void createMenu() {
-        menuBar.removeAll();
+    fun createMenu() {
+        menuBar!!.removeAll()
         // | File     | World    |          |          |          |          |          |
         // | New ZZT  | World Set|          |          |          |          |          |
         // | New Super| Board Set|          |          |          |          |          |
         // | Open worl|          |          |          |          |          |          |
         // | Save     |          |          |          |          |          |          |
         // | Save As  |          |          |          |          |          |          |
-        ArrayList<Menu> menus = new ArrayList<>();
-        {
-            Menu m;
-            m = new Menu("File");
-            m.add("New ZZT world", null, e -> menuNewWorld(false));
-            m.add("New Super ZZT world", null, e -> menuNewWorld(true));
-            m.add("Open world", "L", e -> menuOpenWorld());
-            recentFilesMenu = new JMenu("Recent files");
-            m.add(recentFilesMenu, "");
+        val menus = ArrayList<Menu>()
+        run {
+            var m = Menu("File")
+            m.add("New ZZT world", null) { e: ActionEvent? -> menuNewWorld(false) }
+            m.add("New Super ZZT world", null) { e: ActionEvent? -> menuNewWorld(true) }
+            m.add("Open world", "L") { e: ActionEvent? -> menuOpenWorld() }
+            recentFilesMenu = JMenu("Recent files")
+            m.add(recentFilesMenu!!, "")
 
-            m.add();
-            m.add("One world at a time", e -> handleCheckbox("ONE_WORLD_AT_A_TIME", ((JCheckBoxMenuItem) e.getSource()).isSelected()), handleCheckbox("ONE_WORLD_AT_A_TIME", null));
-            m.add();
-            m.add("Save", "Ctrl-S", e -> menuSave());
-            m.add("Save as", "S", e -> menuSaveAs());
-            m.add();
-            m.add("ZLoom2 settings...", null, e -> {
-                new Settings(this);
-            });
-            m.add();
-            m.add("Close world", "Escape", e -> {
-                if (promptOnClose()) closeEditor();
-            });
-            menus.add(m);
+            m.add()
+            m.add(
+                "One world at a time",
+                { e: ChangeEvent -> handleCheckbox("ONE_WORLD_AT_A_TIME", (e.source as JCheckBoxMenuItem).isSelected) },
+                handleCheckbox("ONE_WORLD_AT_A_TIME", null)
+            )
+            m.add()
+            m.add("Save", "Ctrl-S") { e: ActionEvent? -> menuSave() }
+            m.add("Save as", "S") { e: ActionEvent? -> menuSaveAs() }
+            m.add()
+            m.add("ZLoom2 settings...", null) { e: ActionEvent? -> Settings(this) }
+            m.add()
+            m.add("Close world", "Escape") { e: ActionEvent? ->
+                if (promptOnClose()) closeEditor()
+            }
+            menus.add(m)
 
-            m = new Menu("World");
-            m.add("World settings...", "G", e -> Settings.world(frame, boards, worldData, canvas));
-            m.add();
-            m.add("Import world", null, e -> menuImportWorld());
-            m.add();
-            m.add("Load charset", null, e -> menuLoadCharset());
-            m.add("Load palette", null, e -> menuLoadPalette());
-            m.add("Default charset and palette", null, e -> menuDefaultCharsetPalette());
-            m.add();
-            m.add("Blinking", e -> {
-                handleCheckbox("BLINKING", ((JCheckBoxMenuItem) e.getSource()).isSelected());
-                afterBlinkToggle();
-            }, handleCheckbox("BLINKING", null));
-            m.add();
-            m.add("Test world", "Alt-T", e -> operationTestWorld());
-            m.add();
-            m.add("Atlas", "Ctrl-A", e -> atlas());
-            menus.add(m);
+            m = Menu("World")
+            m.add("World settings...", "G") { e: ActionEvent? -> world(frame, boards, worldData!!, canvas!!) }
+            m.add()
+            m.add("Import world", null) { e: ActionEvent? -> menuImportWorld() }
+            m.add()
+            m.add("Load charset", null) { e: ActionEvent? -> menuLoadCharset() }
+            m.add("Load palette", null) { e: ActionEvent? -> menuLoadPalette() }
+            m.add("Default charset and palette", null) { e: ActionEvent? -> menuDefaultCharsetPalette() }
+            m.add()
+            m.add("Blinking", { e: ChangeEvent ->
+                handleCheckbox("BLINKING", (e.source as JCheckBoxMenuItem).isSelected)
+                afterBlinkToggle()
+            }, handleCheckbox("BLINKING", null))
+            m.add()
+            m.add("Test world", "Alt-T") { e: ActionEvent? -> operationTestWorld() }
+            m.add()
+            m.add("Atlas", "Ctrl-A") { e: ActionEvent? -> atlas() }
+            menus.add(m)
 
-            m = new Menu("Board");
-            m.add("Board settings...", "I", e -> Settings.board(frame, currentBoard, worldData));
-            m.add("Board exits", "X", e -> operationBoardExits());
-            m.add();
-            m.add("Switch board", "B", e -> operationChangeBoard());
-            m.add("Add board", "A", e -> operationAddBoard());
-            m.add("Add boards (*x* grid)", null, e -> operationAddBoardGrid());
-            m.add("Board list", "Shift-B", e -> menuBoardList());
-            m.add();
-            m.add("Import board", "Alt-I", e -> menuImportBoard());
-            m.add("Import boards", null, e -> menuImportBoards());
-            m.add("Export board", "Alt-X", e -> menuExportBoard());
-            m.add();
-            m.add("Remove from atlas", "Ctrl-R", e -> atlasRemoveBoard());
-            m.add();
-            m.add("Stats list", "Alt-S", e -> operationStatList());
-            menus.add(m);
+            m = Menu("Board")
+            m.add("Board settings...", "I") { e: ActionEvent? -> board(frame, currentBoard, worldData!!) }
+            m.add("Board exits", "X") { e: ActionEvent? -> operationBoardExits() }
+            m.add()
+            m.add("Switch board", "B") { e: ActionEvent? -> operationChangeBoard() }
+            m.add("Add board", "A") { e: ActionEvent? -> operationAddBoard() }
+            m.add("Add boards (*x* grid)", null) { e: ActionEvent? -> operationAddBoardGrid() }
+            m.add("Board list", "Shift-B") { e: ActionEvent? -> menuBoardList() }
+            m.add()
+            m.add("Import board", "Alt-I") { e: ActionEvent? -> menuImportBoard() }
+            m.add("Import boards", null) { e: ActionEvent? -> menuImportBoards() }
+            m.add("Export board", "Alt-X") { e: ActionEvent? -> menuExportBoard() }
+            m.add()
+            m.add("Remove from atlas", "Ctrl-R") { e: ActionEvent? -> atlasRemoveBoard() }
+            m.add()
+            m.add("Stats list", "Alt-S") { e: ActionEvent? -> operationStatList() }
+            menus.add(m)
 
-            m = new Menu("Edit");
-            m.add("Undo", "Ctrl-Z", e -> operationUndo());
-            m.add("Redo", "Ctrl-Y", e -> operationRedo());
-            m.add();
-            m.add("Select colour", "C", e -> operationColour());
-            m.add("Modify buffer tile", "P", e -> operationModifyBuffer(false));
-            m.add("Modify buffer tile (advanced)", "Ctrl-P", e -> operationModifyBuffer(true));
-            m.add("Modify tile under cursor", "Alt-M", e -> operationGrabAndModify(false, false));
-            m.add("Modify tile under cursor (advanced)", "Ctrl-Alt-M", e -> operationGrabAndModify(false, true));
-            m.add("Exchange buffer fg/bg colours", "Ctrl-X", e -> operationBufferSwapColour());
-            m.add();
-            m.add("Start block operation", "Alt-B", e -> operationBlockStart());
-            m.add();
-            m.add("Enter text", "F2", e -> operationToggleText());
-            m.add("Toggle drawing", "Tab", e -> operationToggleDrawing());
-            m.add("Flood fill", "F", e -> operationFloodfill(cursorX, cursorY, false));
-            m.add("Gradient fill", "Alt-F", e -> operationFloodfill(cursorX, cursorY, true));
-            m.add();
-            m.add("Convert image", null, e -> operationLoadImage());
-            m.add("Convert image from clipboard", "Ctrl-V", e -> operationPasteImage());
-            m.add();
-            m.add("Erase player from board", "Ctrl-E", e -> operationErasePlayer());
-            m.add();
-            m.add("Buffer manager", "Ctrl-B", e -> operationOpenBufferManager());
-            m.add();
-            for (int f = 3; f <= 10; f++) {
-                var fMenuName = getFMenuName(f);
-                if (fMenuName != null && !fMenuName.equals("")) {
-                    var elementMenu = new JMenu(fMenuName);
-                    fmenus.put(f, elementMenu);
-                    m.add(elementMenu, "F" + f);
+            m = Menu("Edit")
+            m.add("Undo", "Ctrl-Z") { e: ActionEvent? -> operationUndo() }
+            m.add("Redo", "Ctrl-Y") { e: ActionEvent? -> operationRedo() }
+            m.add()
+            m.add("Select colour", "C") { e: ActionEvent? -> operationColour() }
+            m.add("Modify buffer tile", "P") { e: ActionEvent? -> operationModifyBuffer(false) }
+            m.add("Modify buffer tile (advanced)", "Ctrl-P") { e: ActionEvent? -> operationModifyBuffer(true) }
+            m.add("Modify tile under cursor", "Alt-M") { e: ActionEvent? -> operationGrabAndModify(false, false) }
+            m.add(
+                "Modify tile under cursor (advanced)",
+                "Ctrl-Alt-M"
+            ) { e: ActionEvent? -> operationGrabAndModify(false, true) }
+            m.add("Exchange buffer fg/bg colours", "Ctrl-X") { e: ActionEvent? -> operationBufferSwapColour() }
+            m.add()
+            m.add("Start block operation", "Alt-B") { e: ActionEvent? -> operationBlockStart() }
+            m.add()
+            m.add("Enter text", "F2") { e: ActionEvent? -> operationToggleText() }
+            m.add("Toggle drawing", "Tab") { e: ActionEvent? -> operationToggleDrawing() }
+            m.add("Flood fill", "F") { e: ActionEvent? -> operationFloodfill(cursorX, cursorY, false) }
+            m.add("Gradient fill", "Alt-F") { e: ActionEvent? -> operationFloodfill(cursorX, cursorY, true) }
+            m.add()
+            m.add("Convert image", null) { e: ActionEvent? -> operationLoadImage() }
+            m.add("Convert image from clipboard", "Ctrl-V") { e: ActionEvent? -> operationPasteImage() }
+            m.add()
+            m.add("Erase player from board", "Ctrl-E") { e: ActionEvent? -> operationErasePlayer() }
+            m.add()
+            m.add("Buffer manager", "Ctrl-B") { e: ActionEvent? -> operationOpenBufferManager() }
+            m.add()
+            for (f in 3..10) {
+                val fMenuName = getFMenuName(f)
+                if (fMenuName != null && !fMenuName.isEmpty()) {
+                    val elementMenu = JMenu(fMenuName)
+                    fmenus[f] = elementMenu
+                    m.add(elementMenu, "F$f")
                 }
             }
-            menus.add(m);
+            menus.add(m)
 
-            m = new Menu("View");
-            m.add("Zoom in", "Ctrl-=", e -> operationZoomIn(false));
-            m.add("Zoom out", "Ctrl--", e -> operationZoomOut(false));
-            m.add("Reset zoom", null, e -> operationResetZoom(false));
-            m.add();
-            m.add("Show grid in atlas", e ->
-                    {
-                        handleCheckbox("ATLAS_GRID", ((JCheckBoxMenuItem) e.getSource()).isSelected());
-                        afterModification();
-                    },
-                    handleCheckbox("ATLAS_GRID", null));
-            m.add();
-            m.add("Show stats", "Shift-F1", e -> operationShowTileTypes(SHOW_STATS));
-            m.add("Show objects", "Shift-F2", e -> operationShowTileTypes(SHOW_OBJECTS));
-            m.add("Show invisibles", "Shift-F3", e -> operationShowTileTypes(SHOW_INVISIBLES));
-            m.add("Show empties", "Shift-F4", e -> operationShowTileTypes(SHOW_EMPTIES));
-            m.add("Show fakes", "Shift-F5", e -> operationShowTileTypes(SHOW_FAKES));
-            m.add("Show empties as text", "Shift-F6", e -> operationShowTileTypes(SHOW_EMPTEXTS));
-            m.add("Show nothing", null, e -> operationShowTileTypes(SHOW_NOTHING));
-            m.add();
-            m.add("Take screenshot", "F12", e -> takeScreenshot());
-            m.add("Take screenshot to clipboard", "Alt-F12", e -> takeScreenshotToClipboard());
-            menus.add(m);
+            m = Menu("View")
+            m.add("Zoom in", "Ctrl-=") { e: ActionEvent? -> operationZoomIn(false) }
+            m.add("Zoom out", "Ctrl--") { e: ActionEvent? -> operationZoomOut(false) }
+            m.add("Reset zoom", null) { e: ActionEvent? -> operationResetZoom() }
+            m.add()
+            m.add(
+                "Show grid in atlas", { e: ChangeEvent ->
+                    handleCheckbox("ATLAS_GRID", (e.source as JCheckBoxMenuItem).isSelected)
+                    afterModification()
+                },
+                handleCheckbox("ATLAS_GRID", null)
+            )
+            m.add()
+            m.add("Show stats", "Shift-F1") { e: ActionEvent? -> operationShowTileTypes(SHOW_STATS) }
+            m.add("Show objects", "Shift-F2") { e: ActionEvent? -> operationShowTileTypes(SHOW_OBJECTS) }
+            m.add("Show invisibles", "Shift-F3") { e: ActionEvent? -> operationShowTileTypes(SHOW_INVISIBLES) }
+            m.add("Show empties", "Shift-F4") { e: ActionEvent? -> operationShowTileTypes(SHOW_EMPTIES) }
+            m.add("Show fakes", "Shift-F5") { e: ActionEvent? -> operationShowTileTypes(SHOW_FAKES) }
+            m.add("Show empties as text", "Shift-F6") { e: ActionEvent? -> operationShowTileTypes(SHOW_EMPTEXTS) }
+            m.add("Show nothing", null) { e: ActionEvent? -> operationShowTileTypes(SHOW_NOTHING) }
+            m.add()
+            m.add("Take screenshot", "F12") { e: ActionEvent? -> takeScreenshot() }
+            m.add("Take screenshot to clipboard", "Alt-F12") { e: ActionEvent? -> takeScreenshotToClipboard() }
+            menus.add(m)
 
-            m = new Menu("Help");
-            m.add("Help", "F1", e -> menuHelp());
-            m.add("About", null, e -> menuAbout());
-            menus.add(m);
+            m = Menu("Help")
+            m.add("Help", "F1") { e: ActionEvent? -> menuHelp() }
+            m.add("About", null) { e: ActionEvent? -> menuAbout() }
+            menus.add(m)
         }
 
         /*
@@ -1036,17 +1094,16 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
             menuCheckbox(menuItem.getText(), menuItem.isSelected());
         };
          */
-
-        for (var m : menus) {
-            var menu = new JMenu(m.getTitle());
-            menu.addMenuListener(this);
-            for (var mEntry : m) {
-                mEntry.addToJMenu(globalEditor, menu);
+        for (m in menus) {
+            val menu = JMenu(m.title)
+            menu.addMenuListener(this)
+            for (mEntry in m) {
+                mEntry.addToJMenu(globalEditor, menu)
             }
 
-            menuBar.add(menu);
+            menuBar!!.add(menu)
         }
-        menuBar.revalidate();
+        menuBar!!.revalidate()
         /*
                 var mi = menuList[i];
                 if (mi.equals("|")) {
@@ -1080,825 +1137,817 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
          */
     }
 
-    private void afterBlinkToggle() {
-        canvas.setBlinkMode(globalEditor.getBoolean("BLINKING", true));
-        invalidateCache();
+    private fun afterBlinkToggle() {
+        canvas!!.setBlinkMode(globalEditor.getBoolean("BLINKING", true))
+        invalidateCache()
     }
 
-    private void menuHelp() {
-        new Help(this);
+    private fun menuHelp() {
+        Help(this)
     }
 
-    private void menuAbout() {
-        new About(this);
+    private fun menuAbout() {
+        About(this)
     }
 
-    public void updateMenu()
-    {
-        for (var f : fmenus.keySet()) {
-            var fMenuItems = getFMenuItems(f);
-            fmenus.get(f).removeAll();
-            for (var fMenuItem : fMenuItems) {
-                fmenus.get(f).add(fMenuItem);
+    fun updateMenu() {
+        for (f in fmenus.keys) {
+            val fMenuItems = getFMenuItems(f)
+            fmenus[f]!!.removeAll()
+            for (fMenuItem in fMenuItems) {
+                fmenus[f]!!.add(fMenuItem)
             }
         }
 
-        recentFilesMenu.removeAll();
-        int recentMax = globalEditor.getInt("RECENT_MAX", 10);
-        for (int i = 9; i >= 0; i--) {
-            var recentFileName = globalEditor.getString(String.format("RECENT_%d", i));
+        recentFilesMenu!!.removeAll()
+        val recentMax = globalEditor.getInt("RECENT_MAX", 10)
+        for (i in 9 downTo 0) {
+            val recentFileName = globalEditor.getString(String.format("RECENT_%d", i))
             if (recentFileName != null) {
-                var recentFile = new File(Util.evalConfigDir(recentFileName));
-                var menuEntry = recentFile.getName();
-                var menuItem = new JMenuItem(menuEntry);
-                menuItem.addActionListener(new ActionListener() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        try {
-                            openWorld(recentFile);
-                            updateDefaultDir(recentFile);
-                        } catch (IOException | WorldCorruptedException ex) {
-                            globalEditor.removeRecentFile(recentFileName);
-                            recentFilesMenu.remove(menuItem);
-                            if (recentFilesMenu.getMenuComponentCount() == 0) recentFilesMenu.setEnabled(false);
-                            JOptionPane.showMessageDialog(frame, ex, "Error loading world", JOptionPane.ERROR_MESSAGE);
-                        }
-                    }
-                });
-                recentFilesMenu.add(menuItem);
+                val recentFile = File(evalConfigDir(recentFileName))
+                val menuItem = getjMenuItem(recentFile, recentFileName)
+                recentFilesMenu!!.add(menuItem)
             }
         }
-        recentFilesMenu.setEnabled(recentFilesMenu.getMenuComponentCount() != 0);
+        recentFilesMenu!!.isEnabled = recentFilesMenu!!.menuComponentCount != 0
     }
 
-    private JMenuItem[] getFMenuItems(int f) {
-        boolean szzt = worldData.isSuperZZT();
-        ArrayList<JMenuItem> menuItems = new ArrayList<>();
-        for (int i = 0;; i++) {
-            var prop = String.format("F%d_MENU_%d", f, i);
-            var element = globalEditor.getString(prop);
-            if (element == null || element.equals("")) {
-                break;
+    private fun getjMenuItem(recentFile: File, recentFileName: String): JMenuItem {
+        val menuEntry = recentFile.name
+        val menuItem = JMenuItem(menuEntry)
+        menuItem.addActionListener { e: ActionEvent? ->
+            try {
+                openWorld(recentFile)
+                updateDefaultDir(recentFile)
+            } catch (ex: IOException) {
+                globalEditor.removeRecentFile(recentFileName)
+                recentFilesMenu!!.remove(menuItem)
+                if (recentFilesMenu!!.menuComponentCount == 0) recentFilesMenu!!.isEnabled = false
+                JOptionPane.showMessageDialog(frame, ex, "Error loading world", JOptionPane.ERROR_MESSAGE)
+            } catch (ex: WorldCorruptedException) {
+                globalEditor.removeRecentFile(recentFileName)
+                recentFilesMenu!!.remove(menuItem)
+                if (recentFilesMenu!!.menuComponentCount == 0) recentFilesMenu!!.isEnabled = false
+                JOptionPane.showMessageDialog(frame, ex, "Error loading world", JOptionPane.ERROR_MESSAGE)
+            }
+        }
+        return menuItem
+    }
+
+    private fun getFMenuItems(f: Int): Array<JMenuItem> {
+        val szzt = worldData!!.isSuperZZT
+        val menuItems = ArrayList<JMenuItem>()
+        var i = 0
+        while (true) {
+            val prop = String.format("F%d_MENU_%d", f, i)
+            val element = globalEditor.getString(prop)
+            if (element == null || element.isEmpty()) {
+                break
             } else {
-                String elementName, displayName;
-                boolean starred = false;
-                int parenPos = element.indexOf('(');
+                var elementName: String?
+                var displayName: String?
+                var starred = false
+                val parenPos = element.indexOf('(')
                 if (parenPos == -1) {
-                    int exclPos = element.indexOf('!');
+                    val exclPos = element.indexOf('!')
                     if (exclPos != -1) {
-                        elementName = element.substring(0, exclPos);
-                        displayName = element.substring(exclPos + 1);
+                        elementName = element.substring(0, exclPos)
+                        displayName = element.substring(exclPos + 1)
                     } else {
-                        elementName = element;
-                        displayName = elementName;
+                        elementName = element
+                        displayName = elementName
                     }
                 } else {
-                    elementName = element.substring(0, parenPos);
-                    int endParenPos = element.lastIndexOf(')');
-                    if (endParenPos == -1) throw new RuntimeException("Malformed element: " + element);
-                    if (endParenPos == element.length() - 1) {
-                        displayName = elementName;
+                    elementName = element.substring(0, parenPos)
+                    val endParenPos = element.lastIndexOf(')')
+                    if (endParenPos == -1) throw RuntimeException("Malformed element: $element")
+                    if (endParenPos == element.length - 1) {
+                        displayName = elementName
                     } else {
-                        int starPos = element.lastIndexOf('*');
+                        val starPos = element.lastIndexOf('*')
                         if (starPos == -1 || starPos < endParenPos) {
-                            displayName = element.substring(endParenPos + 1);
+                            displayName = element.substring(endParenPos + 1)
                         } else {
-                            starred = true;
-                            displayName = element.substring(endParenPos + 1, starPos);
+                            starred = true
+                            displayName = element.substring(endParenPos + 1, starPos)
                         }
                     }
                 }
-                final boolean editOnPlace = !starred;
-                if (ZType.getId(szzt, elementName) == -1) continue;
-                Tile tile = getTileFromElement(element, 0xF0);
-                int chr = ZType.getChar(szzt, tile);
+                val editOnPlace = !starred
+                if (ZType.getId(szzt, elementName) == -1) {
+                    i++
+                    continue
+                }
+                val tile = getTileFromElement(element, 0xF0)
+                val chr = ZType.getChar(szzt, tile)
                 //byte[] glyph = new byte[1];
                 //glyph[0] = (byte) chr;
-                //var menuItem = new JMenuItem(CP437.toUnicode(glyph) + " " + displayName);
-                var menuItem = new JMenuItem(displayName);
-                //menuItem.setFont(CP437.getFont());
-                menuItem.addActionListener(e -> setBufferToElement(element, editOnPlace));
+                //var menuItem = new JMenuItem(CP437.INSTANCE.toUnicode(glyph) + " " + displayName);
+                val menuItem = JMenuItem(displayName)
+                //menuItem.setFont(CP437.INSTANCE.getFont());
+                menuItem.addActionListener { e: ActionEvent? -> setBufferToElement(element, editOnPlace) }
 
-                int col = ZType.getColour(szzt, tile);
-                var img = canvas.extractCharImageWH(chr, col, szzt ? 2 : 1, 1, false, "____$____", 3, 3);
-                int side = 20;
-                var img2 = new BufferedImage(side, side, BufferedImage.TYPE_INT_ARGB);
-                var g = img2.getGraphics();
-                g.drawImage(img, (side - img.getWidth()) / 2, (side - img.getHeight()) / 2, null);
-                ImageIcon icon = new ImageIcon(img2);
-                menuItem.setIcon(icon);
-                menuItems.add(menuItem);
+                val col = ZType.getColour(szzt, tile)
+                val img = canvas!!.extractCharImageWH(chr, col, if (szzt) 2 else 1, 1, false, "____\$____", 3, 3)
+                val side = 20
+                val img2 = BufferedImage(side, side, BufferedImage.TYPE_INT_ARGB)
+                val g = img2.graphics
+                g.drawImage(img, (side - img.width) / 2, (side - img.height) / 2, null)
+                val icon = ImageIcon(img2)
+                menuItem.icon = icon
+                menuItems.add(menuItem)
             }
+            i++
         }
-        return menuItems.toArray(new JMenuItem[0]);
+        return menuItems.toTypedArray<JMenuItem>()
     }
 
-    private Tile getTileFromElement(String element, int col) {
-        boolean vanilla = false;
-        int parenPos = element.indexOf('(');
+    private fun getTileFromElement(element: String, col: Int): Tile {
+        var vanilla = false
+        var parenPos = element.indexOf('(')
         if (parenPos == -1) {
-            parenPos = element.length();
-            vanilla = true;
+            parenPos = element.length
+            vanilla = true
         }
-        var elementName = element.substring(0, parenPos);
-        int exclPos = elementName.indexOf('!');
+        var elementName = element.substring(0, parenPos)
+        val exclPos = elementName.indexOf('!')
         if (exclPos != -1) {
-            elementName = element.substring(0, exclPos);
+            elementName = element.substring(0, exclPos)
         }
-        var elementId = ZType.getId(worldData.isSuperZZT(), elementName);
+        val elementId = ZType.getId(worldData!!.isSuperZZT, elementName)
         if (elementId == -1) {
-            throw new RuntimeException(String.format("\"%s\" is not a valid %s element", elementName, worldData.isSuperZZT() ? "SuperZZT" : "ZZT"));
+            throw RuntimeException(
+                String.format(
+                    "\"%s\" is not a valid %s element",
+                    elementName,
+                    if (worldData!!.isSuperZZT) "SuperZZT" else "ZZT"
+                )
+            )
         }
-        Tile tile = new Tile(elementId, 0);
-        if (!ZType.isText(worldData.isSuperZZT(), tile.getId())) {
-            paintTile(tile, col);
+        val tile = Tile(elementId, 0)
+        if (!ZType.isText(worldData!!.isSuperZZT, tile.id)) {
+            paintTile(tile, col)
         }
         if (!vanilla) {
-            int lastParenPos = element.lastIndexOf(')');
-            if (lastParenPos == -1) throw new RuntimeException("Malformed element: " + element);
-            String elementStatInfo = element.substring(parenPos + 1, lastParenPos);
+            val lastParenPos = element.lastIndexOf(')')
+            if (lastParenPos == -1) throw RuntimeException("Malformed element: $element")
+            var elementStatInfo = element.substring(parenPos + 1, lastParenPos)
             // | , =, ", \n are escaped. Convert the escaped forms to Unicode PUA U+E00{0,1,2,3,4} respectively so they don't interfere with splitting
-            elementStatInfo = elementStatInfo.replace("\\|", "\uE000");
-            elementStatInfo = elementStatInfo.replace("\\,", "\uE001");
-            elementStatInfo = elementStatInfo.replace("\\=", "\uE002");
-            elementStatInfo = elementStatInfo.replace("\\\"", "\uE003");
-            elementStatInfo = elementStatInfo.replace("\\n", "\uE004");
+            elementStatInfo = elementStatInfo.replace("\\|", "\uE000")
+            elementStatInfo = elementStatInfo.replace("\\,", "\uE001")
+            elementStatInfo = elementStatInfo.replace("\\=", "\uE002")
+            elementStatInfo = elementStatInfo.replace("\\\"", "\uE003")
+            elementStatInfo = elementStatInfo.replace("\\n", "\uE004")
 
             // Split into stats
-            var statList = elementStatInfo.split(Pattern.quote("|"));
-            var stats = new ArrayList<Stat>();
-            for (var statString : statList) {
-                Stat stat = new Stat(worldData.isSuperZZT());
+            val statList = elementStatInfo.split(Pattern.quote("|").toRegex()).dropLastWhile { it.isEmpty() }
+                .toTypedArray()
+            val stats = ArrayList<Stat>()
+            for (statString in statList) {
+                val stat = Stat(worldData!!.isSuperZZT)
                 // Split into params
-                var paramList = statString.split(",");
-                for (var paramString : paramList) {
-                    if (paramString.isEmpty()) continue;
+                val paramList = statString.split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+                for (paramString in paramList) {
+                    if (paramString.isEmpty()) continue
                     // Split into key=value
-                    var kvPair = paramString.split("=");
-                    if (kvPair.length != 2) throw new RuntimeException("Invalid key=value pair in " + paramString);
-                    var param = kvPair[0].toUpperCase();
-                    var value = kvPair[1];
-                    switch (param) {
-                        case "STATID":
-                            stat.setStatId(Integer.parseInt(value));
-                            break;
-                        case "CYCLE":
-                            stat.setCycle(Integer.parseInt(value));
-                            break;
-                        case "P1":
-                            stat.setP1(Integer.parseInt(value));
-                            break;
-                        case "P2":
-                            stat.setP2(Integer.parseInt(value));
-                            break;
-                        case "P3":
-                            stat.setP3(Integer.parseInt(value));
-                            break;
-                        case "UID":
-                            stat.setUid(Integer.parseInt(value));
-                            break;
-                        case "UCO":
-                            stat.setUco(Integer.parseInt(value));
-                            break;
-                        case "IP":
-                            stat.setIp(Integer.parseInt(value));
-                            break;
-                        case "STEPX":
-                            stat.setStepX(Integer.parseInt(value));
-                            break;
-                        case "STEPY":
-                            stat.setStepY(Integer.parseInt(value));
-                            break;
-                        case "POINTER":
-                            stat.setPointer(Integer.parseInt(value));
-                            break;
-                        case "AUTOBIND":
-                            stat.setAutobind(Boolean.parseBoolean(value));
-                            break;
-                        case "SPECIFYID":
-                            stat.setSpecifyId(Boolean.parseBoolean(value));
-                            break;
-                        case "ISPLAYER":
-                            stat.setIsPlayer(Boolean.parseBoolean(value));
-                            break;
-                        case "CODE":
-                            String code = value;
-                            code = code.replace("\uE000", "|");
-                            code = code.replace("\uE001", ",");
-                            code = code.replace("\uE002", "=");
-                            code = code.replace("\uE003", "\"");
-                            code = code.replace("\uE004", "\n");
-                            stat.setCode(CP437.toBytes(code, false));
-                            break;
-                        default:
-                            throw new RuntimeException("Stat property not supported: " + param);
+                    val kvPair = paramString.split("=".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+                    if (kvPair.size != 2) throw RuntimeException("Invalid key=value pair in $paramString")
+                    val param = kvPair[0].uppercase(Locale.getDefault())
+                    val value = kvPair[1]
+                    when (param) {
+                        "STATID" -> stat.statId = value.toInt()
+                        "CYCLE" -> stat.cycle = value.toInt()
+                        "P1" -> stat.p1 = value.toInt()
+                        "P2" -> stat.p2 = value.toInt()
+                        "P3" -> stat.p3 = value.toInt()
+                        "UID" -> stat.uid = value.toInt()
+                        "UCO" -> stat.uco = value.toInt()
+                        "IP" -> stat.ip = value.toInt()
+                        "STEPX" -> stat.stepX = value.toInt()
+                        "STEPY" -> stat.stepY = value.toInt()
+                        "POINTER" -> stat.pointer = value.toInt()
+                        "AUTOBIND" -> stat.isAutobind = value.toBoolean()
+                        "SPECIFYID" -> stat.isSpecifyId = value.toBoolean()
+                        "ISPLAYER" -> stat.isPlayer = value.toBoolean()
+                        "CODE" -> {
+                            var code = value
+                            code = code.replace("\uE000", "|")
+                            code = code.replace("\uE001", ",")
+                            code = code.replace("\uE002", "=")
+                            code = code.replace("\uE003", "\"")
+                            code = code.replace("\uE004", "\n")
+                            stat.code = toBytes(code, false)
+                        }
+
+                        else -> throw RuntimeException("Stat property not supported: $param")
                     }
                 }
-                stats.add(stat);
+                stats.add(stat)
             }
-            tile.setStats(stats);
+            tile.stats = stats
         }
-        return tile;
+        return tile
     }
 
-    private Tile getBufferTile() {
-        return globalEditor.getBufferTile(worldData.isSuperZZT());
-    }
+    private var bufferTile: Tile?
+        get() = globalEditor.getBufferTile(worldData!!.isSuperZZT)
+        private set(tile) {
+            globalEditor.setBufferTile(tile, worldData!!.isSuperZZT)
+        }
 
-    private void setBufferTile(Tile tile) {
-        globalEditor.setBufferTile(tile, worldData.isSuperZZT());
-    }
-
-    private void setBufferToElement(String element, boolean editOnPlace) {
-        Tile tile = getTileFromElement(element, getTileColour(getBufferTile()));
+    private fun setBufferToElement(element: String, editOnPlace: Boolean) {
+        val tile = getTileFromElement(element, getTileColour(bufferTile!!))
         if (editOnPlace) {
-            openTileEditorExempt(tile, currentBoard, -1, -1, this::elementPlaceAtCursor, false);
+            openTileEditorExempt(
+                tile,
+                currentBoard,
+                -1,
+                -1,
+                { tile: Tile -> this.elementPlaceAtCursor(tile) },
+                false
+            )
         } else {
-            elementPlaceAtCursor(tile);
+            elementPlaceAtCursor(tile)
         }
     }
 
-    private void elementPlaceAtCursor(Tile tile) {
-        setBufferTile(tile);
-        var board = getBoardAt(cursorX, cursorY);
+    private fun elementPlaceAtCursor(tile: Tile) {
+        bufferTile = tile
+        val board = getBoardAt(cursorX, cursorY)
 
         if (board != null) {
-            putTileAt(cursorX, cursorY, tile, PUT_DEFAULT);
-            afterModification();
+            putTileAt(cursorX, cursorY, tile, PUT_DEFAULT)
+            afterModification()
         } else {
-            afterUpdate();
+            afterUpdate()
         }
     }
 
-    private void paintTile(Tile tile, int col) {
-        var backupTile = tile.clone();
+    private fun paintTile(tile: Tile, col: Int) {
+        val backupTile = tile.clone()
         if (isText(tile)) {
-            tile.setId((col % 128) + 128);
+            tile.id = (col % 128) + 128
         } else {
-            tile.setCol(col);
+            tile.col = col
         }
     }
 
-    private boolean isText(Tile bufferTile) {
-        return ZType.isText(worldData.isSuperZZT(), bufferTile.getId());
+    private fun isText(bufferTile: Tile): Boolean {
+        return ZType.isText(worldData!!.isSuperZZT, bufferTile.id)
     }
 
-    private int getTileColour(Tile bufferTile) {
-        int col = bufferTile.getCol();
-        int id = bufferTile.getId();
-        boolean szzt = worldData.isSuperZZT();
-        int tcol = ZType.getTextColour(szzt, id);
+    private fun getTileColour(bufferTile: Tile): Int {
+        var col = bufferTile.col
+        val id = bufferTile.id
+        val szzt = worldData!!.isSuperZZT
+        val tcol = ZType.getTextColour(szzt, id)
         if (tcol != -1) {
-            col = tcol;
+            col = tcol
         }
-        return col;
+        return col
     }
 
-    private String getFMenuName(int f) {
-        var firstItem = globalEditor.getString(String.format("F%d_MENU_0", f), "");
-        if (firstItem.isEmpty()) return "";
-        return globalEditor.getString(String.format("F%d_MENU", f), "");
+    private fun getFMenuName(f: Int): String {
+        val firstItem = globalEditor.getString(String.format("F%d_MENU_0", f), "")
+        if (firstItem.isEmpty()) return ""
+        return globalEditor.getString(String.format("F%d_MENU", f), "")
     }
 
-    private void addKeybinds(JComponent component)
-    {
-        frame.setFocusTraversalKeysEnabled(false);
-        component.getActionMap().clear();
-        component.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
+    private fun addKeybinds(component: JComponent) {
+        frame!!.focusTraversalKeysEnabled = false
+        component.actionMap.clear()
+        component.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear()
 
-        var ge = globalEditor;
-        Util.addKeybind(ge, this, component, "Escape");
-        Util.addKeybind(ge, this, component, "Up");
-        Util.addKeybind(ge, this, component, "Down");
-        Util.addKeybind(ge, this, component, "Left");
-        Util.addKeybind(ge, this, component, "Right");
-        Util.addKeybind(ge, this, component, "Alt-Up");
-        Util.addKeybind(ge, this, component, "Alt-Down");
-        Util.addKeybind(ge, this, component, "Alt-Left");
-        Util.addKeybind(ge, this, component, "Alt-Right");
-        Util.addKeybind(ge, this, component, "Shift-Up");
-        Util.addKeybind(ge, this, component, "Shift-Down");
-        Util.addKeybind(ge, this, component, "Shift-Left");
-        Util.addKeybind(ge, this, component, "Shift-Right");
-        Util.addKeybind(ge, this, component, "Ctrl-Shift-Up");
-        Util.addKeybind(ge, this, component, "Ctrl-Shift-Down");
-        Util.addKeybind(ge, this, component, "Ctrl-Shift-Left");
-        Util.addKeybind(ge, this, component, "Ctrl-Shift-Right");
-        Util.addKeybind(ge, this, component, "Tab");
-        Util.addKeybind(ge, this, component, "Home");
-        Util.addKeybind(ge, this, component, "End");
-        Util.addKeybind(ge, this, component, "Insert");
-        Util.addKeybind(ge, this, component, "Space");
-        Util.addKeybind(ge, this, component, "Delete");
-        Util.addKeybind(ge, this, component, "Enter");
-        Util.addKeybind(ge, this, component, "Ctrl-Enter");
-        Util.addKeybind(ge, this, component, "Ctrl-=");
-        Util.addKeybind(ge, this, component, "Ctrl--");
-        Util.addKeybind(ge, this, component, "A");
-        Util.addKeybind(ge, this, component, "B");
-        Util.addKeybind(ge, this, component, "C");
-        Util.addKeybind(ge, this, component, "D");
-        Util.addKeybind(ge, this, component, "F");
-        Util.addKeybind(ge, this, component, "G");
-        Util.addKeybind(ge, this, component, "I");
-        Util.addKeybind(ge, this, component, "L");
-        Util.addKeybind(ge, this, component, "P");
-        Util.addKeybind(ge, this, component, "S");
-        Util.addKeybind(ge, this, component, "X");
-        Util.addKeybind(ge, this, component, "Ctrl-A");
-        Util.addKeybind(ge, this, component, "Ctrl-B");
-        Util.addKeybind(ge, this, component, "Ctrl-E");
-        Util.addKeybind(ge, this, component, "Ctrl-P");
-        Util.addKeybind(ge, this, component, "Ctrl-R");
-        Util.addKeybind(ge, this, component, "Ctrl-S");
-        Util.addKeybind(ge, this, component, "Ctrl-V");
-        Util.addKeybind(ge, this, component, "Ctrl-X");
-        Util.addKeybind(ge, this, component, "Ctrl-Y");
-        Util.addKeybind(ge, this, component, "Ctrl-Z");
-        Util.addKeybind(ge, this, component, "Alt-B");
-        Util.addKeybind(ge, this, component, "Alt-F");
-        Util.addKeybind(ge, this, component, "Alt-I");
-        Util.addKeybind(ge, this, component, "Alt-M");
-        Util.addKeybind(ge, this, component, "Alt-S");
-        Util.addKeybind(ge, this, component, "Alt-T");
-        Util.addKeybind(ge, this, component, "Alt-X");
-        Util.addKeybind(ge, this, component, "Shift-B");
-        Util.addKeybind(ge, this, component, "Ctrl-Alt-M");
-        Util.addKeybind(ge, this, component, "F1");
-        Util.addKeybind(ge, this, component, "F2");
-        Util.addKeybind(ge, this, component, "F3");
-        Util.addKeybind(ge, this, component, "F4");
-        Util.addKeybind(ge, this, component, "F5");
-        Util.addKeybind(ge, this, component, "F6");
-        Util.addKeybind(ge, this, component, "F7");
-        Util.addKeybind(ge, this, component, "F8");
-        Util.addKeybind(ge, this, component, "F9");
-        Util.addKeybind(ge, this, component, "F10");
-        Util.addKeybind(ge, this, component, "F12");
-        Util.addKeybind(ge, this, component, "Shift-F1");
-        Util.addKeybind(ge, this, component, "Shift-F2");
-        Util.addKeybind(ge, this, component, "Shift-F3");
-        Util.addKeybind(ge, this, component, "Shift-F4");
-        Util.addKeybind(ge, this, component, "Shift-F5");
-        Util.addKeybind(ge, this, component, "Shift-F6");
-        Util.addKeybind(ge, this, component, "Alt-F12");
-        Util.addKeybind(ge, this, component, "0");
-        Util.addKeybind(ge, this, component, "1");
-        Util.addKeybind(ge, this, component, "2");
-        Util.addKeybind(ge, this, component, "3");
-        Util.addKeybind(ge, this, component, "4");
-        Util.addKeybind(ge, this, component, "5");
-        Util.addKeybind(ge, this, component, "6");
-        Util.addKeybind(ge, this, component, "7");
-        Util.addKeybind(ge, this, component, "8");
-        Util.addKeybind(ge, this, component, "9");
-        Util.addKeybind(ge, this, component, "Ctrl-0");
-        Util.addKeybind(ge, this, component, "Ctrl-1");
-        Util.addKeybind(ge, this, component, "Ctrl-2");
-        Util.addKeybind(ge, this, component, "Ctrl-3");
-        Util.addKeybind(ge, this, component, "Ctrl-4");
-        Util.addKeybind(ge, this, component, "Ctrl-5");
-        Util.addKeybind(ge, this, component, "Ctrl-6");
-        Util.addKeybind(ge, this, component, "Ctrl-7");
-        Util.addKeybind(ge, this, component, "Ctrl-8");
-        Util.addKeybind(ge, this, component, "Ctrl-9");
+        val ge = globalEditor
+        addKeybind(ge, this, component, "Escape")
+        addKeybind(ge, this, component, "Up")
+        addKeybind(ge, this, component, "Down")
+        addKeybind(ge, this, component, "Left")
+        addKeybind(ge, this, component, "Right")
+        addKeybind(ge, this, component, "Alt-Up")
+        addKeybind(ge, this, component, "Alt-Down")
+        addKeybind(ge, this, component, "Alt-Left")
+        addKeybind(ge, this, component, "Alt-Right")
+        addKeybind(ge, this, component, "Shift-Up")
+        addKeybind(ge, this, component, "Shift-Down")
+        addKeybind(ge, this, component, "Shift-Left")
+        addKeybind(ge, this, component, "Shift-Right")
+        addKeybind(ge, this, component, "Ctrl-Shift-Up")
+        addKeybind(ge, this, component, "Ctrl-Shift-Down")
+        addKeybind(ge, this, component, "Ctrl-Shift-Left")
+        addKeybind(ge, this, component, "Ctrl-Shift-Right")
+        addKeybind(ge, this, component, "Tab")
+        addKeybind(ge, this, component, "Home")
+        addKeybind(ge, this, component, "End")
+        addKeybind(ge, this, component, "Insert")
+        addKeybind(ge, this, component, "Space")
+        addKeybind(ge, this, component, "Delete")
+        addKeybind(ge, this, component, "Enter")
+        addKeybind(ge, this, component, "Ctrl-Enter")
+        addKeybind(ge, this, component, "Ctrl-=")
+        addKeybind(ge, this, component, "Ctrl--")
+        addKeybind(ge, this, component, "A")
+        addKeybind(ge, this, component, "B")
+        addKeybind(ge, this, component, "C")
+        addKeybind(ge, this, component, "D")
+        addKeybind(ge, this, component, "F")
+        addKeybind(ge, this, component, "G")
+        addKeybind(ge, this, component, "I")
+        addKeybind(ge, this, component, "L")
+        addKeybind(ge, this, component, "P")
+        addKeybind(ge, this, component, "S")
+        addKeybind(ge, this, component, "X")
+        addKeybind(ge, this, component, "Ctrl-A")
+        addKeybind(ge, this, component, "Ctrl-B")
+        addKeybind(ge, this, component, "Ctrl-E")
+        addKeybind(ge, this, component, "Ctrl-P")
+        addKeybind(ge, this, component, "Ctrl-R")
+        addKeybind(ge, this, component, "Ctrl-S")
+        addKeybind(ge, this, component, "Ctrl-V")
+        addKeybind(ge, this, component, "Ctrl-X")
+        addKeybind(ge, this, component, "Ctrl-Y")
+        addKeybind(ge, this, component, "Ctrl-Z")
+        addKeybind(ge, this, component, "Alt-B")
+        addKeybind(ge, this, component, "Alt-F")
+        addKeybind(ge, this, component, "Alt-I")
+        addKeybind(ge, this, component, "Alt-M")
+        addKeybind(ge, this, component, "Alt-S")
+        addKeybind(ge, this, component, "Alt-T")
+        addKeybind(ge, this, component, "Alt-X")
+        addKeybind(ge, this, component, "Shift-B")
+        addKeybind(ge, this, component, "Ctrl-Alt-M")
+        addKeybind(ge, this, component, "F1")
+        addKeybind(ge, this, component, "F2")
+        addKeybind(ge, this, component, "F3")
+        addKeybind(ge, this, component, "F4")
+        addKeybind(ge, this, component, "F5")
+        addKeybind(ge, this, component, "F6")
+        addKeybind(ge, this, component, "F7")
+        addKeybind(ge, this, component, "F8")
+        addKeybind(ge, this, component, "F9")
+        addKeybind(ge, this, component, "F10")
+        addKeybind(ge, this, component, "F12")
+        addKeybind(ge, this, component, "Shift-F1")
+        addKeybind(ge, this, component, "Shift-F2")
+        addKeybind(ge, this, component, "Shift-F3")
+        addKeybind(ge, this, component, "Shift-F4")
+        addKeybind(ge, this, component, "Shift-F5")
+        addKeybind(ge, this, component, "Shift-F6")
+        addKeybind(ge, this, component, "Alt-F12")
+        addKeybind(ge, this, component, "0")
+        addKeybind(ge, this, component, "1")
+        addKeybind(ge, this, component, "2")
+        addKeybind(ge, this, component, "3")
+        addKeybind(ge, this, component, "4")
+        addKeybind(ge, this, component, "5")
+        addKeybind(ge, this, component, "6")
+        addKeybind(ge, this, component, "7")
+        addKeybind(ge, this, component, "8")
+        addKeybind(ge, this, component, "9")
+        addKeybind(ge, this, component, "Ctrl-0")
+        addKeybind(ge, this, component, "Ctrl-1")
+        addKeybind(ge, this, component, "Ctrl-2")
+        addKeybind(ge, this, component, "Ctrl-3")
+        addKeybind(ge, this, component, "Ctrl-4")
+        addKeybind(ge, this, component, "Ctrl-5")
+        addKeybind(ge, this, component, "Ctrl-6")
+        addKeybind(ge, this, component, "Ctrl-7")
+        addKeybind(ge, this, component, "Ctrl-8")
+        addKeybind(ge, this, component, "Ctrl-9")
     }
 
-    @Override
-    public void keyAction(String actionName, ActionEvent e) {
+    override fun keyAction(actionName: String?, e: ActionEvent?) {
         // These actions activate whether textEntry is set or not
-        switch (actionName) {
-            case "Escape": operationEscape(); break;
-            case "Up": operationCursorMove(0, -1, true); break;
-            case "Down": operationCursorMove(0, 1, true); break;
-            case "Left": operationCursorMove(-1, 0, true); break;
-            case "Right": operationCursorMove(1, 0, true); break;
-            case "Alt-Up": operationCursorMove(0, -10, true); break;
-            case "Alt-Down": operationCursorMove(0, 10, true); break;
-            case "Alt-Left": operationCursorMove(-10, 0, true); break;
-            case "Alt-Right": operationCursorMove(10, 0, true); break;
-            case "Shift-Up": operationExitJump(0); break;
-            case "Shift-Down": operationExitJump(1); break;
-            case "Shift-Left": operationExitJump(2); break;
-            case "Shift-Right": operationExitJump(3); break;
-            case "Ctrl-Shift-Up": operationExitCreate(0); break;
-            case "Ctrl-Shift-Down": operationExitCreate(1); break;
-            case "Ctrl-Shift-Left": operationExitCreate(2); break;
-            case "Ctrl-Shift-Right": operationExitCreate(3); break;
-            case "Tab": operationToggleDrawing(); break;
-            case "Home": operationCursorMove(-999999999, -999999999, false); break;
-            case "End": operationCursorMove(999999999, 999999999, false); break;
-            case "Insert": operationBufferGrab(); break;
-            case "Ctrl-=": operationZoomIn(false); break;
-            case "Ctrl--": operationZoomOut(false); break;
-            case "Ctrl-X": operationBufferSwapColour(); break;
-            case "Ctrl-Y": operationRedo(); break;
-            case "Ctrl-Z": operationUndo(); break;
-            case "F1": menuHelp(); break;
-            case "F2": operationToggleText(); break;
-            case "F3": operationF(3); break;
-            case "F4": operationF(4); break;
-            case "F5": operationF(5); break;
-            case "F6": operationF(6); break;
-            case "F7": operationF(7); break;
-            case "F8": operationF(8); break;
-            case "F9": operationF(9); break;
-            case "F10": operationF(10); break;
-            case "F12": takeScreenshot(); break;
-            case "Shift-F1": operationShowTileTypes(SHOW_STATS); break;
-            case "Shift-F2": operationShowTileTypes(SHOW_OBJECTS); break;
-            case "Shift-F3": operationShowTileTypes(SHOW_INVISIBLES); break;
-            case "Shift-F4": operationShowTileTypes(SHOW_EMPTIES); break;
-            case "Shift-F5": operationShowTileTypes(SHOW_FAKES); break;
-            case "Shift-F6": operationShowTileTypes(SHOW_EMPTEXTS); break;
-            case "Alt-F12": takeScreenshotToClipboard(); break;
-            default: break;
+        when (actionName) {
+            "Escape" -> operationEscape()
+            "Up" -> operationCursorMove(0, -1, true)
+            "Down" -> operationCursorMove(0, 1, true)
+            "Left" -> operationCursorMove(-1, 0, true)
+            "Right" -> operationCursorMove(1, 0, true)
+            "Alt-Up" -> operationCursorMove(0, -10, true)
+            "Alt-Down" -> operationCursorMove(0, 10, true)
+            "Alt-Left" -> operationCursorMove(-10, 0, true)
+            "Alt-Right" -> operationCursorMove(10, 0, true)
+            "Shift-Up" -> operationExitJump(0)
+            "Shift-Down" -> operationExitJump(1)
+            "Shift-Left" -> operationExitJump(2)
+            "Shift-Right" -> operationExitJump(3)
+            "Ctrl-Shift-Up" -> operationExitCreate(0)
+            "Ctrl-Shift-Down" -> operationExitCreate(1)
+            "Ctrl-Shift-Left" -> operationExitCreate(2)
+            "Ctrl-Shift-Right" -> operationExitCreate(3)
+            "Tab" -> operationToggleDrawing()
+            "Home" -> operationCursorMove(-999999999, -999999999, false)
+            "End" -> operationCursorMove(999999999, 999999999, false)
+            "Insert" -> operationBufferGrab()
+            "Ctrl-=" -> operationZoomIn(false)
+            "Ctrl--" -> operationZoomOut(false)
+            "Ctrl-X" -> operationBufferSwapColour()
+            "Ctrl-Y" -> operationRedo()
+            "Ctrl-Z" -> operationUndo()
+            "F1" -> menuHelp()
+            "F2" -> operationToggleText()
+            "F3" -> operationF(3)
+            "F4" -> operationF(4)
+            "F5" -> operationF(5)
+            "F6" -> operationF(6)
+            "F7" -> operationF(7)
+            "F8" -> operationF(8)
+            "F9" -> operationF(9)
+            "F10" -> operationF(10)
+            "F12" -> takeScreenshot()
+            "Shift-F1" -> operationShowTileTypes(SHOW_STATS)
+            "Shift-F2" -> operationShowTileTypes(SHOW_OBJECTS)
+            "Shift-F3" -> operationShowTileTypes(SHOW_INVISIBLES)
+            "Shift-F4" -> operationShowTileTypes(SHOW_EMPTIES)
+            "Shift-F5" -> operationShowTileTypes(SHOW_FAKES)
+            "Shift-F6" -> operationShowTileTypes(SHOW_EMPTEXTS)
+            "Alt-F12" -> takeScreenshotToClipboard()
+            else -> {}
         }
         if (!textEntry) {
-            switch (actionName) {
-                case "Space": operationBufferPut(); break;
-                case "Delete": operationDelete(); break;
-                case "Enter": operationGrabAndModify(true, false); break;
-                case "Ctrl-Enter": operationGrabAndModify(true, true); break;
-                case "A": operationAddBoard(); break;
-                case "B": operationChangeBoard(); break;
-                case "C": operationColour(); break;
-                case "D": operationDeleteBoard(); break;
-                case "F": operationFloodfill(cursorX, cursorY, false); break;
-                case "G": Settings.world(frame, boards, worldData, canvas); break;
-                case "I": Settings.board(frame, currentBoard, worldData); break;
-                case "L": menuOpenWorld(); break;
-                case "P": operationModifyBuffer(false); break;
-                case "S": menuSaveAs(); break;
-                case "X": operationBoardExits(); break;
-                case "Ctrl-A": atlas(); break;
-                case "Ctrl-B": operationOpenBufferManager(); break;
-                case "Ctrl-E": operationErasePlayer(); break;
-                case "Ctrl-P": operationModifyBuffer(true); break;
-                case "Ctrl-R": atlasRemoveBoard(); break;
-                case "Ctrl-S": menuSave(); break;
-                case "Ctrl-V": operationPasteImage(); break;
-                case "Alt-B": operationBlockStart(); break;
-                case "Alt-F": operationFloodfill(cursorX, cursorY, true); break;
-                case "Alt-I": menuImportBoard(); break;
-                case "Alt-M": operationGrabAndModify(false, false); break;
-                case "Alt-S": operationStatList(); break;
-                case "Alt-T": operationTestWorld(); break;
-                case "Alt-X": menuExportBoard(); break;
-                case "Shift-B": menuBoardList(); break;
-                case "Ctrl-Alt-M": operationGrabAndModify(false, true); break;
-                case "0": operationGetFromBuffer(0); break;
-                case "1": operationGetFromBuffer(1); break;
-                case "2": operationGetFromBuffer(2); break;
-                case "3": operationGetFromBuffer(3); break;
-                case "4": operationGetFromBuffer(4); break;
-                case "5": operationGetFromBuffer(5); break;
-                case "6": operationGetFromBuffer(6); break;
-                case "7": operationGetFromBuffer(7); break;
-                case "8": operationGetFromBuffer(8); break;
-                case "9": operationGetFromBuffer(9); break;
-                case "Ctrl-0": operationSaveToBuffer(0); break;
-                case "Ctrl-1": operationSaveToBuffer(1); break;
-                case "Ctrl-2": operationSaveToBuffer(2); break;
-                case "Ctrl-3": operationSaveToBuffer(3); break;
-                case "Ctrl-4": operationSaveToBuffer(4); break;
-                case "Ctrl-5": operationSaveToBuffer(5); break;
-                case "Ctrl-6": operationSaveToBuffer(6); break;
-                case "Ctrl-7": operationSaveToBuffer(7); break;
-                case "Ctrl-8": operationSaveToBuffer(8); break;
-                case "Ctrl-9": operationSaveToBuffer(9); break;
-                default: break;
+            when (actionName) {
+                "Space" -> operationBufferPut()
+                "Delete" -> operationDelete()
+                "Enter" -> operationGrabAndModify(true, false)
+                "Ctrl-Enter" -> operationGrabAndModify(true, true)
+                "A" -> operationAddBoard()
+                "B" -> operationChangeBoard()
+                "C" -> operationColour()
+                "D" -> operationDeleteBoard()
+                "F" -> operationFloodfill(cursorX, cursorY, false)
+                "G" -> world(frame, boards, worldData!!, canvas!!)
+                "I" -> board(frame, currentBoard, worldData!!)
+                "L" -> menuOpenWorld()
+                "P" -> operationModifyBuffer(false)
+                "S" -> menuSaveAs()
+                "X" -> operationBoardExits()
+                "Ctrl-A" -> atlas()
+                "Ctrl-B" -> operationOpenBufferManager()
+                "Ctrl-E" -> operationErasePlayer()
+                "Ctrl-P" -> operationModifyBuffer(true)
+                "Ctrl-R" -> atlasRemoveBoard()
+                "Ctrl-S" -> menuSave()
+                "Ctrl-V" -> operationPasteImage()
+                "Alt-B" -> operationBlockStart()
+                "Alt-F" -> operationFloodfill(cursorX, cursorY, true)
+                "Alt-I" -> menuImportBoard()
+                "Alt-M" -> operationGrabAndModify(false, false)
+                "Alt-S" -> operationStatList()
+                "Alt-T" -> operationTestWorld()
+                "Alt-X" -> menuExportBoard()
+                "Shift-B" -> menuBoardList()
+                "Ctrl-Alt-M" -> operationGrabAndModify(false, true)
+                "0" -> operationGetFromBuffer(0)
+                "1" -> operationGetFromBuffer(1)
+                "2" -> operationGetFromBuffer(2)
+                "3" -> operationGetFromBuffer(3)
+                "4" -> operationGetFromBuffer(4)
+                "5" -> operationGetFromBuffer(5)
+                "6" -> operationGetFromBuffer(6)
+                "7" -> operationGetFromBuffer(7)
+                "8" -> operationGetFromBuffer(8)
+                "9" -> operationGetFromBuffer(9)
+                "Ctrl-0" -> operationSaveToBuffer(0)
+                "Ctrl-1" -> operationSaveToBuffer(1)
+                "Ctrl-2" -> operationSaveToBuffer(2)
+                "Ctrl-3" -> operationSaveToBuffer(3)
+                "Ctrl-4" -> operationSaveToBuffer(4)
+                "Ctrl-5" -> operationSaveToBuffer(5)
+                "Ctrl-6" -> operationSaveToBuffer(6)
+                "Ctrl-7" -> operationSaveToBuffer(7)
+                "Ctrl-8" -> operationSaveToBuffer(8)
+                "Ctrl-9" -> operationSaveToBuffer(9)
+                else -> {}
             }
         }
     }
 
-    private void operationShowTileTypes(int showMode) {
-        if (currentlyShowing == showMode) {
-            currentlyShowing = SHOW_NOTHING;
+    private fun operationShowTileTypes(showMode: Int) {
+        currentlyShowing = if (currentlyShowing == showMode) {
+            SHOW_NOTHING
         } else {
-            currentlyShowing = showMode;
+            showMode
         }
-        afterChangeShowing();
+        afterChangeShowing()
     }
 
-    private void takeScreenshot() {
-        var boardBuffer = canvas.getBoardBuffer(worldData.isSuperZZT());
-        var now = LocalDateTime.now();
-        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH-mm-ss");
-        var screenshotNameTemplate = globalEditor.getString("SCREENSHOT_NAME", "Screenshot {date} {time}.png");
-        var screenshotFilename = screenshotNameTemplate.replace("{date}", dateFormatter.format(now));
-        screenshotFilename = screenshotFilename.replace("{time}", timeFormatter.format(now));
-        screenshotFilename = screenshotFilename.replace("{worldname}", CP437.toUnicode(worldData.getName()));
-        var currentBoardName = currentBoard == null ? "(no board)" : CP437.toUnicode(currentBoard.getName());
-        screenshotFilename = screenshotFilename.replace("{boardname}", currentBoardName);
-        screenshotFilename = screenshotFilename.replace("{boardnum}", String.valueOf(currentBoardIdx));
+    private fun takeScreenshot() {
+        val boardBuffer = canvas!!.getBoardBuffer(worldData!!.isSuperZZT)
+        val now = LocalDateTime.now()
+        val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val timeFormatter = DateTimeFormatter.ofPattern("HH-mm-ss")
+        val screenshotNameTemplate = globalEditor.getString("SCREENSHOT_NAME", "Screenshot {date} {time}.png")
+        var screenshotFilename = screenshotNameTemplate.replace("{date}", dateFormatter.format(now))
+        screenshotFilename = screenshotFilename.replace("{time}", timeFormatter.format(now))
+        screenshotFilename = screenshotFilename.replace("{worldname}", toUnicode(worldData!!.name))
+        val currentBoardName = if (currentBoard == null) "(no board)" else toUnicode(currentBoard!!.getName())
+        screenshotFilename = screenshotFilename.replace("{boardname}", currentBoardName)
+        screenshotFilename = screenshotFilename.replace("{boardnum}", boardIdx.toString())
 
         //var screenshotFilename = String.format("Screenshot %s.png", dtf.format(now));
+        val screenshotDir = evalConfigDir(globalEditor.getString("SCREENSHOT_DIR", ""))
 
-        var screenshotDir = Util.evalConfigDir(globalEditor.getString("SCREENSHOT_DIR", ""));
-
-        File file;
+        val file: File
         if (screenshotDir.isEmpty()) {
-            var writer = globalEditor.getWriterInLocalDir(screenshotFilename, true);
+            val writer = globalEditor.getWriterInLocalDir(screenshotFilename, true)
             if (writer == null) {
-                JOptionPane.showMessageDialog(frame, "Could not find a directory to save the screenshot to", "Failed to save screenshot", JOptionPane.ERROR_MESSAGE);
-                return;
+                JOptionPane.showMessageDialog(
+                    frame,
+                    "Could not find a directory to save the screenshot to",
+                    "Failed to save screenshot",
+                    JOptionPane.ERROR_MESSAGE
+                )
+                return
             }
-            file = writer.getFile();
+            file = writer.file
         } else {
-            file = Path.of(screenshotDir, screenshotFilename).toFile();
+            file = Path.of(screenshotDir, screenshotFilename).toFile()
         }
         try {
-            ImageIO.write(boardBuffer, "png", file);
+            ImageIO.write(boardBuffer, "png", file)
             //System.out.println("Saved screenshot to " + writer.getFile().toString());
-            editingModePane.display(Color.YELLOW, 1500, "Saved Screenshot");
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(frame, e, "Failed to save screenshot", JOptionPane.ERROR_MESSAGE);
+            editingModePane!!.display(Color.YELLOW, 1500, "Saved Screenshot")
+        } catch (e: IOException) {
+            JOptionPane.showMessageDialog(frame, e, "Failed to save screenshot", JOptionPane.ERROR_MESSAGE)
         }
     }
 
-    private void takeScreenshotToClipboard() {
-        var boardBuffer = canvas.getBoardBuffer(worldData.isSuperZZT());
-        var clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-        var transferable = new Transferable() {
-            @Override
-            public DataFlavor[] getTransferDataFlavors() {
-                return new DataFlavor[]{DataFlavor.imageFlavor};
+    private fun takeScreenshotToClipboard() {
+        val boardBuffer = canvas!!.getBoardBuffer(worldData!!.isSuperZZT)
+        val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+        val transferable: Transferable = object : Transferable {
+            override fun getTransferDataFlavors(): Array<DataFlavor> {
+                return arrayOf(DataFlavor.imageFlavor)
             }
 
-            @Override
-            public boolean isDataFlavorSupported(DataFlavor flavor) {
-                return flavor.equals(DataFlavor.imageFlavor);
+            override fun isDataFlavorSupported(flavor: DataFlavor): Boolean {
+                return flavor.equals(DataFlavor.imageFlavor)
             }
 
-            @Override
-            public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException, IOException {
-                if (flavor.equals(DataFlavor.imageFlavor)) return boardBuffer;
-                throw new UnsupportedFlavorException(flavor);
+            @Throws(UnsupportedFlavorException::class)
+            override fun getTransferData(flavor: DataFlavor): Any {
+                if (flavor.equals(DataFlavor.imageFlavor)) return boardBuffer!!
+                throw UnsupportedFlavorException(flavor)
             }
-        };
-        clipboard.setContents(transferable, (clipbrd, contents) -> { });
-        editingModePane.display(Color.YELLOW, 1500, "Copied Screenshot");
+        }
+        clipboard.setContents(transferable) { clipbrd: Clipboard?, contents: Transferable? -> }
+        editingModePane!!.display(Color.YELLOW, 1500, "Copied Screenshot")
     }
 
-    private void operationPasteImage() {
-        var image = getClipboardImage();
-        if (image == null) return;
+    private fun operationPasteImage() {
+        val image = clipboardImage ?: return
 
-        new ConvertImage(this, image);
+        ConvertImage(this, image)
     }
 
-    private void operationLoadImage() {
-        var fileChooser = getFileChooser(new String[]{"png", "jpg", "jpeg", "gif", "bmp"}, "Bitmap image file");
-        int result = fileChooser.showOpenDialog(frame);
+    private fun operationLoadImage() {
+        val fileChooser = getFileChooser(arrayOf("png", "jpg", "jpeg", "gif", "bmp"), "Bitmap image file")
+        val result = fileChooser.showOpenDialog(frame)
         if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+            val file = fileChooser.selectedFile
             try {
-                var image = ImageIO.read(file);
-                if (image == null) throw new RuntimeException("Unrecognised file format");
-                new ConvertImage(this, image);
-            } catch (IOException | RuntimeException e) {
-                JOptionPane.showMessageDialog(frame, e, "Error loading image", JOptionPane.ERROR_MESSAGE);
+                val image = ImageIO.read(file) ?: throw RuntimeException("Unrecognised file format")
+                ConvertImage(this, image)
+            } catch (e: IOException) {
+                JOptionPane.showMessageDialog(frame, e, "Error loading image", JOptionPane.ERROR_MESSAGE)
+            } catch (e: RuntimeException) {
+                JOptionPane.showMessageDialog(frame, e, "Error loading image", JOptionPane.ERROR_MESSAGE)
             }
         }
     }
 
-    private Image getClipboardImage() {
-        var clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-        var contents = clipboard.getContents(null);
-        try {
-            return (Image) contents.getTransferData(DataFlavor.imageFlavor);
-        } catch (UnsupportedFlavorException | IOException e) {
-            return null;
+    private val clipboardImage: Image?
+        get() {
+            val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+            val contents = clipboard.getContents(null)
+            return try {
+                contents.getTransferData(DataFlavor.imageFlavor) as Image
+            } catch (e: UnsupportedFlavorException) {
+                null
+            } catch (e: IOException) {
+                null
+            }
         }
-    }
 
-    private void operationOpenBufferManager() {
+    private fun operationOpenBufferManager() {
         if (currentBufferManager != null) {
-            currentBufferManager.toFront();
-            frame.requestFocus();
+            currentBufferManager!!.toFront()
+            frame!!.requestFocus()
         } else {
-            currentBufferManager = new BufferManager(this);
+            currentBufferManager = BufferManager(this)
         }
     }
 
-    public String prefix() {
-        return worldData.isSuperZZT() ? "SZZT_" : "ZZT_";
+    fun prefix(): String {
+        return if (worldData!!.isSuperZZT) "SZZT_" else "ZZT_"
     }
 
-    public void operationSaveToBuffer(int bufferNum) {
-        String data;
+    fun operationSaveToBuffer(bufferNum: Int) {
         if (blockStartX != -1) {
             // Block selected.
-            blockCopy(false);
+            blockCopy(false)
         }
-        data = globalEditor.encodeBuffer();
-        setBlockBuffer(0, 0, null, false);
-        String key = String.format(prefix()+"BUF_%d", bufferNum);
-        globalEditor.setString(key, data);
-        globalEditor.setInt(prefix()+"BUF_MAX", Math.max(bufferNum,
-                globalEditor.getInt(prefix()+"BUF_MAX", 0)));
-        globalEditor.setBufferPos(bufferNum, currentBufferManager);
+        val data = globalEditor.encodeBuffer()
+        setBlockBuffer(0, 0, null, false)
+        val key = String.format(prefix() + "BUF_%d", bufferNum)
+        globalEditor.setString(key, data)
+        globalEditor.setInt(
+            prefix() + "BUF_MAX", max(
+                bufferNum.toDouble(),
+                globalEditor.getInt(prefix() + "BUF_MAX", 0).toDouble()
+            ).toInt()
+        )
+        globalEditor.setBufferPos(bufferNum, currentBufferManager)
         if (currentBufferManager != null) {
-            currentBufferManager.updateBuffer(bufferNum);
+            currentBufferManager!!.updateBuffer(bufferNum)
         }
-        afterUpdate();
-        editingModePane.display(Color.MAGENTA, 1500, "Saved to buffer #" + bufferNum);
+        afterUpdate()
+        editingModePane!!.display(Color.MAGENTA, 1500, "Saved to buffer #$bufferNum")
     }
 
-    public void operationGetFromBuffer(int bufferNum) {
-        String key = String.format(prefix()+"BUF_%d", bufferNum);
+    fun operationGetFromBuffer(bufferNum: Int) {
+        val key = String.format(prefix() + "BUF_%d", bufferNum)
         if (globalEditor.isKey(key)) {
-            globalEditor.decodeBuffer(globalEditor.getString(key));
-            globalEditor.setBufferPos(bufferNum, currentBufferManager);
+            globalEditor.decodeBuffer(globalEditor.getString(key))
+            globalEditor.setBufferPos(bufferNum, currentBufferManager)
             if (currentBufferManager != null) {
-                currentBufferManager.updateBuffer(bufferNum);
+                currentBufferManager!!.updateBuffer(bufferNum)
             }
-            afterUpdate();
-            editingModePane.display(Color.PINK, 750, "Loaded from buffer #" + bufferNum);
+            afterUpdate()
+            editingModePane!!.display(Color.PINK, 750, "Loaded from buffer #$bufferNum")
         }
     }
 
 
-    private void operationZoomOut(boolean mouse) {
-        changeZoomLevel(-1, mouse);
+    private fun operationZoomOut(mouse: Boolean) {
+        changeZoomLevel(-1, mouse)
     }
 
-    private void operationZoomIn(boolean mouse) {
-        changeZoomLevel(1, mouse);
-    }
-    private void operationResetZoom(boolean mouse) {
-        changeZoomLevel(0, mouse);
+    private fun operationZoomIn(mouse: Boolean) {
+        changeZoomLevel(1, mouse)
     }
 
-    private void changeZoomLevel(int zoomChange, boolean mouse) {
-        double zoomFactor = globalEditor.getDouble("ZOOM_FACTOR", Math.sqrt(2));
-        double minZoom = globalEditor.getDouble("MIN_ZOOM", 0.0625);
-        double maxZoom = globalEditor.getDouble("MAX_ZOOM", 8.0);
-        double newZoom = zoom;
+    private fun operationResetZoom() {
+        changeZoomLevel(0, false)
+    }
+
+    private fun changeZoomLevel(zoomChange: Int, mouse: Boolean) {
+        val zoomFactor = globalEditor.getDouble("ZOOM_FACTOR", sqrt(2.0))
+        val minZoom = globalEditor.getDouble("MIN_ZOOM", 0.0625)
+        val maxZoom = globalEditor.getDouble("MAX_ZOOM", 8.0)
+        var newZoom = zoom
 
         if (zoomChange == 1) {
-            newZoom *= zoomFactor;
+            newZoom *= zoomFactor
         } else if (zoomChange == -1) {
-            newZoom /= zoomFactor;
+            newZoom /= zoomFactor
         } else if (zoomChange == 0) {
-            newZoom = 1.0;
+            newZoom = 1.0
         }
 
         // Find nearest zoom level
-        double iterZoom = 1.0;
-        double iterZoomFactor = zoomFactor;
-        if (newZoom < iterZoom) iterZoomFactor = 1.0 / iterZoomFactor;
+        var iterZoom = 1.0
+        var iterZoomFactor = zoomFactor
+        if (newZoom < iterZoom) iterZoomFactor = 1.0 / iterZoomFactor
 
-        for (;;) {
-            double iterZoomNew = iterZoom * iterZoomFactor;
-            if (Math.abs(iterZoom - newZoom) < Math.abs(iterZoomNew - newZoom)) {
-                zoom = iterZoom;
-                break;
+        while (true) {
+            val iterZoomNew = iterZoom * iterZoomFactor
+            if (abs(iterZoom - newZoom) < abs(iterZoomNew - newZoom)) {
+                zoom = iterZoom
+                break
             }
-            iterZoom = iterZoomNew;
+            iterZoom = iterZoomNew
         }
-        newZoom = Util.clamp(newZoom, minZoom, maxZoom);
-        double zoomDiff = newZoom - zoom;
-        if (Math.abs(zoomDiff) > 0.0001) {
-            zoom = newZoom;
+        newZoom = clamp(newZoom, minZoom, maxZoom)
+        val zoomDiff = newZoom - zoom
+        if (abs(zoomDiff) > 0.0001) {
+            zoom = newZoom
         }
 
-        int centreOnX, centreOnY;
+        val centreOnX: Int
+        val centreOnY: Int
         if (mouse) {
-            centreOnX = mouseX;
-            centreOnY = mouseY;
+            centreOnX = mouseX
+            centreOnY = mouseY
         } else {
-            centreOnX = cursorX;
-            centreOnY = cursorY;
+            centreOnX = cursorX
+            centreOnY = cursorY
         }
 
-        invalidateCache();
-        afterModification();
-        canvas.revalidate();
-        if (frame.getExtendedState() == Frame.NORMAL) {
-            frame.pack();
+        invalidateCache()
+        afterModification()
+        canvas!!.revalidate()
+        if (frame!!.extendedState == Frame.NORMAL) {
+            frame!!.pack()
         }
-        centreOn(centreOnX, centreOnY);
-        canvas.recheckMouse();
+        centreOn(centreOnX, centreOnY)
+        canvas!!.recheckMouse()
     }
 
-    private void centreOn(int x, int y) {
-        int xPos = canvas.getCharW(x);
-        int yPos = canvas.getCharH(y);
-        int xSize = canvas.getCharW(1);
-        int ySize = canvas.getCharH(1);
-        int xAdd = canvas.getVisibleRect().width / 2;
-        int yAdd = canvas.getVisibleRect().height / 2;
+    private fun centreOn(x: Int, y: Int) {
+        var xPos = canvas!!.getCharW(x)
+        var yPos = canvas!!.getCharH(y)
+        var xSize = canvas!!.getCharW(1)
+        var ySize = canvas!!.getCharH(1)
+        val xAdd = canvas!!.visibleRect.width / 2
+        val yAdd = canvas!!.visibleRect.height / 2
 
-        xSize += xAdd * 2;
-        ySize += yAdd * 2;
-        xPos -= xAdd;
-        yPos -= yAdd;
+        xSize += xAdd * 2
+        ySize += yAdd * 2
+        xPos -= xAdd
+        yPos -= yAdd
 
-        canvas.scrollRectToVisible(new Rectangle(xPos, yPos, xSize, ySize));
+        canvas!!.scrollRectToVisible(Rectangle(xPos, yPos, xSize, ySize))
     }
 
-    private void operationFloodfill(int x, int y, boolean fancy) {
-        var originalTile = getTileAt(x, y, false);
-        if (originalTile == null) return;
+    private fun operationFloodfill(x: Int, y: Int, fancy: Boolean) {
+        val originalTile = getTileAt(x, y, false) ?: return
 
-        byte[][] filled = new byte[height][width];
-        var tileStats = originalTile.getStats();
-        boolean isStatted = false;
-        if (tileStats != null && !tileStats.isEmpty()) isStatted = true;
+        val filled = Array(height) { ByteArray(width) }
+        val tileStats: List<Stat> = originalTile.stats
+        val isStatted = tileStats != null && !tileStats.isEmpty()
 
-        floodFill(x, y, originalTile.getId(), originalTile.getCol(), isStatted, filled);
+        floodFill(x, y, originalTile.id, originalTile.col, isStatted, filled)
 
         if (!fancy) {
-
-            var dirty = new HashSet<Board>();
-            for (int fy = 0; fy < height; fy++) {
-                for (int fx = 0; fx < width; fx++) {
-                    if (filled[fy][fx] == 1) {
-                        var board = putTileDeferred(fx, fy, getBufferTile(), PUT_DEFAULT);
-                        if (board != null) dirty.add(board);
+            val dirty = HashSet<Board>()
+            for (fy in 0 until height) {
+                for (fx in 0 until width) {
+                    if (filled[fy][fx].toInt() == 1) {
+                        val board = putTileDeferred(fx, fy, bufferTile, PUT_DEFAULT)
+                        if (board != null) dirty.add(board)
                     }
                 }
             }
-            for (var board : dirty) {
-                board.finaliseStats();
+            for (board in dirty) {
+                board.finaliseStats()
             }
-            afterModification();
+            afterModification()
         } else {
-            fancyFill(filled);
+            fancyFill(filled)
         }
     }
 
-    private void fancyFill(byte[][] filled) {
-        var boardListing = new HashSet<Integer>();
-        for (int fy = 0; fy < height; fy++)
-            for (int fx = 0; fx < width; fx++)
-                if (filled[fy][fx] == 1)
-                    boardListing.add(grid[fy / boardH][fx / boardW]);
-        var savedBoards = new HashMap<Integer, Board>();
-        for (var boardIdx : boardListing)
-            savedBoards.put(boardIdx, boards.get(boardIdx).clone());
-        fancyFillDialog = true;
-        var listener = new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                FancyFill fill = (FancyFill) e.getSource();
-                if (e.getActionCommand().equals("updateFill")) {
-
-                    var tileXs = fill.getXs();
-                    var tileYs = fill.getYs();
-                    var tiles = fill.getTiles();
-                    HashSet<Board> boardsHit = new HashSet<>();
-                    for (int i = 0; i < tileXs.length; i++) {
-                        boardsHit.add(putTileDeferred(tileXs[i], tileYs[i], tiles[i], PUT_REPLACE_BOTH));
-                    }
-                    for (var board : boardsHit) {
-                        board.finaliseStats();
-                    }
-                    afterModification();
-                } else if (e.getActionCommand().equals("undo")) {
-                    fancyFillDialog = false;
-                    for (var boardIdx : boardListing) {
-                        savedBoards.get(boardIdx).cloneInto(boards.get(boardIdx));
-                    }
-                    addRedraw(1, 1, width - 2, height - 2);
-                    afterModification();
-                } else if (e.getActionCommand().equals("done")) {
-                    fancyFillDialog = false;
-                    afterUpdate();
+    private fun fancyFill(filled: Array<ByteArray>) {
+        val boardListing = HashSet<Int>()
+        for (fy in 0 until height) for (fx in 0 until width) if (filled[fy][fx].toInt() == 1) boardListing.add(grid[fy / boardH][fx / boardW])
+        val savedBoards = HashMap<Int, Board>()
+        for (boardIdx in boardListing) savedBoards[boardIdx] = boards[boardIdx]!!.clone()
+        fancyFillDialog = true
+        val listener = ActionListener { e ->
+            val fill = e.source as FancyFill
+            if (e.actionCommand == "updateFill") {
+                val tileXs = fill.xs
+                val tileYs = fill.ys
+                val tiles = fill.tiles
+                val boardsHit = HashSet<Board?>()
+                for (i in tileXs.indices) {
+                    boardsHit.add(putTileDeferred(tileXs[i], tileYs[i], tiles[i], PUT_REPLACE_BOTH))
                 }
+                for (board in boardsHit) {
+                    board!!.finaliseStats()
+                }
+                afterModification()
+            } else if (e.actionCommand == "undo") {
+                fancyFillDialog = false
+                for (boardIdx in boardListing) {
+                    savedBoards[boardIdx]!!.cloneInto(boards[boardIdx]!!)
+                }
+                addRedraw(1, 1, width - 2, height - 2)
+                afterModification()
+            } else if (e.actionCommand == "done") {
+                fancyFillDialog = false
+                afterUpdate()
             }
-        };
-        new FancyFill(this, listener, filled);
+        }
+        FancyFill(this, listener, filled)
     }
 
-    private void floodFill(int startX, int startY, int id, int col, boolean statted, byte[][] filled)
-    {
-        final int[][] dirs = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-        var stack = new ArrayDeque<Integer>();
-        stack.add(startX);
-        stack.add(startY);
-        filled[startY][startX] = 1;
+    private fun floodFill(startX: Int, startY: Int, id: Int, col: Int, statted: Boolean, filled: Array<ByteArray>) {
+        val dirs = arrayOf(intArrayOf(-1, 0), intArrayOf(1, 0), intArrayOf(0, -1), intArrayOf(0, 1))
+        val stack = ArrayDeque<Int>()
+        stack.add(startX)
+        stack.add(startY)
+        filled[startY][startX] = 1
 
         while (!stack.isEmpty()) {
-            int x = stack.pop();
-            int y = stack.pop();
+            val x = stack.pop()
+            val y = stack.pop()
 
-            for (var dir : dirs) {
-                int nx = x + dir[0];
-                int ny = y + dir[1];
+            for (dir in dirs) {
+                val nx = x + dir[0]
+                val ny = y + dir[1]
                 if (nx >= 0 && ny >= 0 && nx < width && ny < height) {
-                    if (filled[ny][nx] == 0) {
-                        var board = getBoardAt(nx, ny);
+                    if (filled[ny][nx].toInt() == 0) {
+                        val board = getBoardAt(nx, ny)
                         if (board != null) {
                             if (board.getTileId(nx % boardW, ny % boardH) == id) {
                                 if (id == ZType.EMPTY || board.getTileCol(nx % boardW, ny % boardH) == col) {
                                     if (!board.getStatsAt(nx % boardW, ny % boardH).isEmpty() == statted) {
-                                        filled[ny][nx] = 1;
-                                        stack.add(nx);
-                                        stack.add(ny);
+                                        filled[ny][nx] = 1
+                                        stack.add(nx)
+                                        stack.add(ny)
                                     }
                                 }
                             }
@@ -1909,549 +1958,566 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
         }
     }
 
-    private void operationToggleDrawing() {
-        if (operationCancel()) return;
-        setDrawing(true);
-        putTileAt(cursorX, cursorY, getBufferTile(), PUT_DEFAULT);
-        afterModification();
+    private fun operationToggleDrawing() {
+        if (operationCancel()) return
+        setDrawing(true)
+        putTileAt(cursorX, cursorY, bufferTile, PUT_DEFAULT)
+        afterModification()
     }
 
-    private void operationToggleText() {
-        if (operationCancel()) return;
-        setTextEntry(true);
-        textEntryX = cursorX;
-        afterUpdate();
+    private fun operationToggleText() {
+        if (operationCancel()) return
+        setTextEntry(true)
+        textEntryX = cursorX
+        afterUpdate()
     }
 
-    private void setTextEntry(boolean state) {
-        textEntry = state;
-        canvas.setTextEntry(state);
+    private fun setTextEntry(state: Boolean) {
+        textEntry = state
+        canvas!!.setTextEntry(state)
     }
 
-    private void setDrawing(boolean state) {
-        drawing = state;
-        canvas.setDrawing(state);
+    private fun setDrawing(state: Boolean) {
+        drawing = state
+        canvas!!.setDrawing(state)
     }
 
-    private void setBlockStart(int x, int y) {
-        blockStartX = x;
-        blockStartY = y;
-        canvas.setSelectionBlock(blockStartX, blockStartY);
+    private fun setBlockStart(x: Int, y: Int) {
+        blockStartX = x
+        blockStartY = y
+        canvas!!.setSelectionBlock(blockStartX, blockStartY)
     }
 
-    private void setBlockBuffer(int w, int h, Tile[] ar, boolean r) {
-        globalEditor.setBlockBuffer(w, h, ar, r, worldData.isSuperZZT());
-        canvas.repaint();
+    private fun setBlockBuffer(w: Int, h: Int, ar: Array<Tile>?, r: Boolean) {
+        globalEditor.setBlockBuffer(w, h, ar, r, worldData!!.isSuperZZT)
+        canvas!!.repaint()
     }
 
-    private void operationEscape() {
-        if (operationCancel()) return;
-        tryClose();
+    private fun operationEscape() {
+        if (operationCancel()) return
+        tryClose()
     }
 
-    private boolean operationCancel() {
+    private fun operationCancel(): Boolean {
         if (drawing) {
-            setDrawing(false);
-            afterUpdate();
-            return true;
+            setDrawing(false)
+            afterUpdate()
+            return true
         }
         if (textEntry) {
-            setTextEntry(false);
-            afterUpdate();
-            return true;
+            setTextEntry(false)
+            afterUpdate()
+            return true
         }
         if (globalEditor.isBlockBuffer()) {
-            setBlockBuffer(0, 0, null, false);
-            afterUpdate();
-            return true;
+            setBlockBuffer(0, 0, null, false)
+            afterUpdate()
+            return true
         }
         if (blockStartX != -1) {
-            setBlockStart(-1, -1);
-            afterUpdate();
-            return true;
+            setBlockStart(-1, -1)
+            afterUpdate()
+            return true
         }
         if (moveBlockW != 0) {
-            setMoveBlock(0, 0);
-            afterUpdate();
-            return true;
+            setMoveBlock(0, 0)
+            afterUpdate()
+            return true
         }
 
         if (currentlyShowing != SHOW_NOTHING) {
-            currentlyShowing = SHOW_NOTHING;
-            afterChangeShowing();
-            return true;
+            currentlyShowing = SHOW_NOTHING
+            afterChangeShowing()
+            return true
         }
-        return false;
+        return false
     }
 
 
+    private fun operationBlockStart() {
+        operationCancel()
+        setBlockStart(cursorX, cursorY)
 
-    private void operationBlockStart() {
-        operationCancel();
-        setBlockStart(cursorX, cursorY);
-
-        afterUpdate();
+        afterUpdate()
     }
 
-    private void operationBlockEnd() {
-        final int saved_blockStartX = blockStartX;
-        final int saved_blockStartY = blockStartY;
-        final int saved_cursorX = cursorX;
-        final int saved_cursorY = cursorY;
-        var popupMenu = new JPopupMenu("Choose block command");
-        popupMenu.addPopupMenuListener(this);
-        String[] menuItems = {"Copy block", "Copy block (repeated)", "Move block", "Clear block", "Flip block",
-                "Mirror block", "Paint block"};
-        ActionListener listener = e -> {
-            if (blockStartX != saved_blockStartX ||
-                    blockStartY != saved_blockStartY ||
-                    cursorX != saved_cursorX ||
-                    cursorY != saved_cursorY) return;
-
-            var menuItem = ((JMenuItem)e.getSource()).getText();
-            switch (menuItem) {
-                case "Copy block": blockCopy(false); break;
-                case "Copy block (repeated)": blockCopy(true); break;
-                case "Move block": blockMove(); break;
-                case "Clear block": blockClear(); break;
-                case "Flip block": blockFlip(false); break;
-                case "Mirror block": blockFlip(true); break;
-                case "Paint block": blockPaint(); break;
-                default: break;
+    private fun operationBlockEnd() {
+        val saved_blockStartX = blockStartX
+        val saved_blockStartY = blockStartY
+        val saved_cursorX = cursorX
+        val saved_cursorY = cursorY
+        val popupMenu = JPopupMenu("Choose block command")
+        popupMenu.addPopupMenuListener(this)
+        val menuItems = arrayOf(
+            "Copy block", "Copy block (repeated)", "Move block", "Clear block", "Flip block",
+            "Mirror block", "Paint block"
+        )
+        val listener = ActionListener { e: ActionEvent ->
+            if (blockStartX != saved_blockStartX || blockStartY != saved_blockStartY || cursorX != saved_cursorX || cursorY != saved_cursorY) return@ActionListener
+            val menuItem = (e.source as JMenuItem).text
+            when (menuItem) {
+                "Copy block" -> blockCopy(false)
+                "Copy block (repeated)" -> blockCopy(true)
+                "Move block" -> blockMove()
+                "Clear block" -> blockClear()
+                "Flip block" -> blockFlip(false)
+                "Mirror block" -> blockFlip(true)
+                "Paint block" -> blockPaint()
+                else -> {}
             }
-        };
-
-        for (var item : menuItems) {
-            var menuItem = new JMenuItem(item);
-            menuItem.addActionListener(listener);
-            popupMenu.add(menuItem);
         }
-        popupMenu.show(frame, (frame.getWidth() - popupMenu.getPreferredSize().width) / 2,
-                (frame.getHeight() - popupMenu.getPreferredSize().height) / 2);
+
+        for (item in menuItems) {
+            val menuItem = JMenuItem(item)
+            menuItem.addActionListener(listener)
+            popupMenu.add(menuItem)
+        }
+        popupMenu.show(
+            frame, (frame!!.width - popupMenu.preferredSize.width) / 2,
+            (frame!!.height - popupMenu.preferredSize.height) / 2
+        )
 
         // From https://stackoverflow.com/a/7754567
-        SwingUtilities.invokeLater(() -> popupMenu.dispatchEvent(
-                new KeyEvent(popupMenu, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_DOWN, '\0')
-        ));
+        SwingUtilities.invokeLater {
+            popupMenu.dispatchEvent(
+                KeyEvent(popupMenu, KeyEvent.KEY_PRESSED, 0, 0, KeyEvent.VK_DOWN, '\u0000')
+            )
+        }
     }
 
-    private int getBlockX1() { return Math.min(cursorX, blockStartX); }
-    private int getBlockY1() { return Math.min(cursorY, blockStartY); }
-    private int getBlockX2() { return Math.max(cursorX, blockStartX); }
-    private int getBlockY2() { return Math.max(cursorY, blockStartY); }
-    private void afterBlockOperation(boolean modified) {
-        setBlockStart(-1, -1);
-        if (modified) afterModification();
-        else afterUpdate();
+    private val blockX1: Int
+        get() = min(cursorX.toDouble(), blockStartX.toDouble()).toInt()
+    private val blockY1: Int
+        get() = min(cursorY.toDouble(), blockStartY.toDouble()).toInt()
+    private val blockX2: Int
+        get() = max(cursorX.toDouble(), blockStartX.toDouble()).toInt()
+    private val blockY2: Int
+        get() = max(cursorY.toDouble(), blockStartY.toDouble()).toInt()
+
+    private fun afterBlockOperation(modified: Boolean) {
+        setBlockStart(-1, -1)
+        if (modified) afterModification()
+        else afterUpdate()
     }
 
-    private void blockClear() {
-        Tile tile = new Tile(0, 0);
-        addRedraw(getBlockX1(), getBlockY1(), getBlockX2(), getBlockY2());
-        for (int y = getBlockY1(); y <= getBlockY2(); y++) {
-            for (int x = getBlockX1(); x <= getBlockX2(); x++) {
-                putTileAt(x, y, tile, PUT_REPLACE_BOTH);
+    private fun blockClear() {
+        val tile = Tile(0, 0)
+        addRedraw(blockX1, blockY1, blockX2, blockY2)
+        for (y in blockY1..blockY2) {
+            for (x in blockX1..blockX2) {
+                putTileAt(x, y, tile, PUT_REPLACE_BOTH)
             }
         }
 
-        afterBlockOperation(true);
+        afterBlockOperation(true)
     }
 
-    private void blockPaint() {
-        int paintCol = getTileColour(getBufferTile());
-        addRedraw(getBlockX1(), getBlockY1(), getBlockX2(), getBlockY2());
-        for (int y = getBlockY1(); y <= getBlockY2(); y++) {
-            for (int x = getBlockX1(); x <= getBlockX2(); x++) {
-                var tile = getTileAt(x, y, false);
-                paintTile(tile, paintCol);
-                putTileAt(x, y, tile, PUT_REPLACE_BOTH);
+    private fun blockPaint() {
+        val paintCol = getTileColour(bufferTile!!)
+        addRedraw(blockX1, blockY1, blockX2, blockY2)
+        for (y in blockY1..blockY2) {
+            for (x in blockX1..blockX2) {
+                val tile = checkNotNull(getTileAt(x, y, false))
+                paintTile(tile, paintCol)
+                putTileAt(x, y, tile, PUT_REPLACE_BOTH)
             }
         }
-        afterBlockOperation(true);
+        afterBlockOperation(true)
     }
 
-    private void blockCopy(boolean repeated) {
-        int w = getBlockX2() + 1 - getBlockX1();
-        int h = getBlockY2() + 1 - getBlockY1();
-        var blockBuffer = new Tile[w * h];
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                int xPos = x + getBlockX1();
-                int yPos = y + getBlockY1();
-                int idx = y * w + x;
-                blockBuffer[idx] = getTileAt(xPos, yPos, true);
+    private fun blockCopy(repeated: Boolean) {
+        val w = blockX2 + 1 - blockX1
+        val h = blockY2 + 1 - blockY1
+        val blockBuffer = arrayOfNulls<Tile>(w * h)
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val xPos = x + blockX1
+                val yPos = y + blockY1
+                val idx = y * w + x
+                blockBuffer[idx] = getTileAt(xPos, yPos, true)
             }
         }
-        setBlockBuffer(w, h, blockBuffer, repeated);
-        afterBlockOperation(false);
+        // TODO(jakeouellette): Cleanup null check cast.
+        setBlockBuffer(w, h, blockBuffer.map { tile :Tile? -> tile!! }.toTypedArray(), repeated)
+        afterBlockOperation(false)
     }
 
-    private void setMoveBlock(int w, int h) {
-        moveBlockW = w;
-        moveBlockH = h;
-        canvas.setPlacingBlock(w, h);
+    private fun setMoveBlock(w: Int, h: Int) {
+        moveBlockW = w
+        moveBlockH = h
+        canvas!!.setPlacingBlock(w, h)
     }
 
-    private void blockMove() {
-        moveBlockX = getBlockX1();
-        moveBlockY = getBlockY1();
-        int w = getBlockX2() + 1 - getBlockX1();
-        int h = getBlockY2() + 1 - getBlockY1();
-        setMoveBlock(w, h);
-        afterBlockOperation(false);
+    private fun blockMove() {
+        moveBlockX = blockX1
+        moveBlockY = blockY1
+        val w = blockX2 + 1 - blockX1
+        val h = blockY2 + 1 - blockY1
+        setMoveBlock(w, h)
+        afterBlockOperation(false)
     }
 
-    private void blockFinishMove() {
+    private fun blockFinishMove() {
         // Move from moveBlockX, moveBlockY, moveBlockW, moveBlockH, cursorX, cursorY
 
-        var blockMap = new LinkedHashMap<ArrayList<Board>, LinkedHashMap<ArrayList<Integer>, ArrayList<Integer>>>();
-        addRedraw(cursorX, cursorY, cursorX + moveBlockW - 1, cursorY + moveBlockH - 1);
-        addRedraw(moveBlockX, moveBlockY, moveBlockX + moveBlockW - 1, moveBlockY + moveBlockH - 1);
-        for (int vy = 0; vy < moveBlockH; vy++) {
-            for (int vx = 0; vx < moveBlockW; vx++) {
+        val blockMap = LinkedHashMap<ArrayList<Board?>, LinkedHashMap<ArrayList<Int>?, ArrayList<Int>?>>()
+        addRedraw(cursorX, cursorY, cursorX + moveBlockW - 1, cursorY + moveBlockH - 1)
+        addRedraw(moveBlockX, moveBlockY, moveBlockX + moveBlockW - 1, moveBlockY + moveBlockH - 1)
+        for (vy in 0 until moveBlockH) {
+            for (vx in 0 until moveBlockW) {
                 // The move order depends on the relationship between the two blocks, to avoid double moving
-                int x = moveBlockX >= cursorX ? vx : moveBlockW - 1 - vx;
-                int y = moveBlockY >= cursorY ? vy : moveBlockH - 1 - vy;
-                int xFrom = x + moveBlockX;
-                int yFrom = y + moveBlockY;
-                int xTo = x + cursorX;
-                int yTo = y + cursorY;
+                val x = if (moveBlockX >= cursorX) vx else moveBlockW - 1 - vx
+                val y = if (moveBlockY >= cursorY) vy else moveBlockH - 1 - vy
+                val xFrom = x + moveBlockX
+                val yFrom = y + moveBlockY
+                val xTo = x + cursorX
+                val yTo = y + cursorY
                 if (xFrom < width && yFrom < height) {
                     if (xTo < width && yTo < height) {
-                        var boardKey = new ArrayList<Board>(2);
-                        boardKey.add(getBoardAt(xFrom, yFrom));
-                        boardKey.add(getBoardAt(xTo, yTo));
-                        var from = pair(xFrom, yFrom);
-                        var to = pair(xTo, yTo);
+                        val boardKey = ArrayList<Board?>(2)
+                        boardKey.add(getBoardAt(xFrom, yFrom))
+                        boardKey.add(getBoardAt(xTo, yTo))
+                        val from = pair(xFrom, yFrom)
+                        val to = pair(xTo, yTo)
 
                         if (!blockMap.containsKey(boardKey)) {
-                            blockMap.put(boardKey, new LinkedHashMap<>());
+                            blockMap[boardKey] = LinkedHashMap()
                         }
-                        blockMap.get(boardKey).put(from, to);
+                        blockMap[boardKey]!![from] = to
                     }
                 }
             }
         }
 
-        blockTileMove(blockMap, false);
+        blockTileMove(blockMap, false)
 
-        setMoveBlock(0, 0);
-        afterBlockOperation(true);
+        setMoveBlock(0, 0)
+        afterBlockOperation(true)
     }
 
-    private void blockFlip(boolean horizontal) {
-        int hx = (getBlockX1() + getBlockX2()) / 2;
-        int hy = (getBlockY1() + getBlockY2()) / 2;
-        var blockMap = new LinkedHashMap<ArrayList<Board>, LinkedHashMap<ArrayList<Integer>, ArrayList<Integer>>>();
-        addRedraw(getBlockX1(), getBlockY1(), getBlockX2(), getBlockY2());
-        for (int y = getBlockY1(); y <= getBlockY2(); y++) {
-            for (int x = getBlockX1(); x <= getBlockX2(); x++) {
+    private fun blockFlip(horizontal: Boolean) {
+        val hx = (blockX1 + blockX2) / 2
+        val hy = (blockY1 + blockY2) / 2
+        val blockMap = LinkedHashMap<ArrayList<Board?>, LinkedHashMap<ArrayList<Int>?, ArrayList<Int>?>>()
+        addRedraw(blockX1, blockY1, blockX2, blockY2)
+        for (y in blockY1..blockY2) {
+            for (x in blockX1..blockX2) {
                 if ((horizontal && x <= hx) || (!horizontal && y <= hy)) {
-                    int xTo = horizontal ? getBlockX2() - (x - getBlockX1()) : x;
-                    int yTo = !horizontal ? getBlockY2() - (y - getBlockY1()) : y;
+                    val xTo = if (horizontal) blockX2 - (x - blockX1) else x
+                    val yTo = if (!horizontal) blockY2 - (y - blockY1) else y
 
-                    var boardKey = new ArrayList<Board>(2);
-                    boardKey.add(getBoardAt(x, y));
-                    boardKey.add(getBoardAt(xTo, yTo));
-                    var from = pair(x, y);
-                    var to = pair(xTo, yTo);
+                    val boardKey = ArrayList<Board?>(2)
+                    boardKey.add(getBoardAt(x, y))
+                    boardKey.add(getBoardAt(xTo, yTo))
+                    val from = pair(x, y)
+                    val to = pair(xTo, yTo)
 
                     if (!blockMap.containsKey(boardKey)) {
-                        blockMap.put(boardKey, new LinkedHashMap<>());
+                        blockMap[boardKey] = LinkedHashMap()
                     }
-                    blockMap.get(boardKey).put(from, to);
+                    blockMap[boardKey]!![from] = to
                 }
             }
         }
 
-        blockTileMove(blockMap, true);
-        afterBlockOperation(true);
+        blockTileMove(blockMap, true)
+        afterBlockOperation(true)
     }
 
-    private void blockTileMove(LinkedHashMap<ArrayList<Board>, LinkedHashMap<ArrayList<Integer>, ArrayList<Integer>>> blockMap, boolean swap)
-    {
-        Tile blankTile = new Tile(0, 0);
-        for (var boardKey : blockMap.keySet()) {
-            var tileMoves = blockMap.get(boardKey);
-            var fromBoard = boardKey.get(0);
-            var toBoard = boardKey.get(1);
-            if (fromBoard == null || toBoard == null) continue;
+    private fun blockTileMove(
+        blockMap: LinkedHashMap<ArrayList<Board?>, LinkedHashMap<ArrayList<Int>?, ArrayList<Int>?>>,
+        swap: Boolean
+    ) {
+        val blankTile = Tile(0, 0)
+        for (boardKey in blockMap.keys) {
+            val tileMoves = blockMap[boardKey]!!
+            val fromBoard = boardKey[0]
+            val toBoard = boardKey[1]
+            if (fromBoard == null || toBoard == null) continue
 
-            var firstFrom = tileMoves.keySet().iterator().next();
-            int fromBoardXOffset = firstFrom.get(0) / boardW * boardW;
-            int fromBoardYOffset = firstFrom.get(1) / boardH * boardH;
+            val firstFrom = tileMoves.keys.iterator().next()
+            val fromBoardXOffset = firstFrom!![0] / boardW * boardW
+            val fromBoardYOffset = firstFrom[1] / boardH * boardH
 
-            if (fromBoard == toBoard) {
+            if (fromBoard === toBoard) {
                 if (!swap) {
                     // If stat0 is being overwritten and isn't being moved itself, don't move it
-                    int stat0x = toBoard.getStat(0).getX() - 1 + fromBoardXOffset;
-                    int stat0y = toBoard.getStat(0).getY() - 1 + fromBoardYOffset;
+                    val stat0x = toBoard.getStat(0)!!.x - 1 + fromBoardXOffset
+                    val stat0y = toBoard.getStat(0)!!.y - 1 + fromBoardYOffset
                     if (!tileMoves.containsKey(pair(stat0x, stat0y))) {
-                        for (var from : tileMoves.keySet()) {
-                            var to = tileMoves.get(from);
-                            if (to.get(0) == stat0x && to.get(1) == stat0y) {
-                                tileMoves.remove(from);
-                                break;
+                        for (from in tileMoves.keys) {
+                            val to = tileMoves[from]
+                            if (to!![0] == stat0x && to[1] == stat0y) {
+                                tileMoves.remove(from)
+                                break
                             }
                         }
                     }
                 }
 
-                HashMap<ArrayList<Integer>, ArrayList<Integer>> reverseTileMoves = new HashMap<>();
-                for (var from : tileMoves.keySet()) {
-                    var to = tileMoves.get(from);
-                    reverseTileMoves.put(to, from);
+                val reverseTileMoves = HashMap<ArrayList<Int>?, ArrayList<Int>?>()
+                for (from in tileMoves.keys) {
+                    val to = tileMoves[from]
+                    reverseTileMoves[to] = from
                 }
 
                 // Same board
-                var deleteStats = new ArrayList<Integer>();
-                for (int i = 0; i < toBoard.getStatCount(); i++) {
-                    var stat = toBoard.getStat(i);
-                    var from = pair(stat.getX() - 1 + fromBoardXOffset, stat.getY() - 1 + fromBoardYOffset);
-                    var to = tileMoves.get(from);
+                val deleteStats = ArrayList<Int>()
+                for (i in 0 until toBoard.statCount) {
+                    val stat = toBoard.getStat(i)
+                    var from: ArrayList<Int>? = pair(stat!!.x - 1 + fromBoardXOffset, stat.y - 1 + fromBoardYOffset)
+                    var to = tileMoves[from]
                     if (to != null) {
                         //System.out.printf("Stat %d moving from %d,%d to %d,%d\n", i, stat.getX(), stat.getY(), to.get(0) % boardW + 1, to.get(1) % boardH + 1);
-                        stat.setX(to.get(0) % boardW + 1);
-                        stat.setY(to.get(1) % boardH + 1);
-                        continue;
+                        stat.x = to[0] % boardW + 1
+                        stat.y = to[1] % boardH + 1
+                        continue
                     }
-                    to = from;
-                    from = reverseTileMoves.get(to);
+                    to = from
+                    from = reverseTileMoves[to]
                     if (from != null) {
                         if (swap) {
                             //System.out.printf("Stat %d moving from %d,%d to %d,%d !\n", i, stat.getX(), stat.getY(), from.get(0) % boardW + 1, from.get(1) % boardH + 1);
-                            stat.setX(from.get(0) % boardW + 1);
-                            stat.setY(from.get(1) % boardH + 1);
+                            stat.x = from[0] % boardW + 1
+                            stat.y = from[1] % boardH + 1
                         } else {
-                            if (i != 0) deleteStats.add(i);
+                            if (i != 0) deleteStats.add(i)
                         }
                     }
                 }
 
-                toBoard.directDeleteStats(deleteStats);
+                toBoard.directDeleteStats(deleteStats)
 
-                var changingTiles = new HashMap<ArrayList<Integer>, ArrayList<Integer>>();
-                for (var from : tileMoves.keySet()) {
-                    var to = tileMoves.get(from);
-                    var id = toBoard.getTileId(from.get(0) % boardW, from.get(1) % boardH);
-                    var col = toBoard.getTileCol(from.get(0) % boardW, from.get(1) % boardH);
-                    changingTiles.put(to, pair(id, col));
+                val changingTiles = HashMap<ArrayList<Int>?, ArrayList<Int>>()
+                for (from in tileMoves.keys) {
+                    val to = tileMoves[from]
+                    val id = toBoard.getTileId(from!![0] % boardW, from[1] % boardH)
+                    val col = toBoard.getTileCol(from[0] % boardW, from[1] % boardH)
+                    changingTiles[to] = pair(id, col)
                     if (swap) {
-                        var tid = toBoard.getTileId(to.get(0) % boardW, to.get(1) % boardH);
-                        var tcol = toBoard.getTileCol(to.get(0) % boardW, to.get(1) % boardH);
-                        changingTiles.put(from, pair(tid, tcol));
+                        val tid = toBoard.getTileId(to!![0] % boardW, to[1] % boardH)
+                        val tcol = toBoard.getTileCol(to[0] % boardW, to[1] % boardH)
+                        changingTiles[from] = pair(tid, tcol)
                     } else {
-                        toBoard.setTileRaw(from.get(0) % boardW, from.get(1) % boardH, blankTile.getId(), blankTile.getCol());
+                        toBoard.setTileRaw(from[0] % boardW, from[1] % boardH, blankTile.id, blankTile.col)
                     }
                 }
-                for (var to : changingTiles.keySet()) {
-                    var tile = changingTiles.get(to);
-                    toBoard.setTileRaw(to.get(0) % boardW, to.get(1) % boardH, tile.get(0), tile.get(1));
+                for (to in changingTiles.keys) {
+                    val tile = changingTiles[to]!!
+                    toBoard.setTileRaw(to!![0] % boardW, to[1] % boardH, tile[0], tile[1])
                 }
-                toBoard.finaliseStats();
+                toBoard.finaliseStats()
 
                 // Copy to buffer
-
             } else {
                 // Different board
 
-                for (var from : tileMoves.keySet()) {
-                    var to = tileMoves.get(from);
-                    var tile = getTileAt(from.get(0), from.get(1), true);
+                for (from in tileMoves.keys) {
+                    val to = tileMoves[from]
+                    val tile = getTileAt(from!![0], from[1], true)
                     if (swap) {
-                        var otherTile = getTileAt(to.get(0), to.get(1), true);
-                        putTileAt(from.get(0), from.get(1), otherTile, PUT_REPLACE_BOTH);
+                        val otherTile = getTileAt(to!![0], to[1], true)
+                        putTileAt(from[0], from[1], otherTile, PUT_REPLACE_BOTH)
                     } else {
-                        putTileAt(from.get(0), from.get(1), blankTile, PUT_REPLACE_BOTH);
+                        putTileAt(from[0], from[1], blankTile, PUT_REPLACE_BOTH)
                     }
-                    putTileAt(to.get(0), to.get(1), tile, PUT_REPLACE_BOTH);
+                    putTileAt(to!![0], to[1], tile, PUT_REPLACE_BOTH)
                 }
             }
         }
     }
 
-    private void blockPaste() {
-        int w = globalEditor.getBlockBufferW();
-        int h = globalEditor.getBlockBufferH();
-        var blockBuffer = globalEditor.getBlockBuffer(worldData.isSuperZZT());
-        addRedraw(cursorX, cursorY, cursorX + w - 1, cursorY + h - 1);
+    private fun blockPaste() {
+        val w = globalEditor.blockBufferW
+        val h = globalEditor.blockBufferH
+        val blockBuffer = globalEditor.getBlockBuffer(worldData!!.isSuperZZT)
+        addRedraw(cursorX, cursorY, cursorX + w - 1, cursorY + h - 1)
 
         // Find the player
-        int px = -1, py = -1;
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                int xPos = x + cursorX;
-                int yPos = y + cursorY;
+        var px = -1
+        var py = -1
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val xPos = x + cursorX
+                val yPos = y + cursorY
                 if (xPos < width && yPos < height) {
-                    int idx = y * w + x;
-                    Tile t = blockBuffer[idx];
-                    var st = t.getStats();
+                    val idx = y * w + x
+                    val t = blockBuffer[idx]
+                    val st: List<Stat> = t.stats
                     if (!st.isEmpty()) {
-                        if (st.get(0).isPlayer()) {
+                        if (st[0].isPlayer) {
                             // Player has been found. Record the player's location
                             // then place
-                            px = x;
-                            py = y;
-                            putTileAt(xPos, yPos, blockBuffer[idx], PUT_REPLACE_BOTH);
+                            px = x
+                            py = y
+                            putTileAt(xPos, yPos, blockBuffer[idx], PUT_REPLACE_BOTH)
                         }
                     }
                 }
             }
         }
 
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
+        for (y in 0 until h) {
+            for (x in 0 until w) {
                 if (x == px && y == py) {
-                    continue; // We have already placed the player
+                    continue  // We have already placed the player
                 }
-                int xPos = x + cursorX;
-                int yPos = y + cursorY;
+                val xPos = x + cursorX
+                val yPos = y + cursorY
                 if (xPos < width && yPos < height) {
-                    int idx = y * w + x;
-                    putTileAt(xPos, yPos, blockBuffer[idx], PUT_REPLACE_BOTH);
+                    val idx = y * w + x
+                    putTileAt(xPos, yPos, blockBuffer[idx], PUT_REPLACE_BOTH)
                 }
             }
         }
 
-        if (!globalEditor.getBlockBufferRepeated()) {
-            setBlockBuffer(0, 0, null, false);
+        if (!globalEditor.blockBufferRepeated) {
+            setBlockBuffer(0, 0, null, false)
         }
-        afterBlockOperation(true);
+        afterBlockOperation(true)
     }
 
-    private void operationF(int f) {
-        JPopupMenu popup = new JPopupMenu();
-        var fMenuName = getFMenuName(f);
-        var items = 0;
+    private fun operationF(f: Int) {
+        val popup = JPopupMenu()
+        val fMenuName = getFMenuName(f)
+        var items = 0
         if (fMenuName != null) {
-            var fMenuItems = getFMenuItems(f);
-            for (var fMenuItem : fMenuItems) {
-                popup.add(fMenuItem);
-                items++;
+            val fMenuItems = getFMenuItems(f)
+            for (fMenuItem in fMenuItems) {
+                popup.add(fMenuItem)
+                items++
             }
         }
-        popup.addPopupMenuListener(this);
+        popup.addPopupMenuListener(this)
         if (items > 0) {
-            popup.show(frame, (frame.getWidth() - popup.getPreferredSize().width) / 2,
-                    (frame.getHeight() - popup.getPreferredSize().height) / 2);
+            popup.show(
+                frame, (frame!!.width - popup.preferredSize.width) / 2,
+                (frame!!.height - popup.preferredSize.height) / 2
+            )
         }
     }
 
-    private void operationColour() {
-        int col = getTileColour(getBufferTile());
-        ColourSelector.createColourSelector(this, col, frame, e -> {
-            int newCol = Integer.parseInt(e.getActionCommand());
-            var tile = getBufferTile();
-            paintTile(tile, newCol);
-            setBufferTile(tile);
-            afterUpdate();
-        }, ColourSelector.COLOUR);
+    private fun operationColour() {
+        val col = getTileColour(bufferTile!!)
+        createColourSelector(this, col, frame, { e: ActionEvent ->
+            val newCol = e.actionCommand.toInt()
+            val tile = bufferTile!!
+            paintTile(tile, newCol)
+            bufferTile = tile
+            afterUpdate()
+        }, ColourSelector.COLOUR)
     }
 
-    void testCharsetPalette(File dir, String basename, ArrayList<File> unlinkList, ArrayList<String> argList) throws IOException
-    {
-        var palette = canvas.getPalette();
+    @Throws(IOException::class)
+    fun testCharsetPalette(dir: File, basename: String?, unlinkList: ArrayList<File?>, argList: ArrayList<String?>) {
+        // todo(jakeouellette): replaced getPalette with get palette data, may
+        // have introduced a bug, check it.
+        val palette = canvas!!.paletteData
         if (palette != Data.DEFAULT_PALETTE) {
-            File palFile = Paths.get(dir.getPath(), basename + ".PAL").toFile();
-            Files.write(palFile.toPath(), palette);
-            unlinkList.add(palFile);
-            argList.add("-l");
-            argList.add("palette:pal:" + basename + ".PAL");
+            val palFile = Paths.get(dir.path, "$basename.PAL").toFile()
+            Files.write(palFile.toPath(), palette)
+            unlinkList.add(palFile)
+            argList.add("-l")
+            argList.add("palette:pal:$basename.PAL")
         }
-        var charset = canvas.getCharset();
+        val charset = canvas!!.charset
         if (charset != Data.DEFAULT_CHARSET) {
-            File chrFile = Paths.get(dir.getPath(), basename + ".CHR").toFile();
-            Files.write(chrFile.toPath(), charset);
-            unlinkList.add(chrFile);
-            argList.add("-l");
-            argList.add("charset:chr:" + basename + ".CHR");
+            val chrFile = Paths.get(dir.path, "$basename.CHR").toFile()
+            Files.write(chrFile.toPath(), charset)
+            unlinkList.add(chrFile)
+            argList.add("-l")
+            argList.add("charset:chr:$basename.CHR")
         }
     }
 
-    private void operationTestWorld() {
-        int changeBoardTo;
-        if (globalEditor.getBoolean("TEST_SWITCH_BOARD", false)) {
-            changeBoardTo = currentBoardIdx;
+    private fun operationTestWorld() {
+        val changeBoardTo = if (globalEditor.getBoolean("TEST_SWITCH_BOARD", false)) {
+            boardIdx
         } else {
-            changeBoardTo = worldData.getCurrentBoard();
+            worldData!!.currentBoard
         }
-        if (changeBoardTo == -1) return;
+        if (changeBoardTo == -1) return
 
         try {
-            ArrayList<File> unlinkList = new ArrayList<>();
+            val unlinkList = ArrayList<File?>()
 
-            String zzt = worldData.isSuperZZT() ? "SZZT" : "ZZT";
-            String ext = worldData.isSuperZZT() ? ".SZT" : ".ZZT";
-            String hiext = worldData.isSuperZZT() ? ".HGS" : ".HI";
-            String testPath = Util.evalConfigDir(globalEditor.getString(zzt+"_TEST_PATH", ""));
+            val zzt = if (worldData!!.isSuperZZT) "SZZT" else "ZZT"
+            val ext = if (worldData!!.isSuperZZT) ".SZT" else ".ZZT"
+            val hiext = if (worldData!!.isSuperZZT) ".HGS" else ".HI"
+            val testPath = evalConfigDir(globalEditor.getString(zzt + "_TEST_PATH", ""))
             if (testPath.isBlank()) {
-                var errmsg = String.format("You need to configure a %s test directory in the settings before you can test worlds.",
-                        worldData.isSuperZZT() ? "Super ZZT" : "ZZT");
-                JOptionPane.showMessageDialog(frame, errmsg, "Error testing world", JOptionPane.ERROR_MESSAGE);
-                return;
+                val errmsg = String.format(
+                    "You need to configure a %s test directory in the settings before you can test worlds.",
+                    if (worldData!!.isSuperZZT) "Super ZZT" else "ZZT"
+                )
+                JOptionPane.showMessageDialog(frame, errmsg, "Error testing world", JOptionPane.ERROR_MESSAGE)
+                return
             }
-            File dir = new File(testPath);
-            File zeta = Paths.get(dir.getPath(), globalEditor.getString(zzt+"_TEST_COMMAND")).toFile();
-            String basename = "";
-            File testFile = null;
-            File testFileHi = null;
-            for (int nameSuffix = 0; nameSuffix < 99; nameSuffix++) {
-                basename = globalEditor.getString(zzt + "_TEST_FILENAME");
+            val dir = File(testPath)
+            val zeta = Paths.get(dir.path, globalEditor.getString(zzt + "_TEST_COMMAND")).toFile()
+            var basename: String? = ""
+            var testFile: File? = null
+            var testFileHi: File? = null
+            for (nameSuffix in 0..98) {
+                basename = globalEditor.getString(zzt + "_TEST_FILENAME")
                 if (nameSuffix > 1) {
-                    String suffixString = String.valueOf(nameSuffix);
-                    int maxLen = 8 - suffixString.length();
-                    if (basename.length() > maxLen) {
-                        basename = basename.substring(0, maxLen);
+                    val suffixString = nameSuffix.toString()
+                    val maxLen = 8 - suffixString.length
+                    if (basename!!.length > maxLen) {
+                        basename = basename.substring(0, maxLen)
                     }
-                    basename += suffixString;
+                    basename += suffixString
                 }
-                if (basename.length() > 8) basename = basename.substring(0, 8);
-                testFile = Paths.get(dir.getPath(), basename + ext).toFile();
-                testFileHi = Paths.get(dir.getPath(), basename + hiext).toFile();
+                if (basename!!.length > 8) basename = basename.substring(0, 8)
+                testFile = Paths.get(dir.path, basename + ext).toFile()
+                testFileHi = Paths.get(dir.path, basename + hiext).toFile()
                 if (!testFile.exists()) {
-                    break;
+                    break
                 }
-                testFile = null;
-                testFileHi = null;
+                testFile = null
+                testFileHi = null
             }
             if (testFile == null) {
-                throw new IOException("Error creating test file");
+                throw IOException("Error creating test file")
             }
-            unlinkList.add(testFile);
-            unlinkList.add(testFileHi);
-            ArrayList<String> argList = new ArrayList<>();
-            argList.add(zeta.getPath());
+            unlinkList.add(testFile)
+            unlinkList.add(testFileHi)
+            val argList = ArrayList<String?>()
+            argList.add(zeta.path)
 
-            if (globalEditor.getBoolean(zzt+"_TEST_USE_CHARPAL", false)) {
-                testCharsetPalette(dir, basename, unlinkList, argList);
+            if (globalEditor.getBoolean(zzt + "_TEST_USE_CHARPAL", false)) {
+                testCharsetPalette(dir, basename, unlinkList, argList)
             }
-            if (globalEditor.getBoolean(zzt+"_TEST_USE_BLINK", false)) {
+            if (globalEditor.getBoolean(zzt + "_TEST_USE_BLINK", false)) {
                 if (!globalEditor.getBoolean("BLINKING", true)) {
-                    argList.add("-b");
+                    argList.add("-b")
                 }
             }
-            var params = globalEditor.getString(zzt+"_TEST_PARAMS").split(" ");
-            argList.addAll(Arrays.asList(params));
+            val params =
+                globalEditor.getString(zzt + "_TEST_PARAMS")!!.split(" ".toRegex()).dropLastWhile { it.isEmpty() }
+                    .toTypedArray()
+            argList.addAll(Arrays.asList(*params))
 
-            argList.add(basename+ext);
+            argList.add(basename + ext)
 
-            boolean inject_P = globalEditor.getBoolean(zzt+"_TEST_INJECT_P", false);
-            int delay_P = globalEditor.getInt(zzt+"_TEST_INJECT_P_DELAY", 0);
-            boolean inject_Enter = false;
-            int delay_Enter = 0;
-            if (worldData.isSuperZZT()) {
-                inject_Enter = globalEditor.getBoolean(zzt+"_TEST_INJECT_ENTER", false);
-                delay_Enter = globalEditor.getInt(zzt+"_TEST_INJECT_ENTER_DELAY", 0);
+            val inject_P = globalEditor.getBoolean(zzt + "_TEST_INJECT_P", false)
+            val delay_P = globalEditor.getInt(zzt + "_TEST_INJECT_P_DELAY", 0)
+            var inject_Enter = false
+            var delay_Enter = 0
+            if (worldData!!.isSuperZZT) {
+                inject_Enter = globalEditor.getBoolean(zzt + "_TEST_INJECT_ENTER", false)
+                delay_Enter = globalEditor.getInt(zzt + "_TEST_INJECT_ENTER_DELAY", 0)
             }
-            launchTest(argList, dir, testFile, unlinkList, changeBoardTo, inject_P, delay_P, inject_Enter, delay_Enter);
-
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(frame, e, "Error testing world", JOptionPane.ERROR_MESSAGE);
+            launchTest(argList, dir, testFile, unlinkList, changeBoardTo, inject_P, delay_P, inject_Enter, delay_Enter)
+        } catch (e: IOException) {
+            JOptionPane.showMessageDialog(frame, e, "Error testing world", JOptionPane.ERROR_MESSAGE)
         }
     }
 
-    private void launchTest(ArrayList<String> argList, File dir, File testFile, ArrayList<File> unlinkList, int testBoard,
-                            boolean inject_P, int delay_P, boolean inject_Enter, int delay_Enter) {
+    private fun launchTest(
+        argList: ArrayList<String?>, dir: File, testFile: File, unlinkList: ArrayList<File?>, testBoard: Int,
+        inject_P: Boolean, delay_P: Int, inject_Enter: Boolean, delay_Enter: Int
+    ) {
         /*
         synchronized (deleteOnClose) {
             for (var unlinkFile : unlinkList) {
@@ -2459,37 +2525,37 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
             }
         }
         */
-        Thread testThread = new Thread(() -> {
+        val testThread = Thread {
             try {
-                var worldCopy = worldData.clone();
-                worldCopy.setCurrentBoard(testBoard);
-                ProcessBuilder pb = new ProcessBuilder(argList);
+                val worldCopy = worldData!!.clone()
+                worldCopy.currentBoard = testBoard
+                val pb = ProcessBuilder(argList)
 
                 if (saveGame(testFile, worldCopy)) {
-                    pb.directory(dir);
-                    Process p = pb.start();
+                    pb.directory(dir)
+                    val p = pb.start()
                     if (inject_P || inject_Enter) {
-                        Robot r = new Robot();
+                        val r = Robot()
                         if (inject_P) {
-                            r.delay(delay_P);
-                            r.keyPress(KeyEvent.VK_P);
-                            r.keyRelease(KeyEvent.VK_P);
+                            r.delay(delay_P)
+                            r.keyPress(KeyEvent.VK_P)
+                            r.keyRelease(KeyEvent.VK_P)
                         }
                         if (inject_Enter) {
-                            r.delay(delay_Enter);
-                            r.keyPress(KeyEvent.VK_ENTER);
-                            r.keyRelease(KeyEvent.VK_ENTER);
+                            r.delay(delay_Enter)
+                            r.keyPress(KeyEvent.VK_ENTER)
+                            r.keyRelease(KeyEvent.VK_ENTER)
                         }
                     }
-                    p.waitFor();
+                    p.waitFor()
                 } else {
-                    throw new IOException("Error creating test file");
+                    throw IOException("Error creating test file")
                 }
 
 
-                for (var unlinkFile : unlinkList) {
-                    if (unlinkFile.exists()) {
-                        unlinkFile.delete();
+                for (unlinkFile in unlinkList) {
+                    if (unlinkFile!!.exists()) {
+                        unlinkFile.delete()
                         /*
                         synchronized (deleteOnClose) {
                             deleteOnClose.remove(unlinkFile);
@@ -2497,229 +2563,229 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
                         */
                     }
                 }
-            } catch (IOException | AWTException e) {
-                JOptionPane.showMessageDialog(frame, e);
-            } catch (InterruptedException ignored) {
+            } catch (e: IOException) {
+                JOptionPane.showMessageDialog(frame, e)
+            } catch (e: AWTException) {
+                JOptionPane.showMessageDialog(frame, e)
+            } catch (ignored: InterruptedException) {
             }
-        });
-        testThreads.add(testThread);
-        testThread.start();
+        }
+        testThreads.add(testThread)
+        testThread.start()
     }
 
-    private void operationExitJump(int exit) {
-        int destBoard = currentBoard.getExit(exit);
-        if (destBoard != 0) changeBoard(destBoard);
+    private fun operationExitJump(exit: Int) {
+        val destBoard = currentBoard!!.getExit(exit)
+        if (destBoard != 0) changeBoard(destBoard)
     }
 
-    private void operationExitCreate(int exit) {
-        final int[] exitRecip = {1, 0, 3, 2};
-        final int[] xOff = {0, 0, -boardW, boardW};
-        final int[] yOff = {-boardH, boardH, 0, 0};
+    private fun operationExitCreate(exit: Int) {
+        val exitRecip = intArrayOf(1, 0, 3, 2)
+        val xOff = intArrayOf(0, 0, -boardW, boardW)
+        val yOff = intArrayOf(-boardH, boardH, 0, 0)
 
-        int oldBoardIdx = currentBoardIdx;
-        int destBoard = currentBoard.getExit(exit);
+        val oldBoardIdx = boardIdx
+        val destBoard = currentBoard!!.getExit(exit)
         if (destBoard != 0) {
-            changeBoard(destBoard);
+            changeBoard(destBoard)
         } else {
-            int savedCursorX = cursorX;
-            int savedCursorY = cursorY;
-            cursorX += xOff[exit];
-            cursorY += yOff[exit];
+            val savedCursorX = cursorX
+            val savedCursorY = cursorY
+            cursorX += xOff[exit]
+            cursorY += yOff[exit]
             if (cursorX < 0 || cursorY < 0 || cursorX >= width || cursorY >= height) {
-                cursorX = savedCursorX;
-                cursorY = savedCursorY;
+                cursorX = savedCursorX
+                cursorY = savedCursorY
             }
-            int newBoardIdx = operationAddBoard();
+            val newBoardIdx = operationAddBoard()
             if (newBoardIdx != -1) {
-                boards.get(oldBoardIdx).setExit(exit, newBoardIdx);
-                boards.get(newBoardIdx).setExit(exitRecip[exit], oldBoardIdx);
-                canvas.setCursor(cursorX, cursorY);
+                boards[oldBoardIdx]!!.setExit(exit, newBoardIdx)
+                boards[newBoardIdx]!!.setExit(exitRecip[exit], oldBoardIdx)
+                canvas!!.setCursor(cursorX, cursorY)
             } else {
-                cursorX = savedCursorX;
-                cursorY = savedCursorY;
+                cursorX = savedCursorX
+                cursorY = savedCursorY
             }
-            afterUpdate();
+            afterUpdate()
         }
     }
 
-    public int operationAddBoard() {
-        var response = JOptionPane.showInputDialog(frame, "Name for new board:");
+    fun operationAddBoard(): Int {
+        val response = JOptionPane.showInputDialog(frame, "Name for new board:")
         if (response != null) {
-            Board newBoard = blankBoard(response);
-            int newBoardIdx = boards.size();
-            boards.add(newBoard);
+            val newBoard = blankBoard(response)
+            val newBoardIdx = boards.size
+            boards.add(newBoard)
 
-            boolean addedToAtlas = false;
+            var addedToAtlas = false
 
             if (currentAtlas != null) {
-                int gridX = cursorX / boardW;
-                int gridY = cursorY / boardH;
+                val gridX = cursorX / boardW
+                val gridY = cursorY / boardH
                 if (grid[gridY][gridX] == -1) {
-                    addedToAtlas = true;
-                    grid[gridY][gridX] = newBoardIdx;
-                    atlases.put(newBoardIdx, currentAtlas);
+                    addedToAtlas = true
+                    grid[gridY][gridX] = newBoardIdx
+                    atlases[newBoardIdx] = currentAtlas!!
 
-                    final int[][] dirs = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
-                    final int[] dirReverse = {1, 0, 3, 2};
+                    val dirs = arrayOf(intArrayOf(0, -1), intArrayOf(0, 1), intArrayOf(-1, 0), intArrayOf(1, 0))
+                    val dirReverse = intArrayOf(1, 0, 3, 2)
 
-                    for (int exit = 0; exit < 4; exit++) {
-                        int bx = gridX + dirs[exit][0];
-                        int by = gridY + dirs[exit][1];
+                    for (exit in 0..3) {
+                        val bx = gridX + dirs[exit][0]
+                        val by = gridY + dirs[exit][1]
                         if (bx >= 0 && by >= 0 && bx < gridW && by < gridH) {
-                            int boardAtIdx = grid[by][bx];
+                            val boardAtIdx = grid[by][bx]
                             if (boardAtIdx != -1) {
-                                int revExit = dirReverse[exit];
-                                var boardAt = boards.get(boardAtIdx);
-                                if (boardAt.getExit(revExit) == 0) {
-                                    boardAt.setExit(revExit, newBoardIdx);
-                                    newBoard.setExit(exit, boardAtIdx);
+                                val revExit = dirReverse[exit]
+                                val boardAt = boards[boardAtIdx]
+                                if (boardAt!!.getExit(revExit) == 0) {
+                                    boardAt.setExit(revExit, newBoardIdx)
+                                    newBoard.setExit(exit, boardAtIdx)
                                 }
                             }
                         }
                     }
-
                 }
             }
             if (!addedToAtlas) {
-                changeBoard(boards.size() - 1);
+                changeBoard(boards.size - 1)
             } else {
-                invalidateCache();
-                afterModification();
+                invalidateCache()
+                afterModification()
             }
-            return newBoardIdx;
+            return newBoardIdx
         }
-        return -1;
+        return -1
     }
 
-    private Board blankBoard(String name) {
-        if (worldData.isSuperZZT()) {
-            return new SZZTBoard(name);
+    private fun blankBoard(name: String): Board {
+        return if (worldData!!.isSuperZZT) {
+            SZZTBoard(name)
         } else {
-            return new ZZTBoard(name);
+            ZZTBoard(name)
         }
     }
 
-    private void operationAddBoardGrid() {
-        var dlg = new JDialog();
+    private fun operationAddBoardGrid() {
+        val dlg = JDialog()
         //Util.addEscClose(settings, settings.getRootPane());
         //Util.addKeyClose(settings, settings.getRootPane(), KeyEvent.VK_ENTER, 0);
-        dlg.setResizable(false);
-        dlg.setTitle("Add Boards (*x* grid)");
-        dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        dlg.setModalityType(JDialog.ModalityType.APPLICATION_MODAL);
-        dlg.getContentPane().setLayout(new BorderLayout());
-        var cp = new JPanel(new GridLayout(0, 1));
-        cp.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        dlg.getContentPane().add(cp, BorderLayout.CENTER);
+        dlg.isResizable = false
+        dlg.title = "Add Boards (*x* grid)"
+        dlg.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
+        dlg.modalityType = Dialog.ModalityType.APPLICATION_MODAL
+        dlg.contentPane.layout = BorderLayout()
+        val cp = JPanel(GridLayout(0, 1))
+        cp.border = BorderFactory.createEmptyBorder(8, 8, 8, 8)
+        dlg.contentPane.add(cp, BorderLayout.CENTER)
 
-        var widthSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 100, 1));
-        var heightSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 100, 1));
-        var nameField = new JTextField("Board {x},{y}");
-        nameField.setFont(CP437.getFont());
-        nameField.setToolTipText("Board name template. {x} and {y} are replaced with the grid location of the board (1-based).");
-        var hidePlayerChk = new JCheckBox("Erase player from boards", false);
-        hidePlayerChk.setToolTipText("Erase the player from each board. This will place the player's stat in a corner of the board's border, keeping it off the board. You should place the player later if you want to actually use this board.");
-        var openAtlasChk = new JCheckBox("Open board grid in Atlas view.", true);
-        openAtlasChk.setToolTipText("After creating the board grid, load it in Atlas view.");
-        var createButton = new JButton("Create boards");
-        var cancelButton = new JButton("Cancel");
+        val widthSpinner = JSpinner(SpinnerNumberModel(1, 1, 100, 1))
+        val heightSpinner = JSpinner(SpinnerNumberModel(1, 1, 100, 1))
+        val nameField = JTextField("Board {x},{y}")
+        nameField.font = font
+        nameField.toolTipText =
+            "Board name template. {x} and {y} are replaced with the grid location of the board (1-based)."
+        val hidePlayerChk = JCheckBox("Erase player from boards", false)
+        hidePlayerChk.toolTipText =
+            "Erase the player from each board. This will place the player's stat in a corner of the board's border, keeping it off the board. You should place the player later if you want to actually use this board."
+        val openAtlasChk = JCheckBox("Open board grid in Atlas view.", true)
+        openAtlasChk.toolTipText = "After creating the board grid, load it in Atlas view."
+        val createButton = JButton("Create boards")
+        val cancelButton = JButton("Cancel")
 
-        var widthPanel = new JPanel(new BorderLayout());
-        var heightPanel = new JPanel(new BorderLayout());
-        var namePanel = new JPanel(new BorderLayout());
-        var btnsPanel = new JPanel(new BorderLayout());
-        widthPanel.add(new JLabel("Grid width: "), BorderLayout.WEST);
-        heightPanel.add(new JLabel("Grid height: "), BorderLayout.WEST);
-        namePanel.add(new JLabel("Name template: "), BorderLayout.WEST);
-        widthPanel.add(widthSpinner, BorderLayout.EAST);
-        heightPanel.add(heightSpinner, BorderLayout.EAST);
-        namePanel.add(nameField, BorderLayout.EAST);
-        btnsPanel.add(createButton, BorderLayout.WEST);
-        btnsPanel.add(cancelButton, BorderLayout.EAST);
-        cp.add(widthPanel);
-        cp.add(heightPanel);
-        cp.add(namePanel);
-        cp.add(hidePlayerChk);
-        cp.add(openAtlasChk);
-        cp.add(btnsPanel);
+        val widthPanel = JPanel(BorderLayout())
+        val heightPanel = JPanel(BorderLayout())
+        val namePanel = JPanel(BorderLayout())
+        val btnsPanel = JPanel(BorderLayout())
+        widthPanel.add(JLabel("Grid width: "), BorderLayout.WEST)
+        heightPanel.add(JLabel("Grid height: "), BorderLayout.WEST)
+        namePanel.add(JLabel("Name template: "), BorderLayout.WEST)
+        widthPanel.add(widthSpinner, BorderLayout.EAST)
+        heightPanel.add(heightSpinner, BorderLayout.EAST)
+        namePanel.add(nameField, BorderLayout.EAST)
+        btnsPanel.add(createButton, BorderLayout.WEST)
+        btnsPanel.add(cancelButton, BorderLayout.EAST)
+        cp.add(widthPanel)
+        cp.add(heightPanel)
+        cp.add(namePanel)
+        cp.add(hidePlayerChk)
+        cp.add(openAtlasChk)
+        cp.add(btnsPanel)
 
-        cancelButton.addActionListener(e -> {
-            dlg.dispose();
-        });
-        createButton.addActionListener(e -> {
-            int width = (int) widthSpinner.getValue();
-            int height = (int) heightSpinner.getValue();
-            String nameTemplate = nameField.getText();
+        cancelButton.addActionListener { e: ActionEvent? -> dlg.dispose() }
+        createButton.addActionListener { e: ActionEvent? ->
+            val width = widthSpinner.value as Int
+            val height = heightSpinner.value as Int
+            val nameTemplate = nameField.text
 
-            int startIdx = boards.size();
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    String name = nameTemplate.replace("{x}", Integer.toString(x + 1));
-                    name = name.replace("{y}", Integer.toString(y + 1));
+            val startIdx = boards.size
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    var name = nameTemplate.replace("{x}", (x + 1).toString())
+                    name = name.replace("{y}", (y + 1).toString())
 
-                    Board newBoard = blankBoard(name);
+                    val newBoard = blankBoard(name)
 
-                    int currentIdx = y * width + x + startIdx;
+                    val currentIdx = y * width + x + startIdx
 
                     // Create connections
                     // North
-                    if (y > 0) newBoard.setExit(0, currentIdx - width);
+                    if (y > 0) newBoard.setExit(0, currentIdx - width)
                     // South
-                    if (y < height - 1) newBoard.setExit(1, currentIdx + width);
+                    if (y < height - 1) newBoard.setExit(1, currentIdx + width)
                     // West
-                    if (x > 0) newBoard.setExit(2, currentIdx - 1);
+                    if (x > 0) newBoard.setExit(2, currentIdx - 1)
                     // East
-                    if (x < width - 1) newBoard.setExit(3, currentIdx + 1);
+                    if (x < width - 1) newBoard.setExit(3, currentIdx + 1)
 
-                    if (hidePlayerChk.isSelected()) {
-                        erasePlayer(newBoard);
+                    if (hidePlayerChk.isSelected) {
+                        erasePlayer(newBoard)
                     }
 
-                    boards.add(newBoard);
+                    boards.add(newBoard)
                 }
             }
 
-            if (openAtlasChk.isSelected()) {
-                changeBoard(startIdx);
-                atlas();
+            if (openAtlasChk.isSelected) {
+                changeBoard(startIdx)
+                atlas()
             }
-            dlg.dispose();
-        });
+            dlg.dispose()
+        }
 
-        dlg.pack();
-        dlg.setLocationRelativeTo(frame);
-        dlg.setVisible(true);
+        dlg.pack()
+        dlg.setLocationRelativeTo(frame)
+        dlg.isVisible = true
     }
 
-    private void operationErasePlayer() {
-        int x = getBoardXOffset() + currentBoard.getStat(0).getX() - 1;
-        int y = getBoardYOffset() + currentBoard.getStat(0).getY() - 1;
+    private fun operationErasePlayer() {
+        val x = boardXOffset + currentBoard!!.getStat(0)!!.x - 1
+        val y = boardYOffset + currentBoard!!.getStat(0)!!.y - 1
 
-        erasePlayer(currentBoard);
-        addRedraw(x, y, x, y);
+        erasePlayer(currentBoard)
+        addRedraw(x, y, x, y)
 
-        afterModification();
+        afterModification()
     }
 
-    private void erasePlayer(Board board) {
-        int cornerX = board.getWidth() + 1;
-        int cornerY = 0;
+    private fun erasePlayer(board: Board?) {
+        val cornerX = board!!.width + 1
+        val cornerY = 0
 
-        var stat0 = board.getStat(0);
+        val stat0 = board.getStat(0)
 
         // If the player is already in the corner, do nothing
-        if (stat0.getX() == cornerX && stat0.getY() == cornerY)
-            return;
+        if (stat0!!.x == cornerX && stat0.y == cornerY) return
 
-        var oldStat0x = stat0.getX() - 1;
-        var oldStat0y = stat0.getY() - 1;
+        val oldStat0x = stat0.x - 1
+        val oldStat0y = stat0.y - 1
 
         // Replace player with under tile
-        Tile under = new Tile(stat0.getUid(), stat0.getUco());
-        stat0.setX(cornerX);
-        stat0.setY(cornerY);
+        val under = Tile(stat0.uid, stat0.uco)
+        stat0.x = cornerX
+        stat0.y = cornerY
 
-        board.setTile(oldStat0x, oldStat0y, under);
+        board.setTile(oldStat0x, oldStat0y, under)
 
         /*
         // Fix uid/uco
@@ -2735,1051 +2801,1084 @@ public class WorldEditor implements KeyActionReceiver, KeyListener, WindowFocusL
         */
     }
 
-    private void operationDeleteBoard() {
-        new BoardManager(this, boards, currentBoardIdx);
+    private fun operationDeleteBoard() {
+        BoardManager(this, boards, boardIdx)
     }
 
-    private void operationChangeBoard() {
-        new BoardSelector(this, boards, e -> {
-            int newBoardIdx = Integer.parseInt(e.getActionCommand());
-            changeBoard(newBoardIdx);
-        });
+    private fun operationChangeBoard() {
+        BoardSelector(this, boards, ActionListener { e: ActionEvent ->
+            val newBoardIdx = e.actionCommand.toInt()
+            changeBoard(newBoardIdx)
+        })
     }
 
-    private void operationCursorMove(int offX, int offY, boolean draw) {
-        int newCursorX = Util.clamp(cursorX + offX, 0, width - 1);
-        int newCursorY = Util.clamp(cursorY + offY, 0, height - 1);
+    private fun operationCursorMove(offX: Int, offY: Int, draw: Boolean) {
+        val newCursorX = clamp(cursorX + offX, 0, width - 1)
+        val newCursorY = clamp(cursorY + offY, 0, height - 1)
 
         if (newCursorX != cursorX || newCursorY != cursorY) {
             if (!draw) {
-                cursorX = newCursorX;
-                cursorY = newCursorY;
+                cursorX = newCursorX
+                cursorY = newCursorY
             } else {
-                int deltaX = offX == 0 ? 0 : offX / Math.abs(offX);
-                int deltaY = offY == 0 ? 0 : offY / Math.abs(offY);
-                var dirty = new HashSet<Board>();
+                val deltaX = if (offX == 0) 0 else (offX / abs(offX.toDouble())).toInt()
+                val deltaY = if (offY == 0) 0 else (offY / abs(offY.toDouble())).toInt()
+                val dirty = HashSet<Board>()
                 while (cursorX != newCursorX || cursorY != newCursorY) {
-                    cursorX += deltaX;
-                    cursorY += deltaY;
+                    cursorX += deltaX
+                    cursorY += deltaY
 
                     if (drawing) {
-                        var board = putTileDeferred(cursorX, cursorY, getBufferTile(), PUT_DEFAULT);
-                        if (board != null) dirty.add(board);
+                        val board = putTileDeferred(cursorX, cursorY, bufferTile, PUT_DEFAULT)
+                        if (board != null) dirty.add(board)
                     }
                 }
-                for (var board : dirty) {
-                    board.finaliseStats();
+                for (board in dirty) {
+                    board.finaliseStats()
                 }
             }
-            canvas.setCursor(cursorX, cursorY);
+            canvas!!.setCursor(cursorX, cursorY)
 
             if (drawing) {
-                afterModification();
+                afterModification()
             } else {
-                afterUpdate();
+                afterUpdate()
             }
         }
     }
 
-    private void operationBufferGrab() {
-        setBufferTile(getTileAt(cursorX, cursorY, true));
-        afterUpdate();
+    private fun operationBufferGrab() {
+        bufferTile = getTileAt(cursorX, cursorY, true)
+        afterUpdate()
     }
 
-    private void operationBufferPut() {
-        if (getTileAt(cursorX, cursorY, false).equals(getBufferTile())) {
-            operationDelete();
-            return;
+    private fun operationBufferPut() {
+        if (getTileAt(cursorX, cursorY, false) == bufferTile) {
+            operationDelete()
+            return
         }
-        putTileAt(cursorX, cursorY, getBufferTile(), PUT_DEFAULT);
-        afterModification();
+        putTileAt(cursorX, cursorY, bufferTile, PUT_DEFAULT)
+        afterModification()
     }
 
-    private void operationBufferSwapColour() {
-        var tile = getBufferTile().clone();
-        int oldCol = tile.getCol();
-        int newCol = ((oldCol & 0x0F) << 4) | ((oldCol & 0xF0) >> 4);
-        tile.setCol(newCol);
-        setBufferTile(tile);
-        afterUpdate();
+    private fun operationBufferSwapColour() {
+        val tile = bufferTile!!.clone()
+        val oldCol = tile.col
+        val newCol = ((oldCol and 0x0F) shl 4) or ((oldCol and 0xF0) shr 4)
+        tile.col = newCol
+        bufferTile = tile
+        afterUpdate()
     }
 
-    private void mouseDraw() {
-        var dirty = new HashSet<Board>();
+    private fun mouseDraw() {
+        val dirty = HashSet<Board>()
         if (oldMousePosX == -1) {
-            mousePlot(mouseX, mouseY, dirty);
+            mousePlot(mouseX, mouseY, dirty)
         } else {
-            int cx = -1, cy = -1;
-            int dx = mousePosX - oldMousePosX;
-            int dy = mousePosY - oldMousePosY;
-            int dist = Math.max(Math.abs(dx), Math.abs(dy));
-            if (dist == 0) return;
-            var plotSet = new HashSet<ArrayList<Integer>>();
+            var cx = -1
+            var cy = -1
+            val dx = mousePosX - oldMousePosX
+            val dy = mousePosY - oldMousePosY
+            val dist = max(abs(dx.toDouble()), abs(dy.toDouble())).toInt()
+            if (dist == 0) return
+            val plotSet = HashSet<ArrayList<Int>>()
             //int cw = canvas.getCharW(), ch = canvas.getCharH();
-            for (int i = 0; i <= dist; i++) {
-                int x = dx * i / dist + oldMousePosX;
-                int y = dy * i / dist + oldMousePosY;
-                int ncx = canvas.toCharX(x);
-                int ncy = canvas.toCharY(y);
+            for (i in 0..dist) {
+                val x = dx * i / dist + oldMousePosX
+                val y = dy * i / dist + oldMousePosY
+                val ncx = canvas!!.toCharX(x)
+                val ncy = canvas!!.toCharY(y)
                 if (ncx != cx || ncy != cy) {
-                    cx = ncx;
-                    cy = ncy;
-                    plotSet.add(pair(cx, cy));
+                    cx = ncx
+                    cy = ncy
+                    plotSet.add(pair(cx, cy))
                 }
             }
-            for (var plot : plotSet) {
-                mousePlot(plot.get(0), plot.get(1), dirty);
+            for (plot in plotSet) {
+                mousePlot(plot[0], plot[1], dirty)
             }
         }
-        for (var board : dirty) {
-            board.finaliseStats();
+        for (board in dirty) {
+            board.finaliseStats()
         }
-        afterModification();
-        canvas.setCursor(cursorX, cursorY);
+        afterModification()
+        canvas!!.setCursor(cursorX, cursorY)
     }
 
-    private boolean mouseMove() {
-        int x = mouseX;
-        int y = mouseY;
+    private fun mouseMove(): Boolean {
+        val x = mouseX
+        val y = mouseY
         if (x >= 0 && y >= 0 && x < width && y < height) {
-            cursorX = x;
-            cursorY = y;
-            canvas.setCursor(cursorX, cursorY);
-            afterUpdate();
-            return true;
+            cursorX = x
+            cursorY = y
+            canvas!!.setCursor(cursorX, cursorY)
+            afterUpdate()
+            return true
         }
-        return false;
+        return false
     }
 
-    private void mouseGrab() {
+    private fun mouseGrab() {
         if (mouseMove()) {
-            setBufferTile(getTileAt(cursorX, cursorY, true));
-            afterUpdate();
+            bufferTile = getTileAt(cursorX, cursorY, true)
+            afterUpdate()
         }
     }
 
-    private int mouseCharX(int x) {
-        return canvas.toCharX(x);
-    }
-    private int mouseCharY(int y) {
-        return canvas.toCharY(y);
+    private fun mouseCharX(x: Int): Int {
+        return canvas!!.toCharX(x)
     }
 
-    private void mousePlot(int x, int y, HashSet<Board> dirty) {
+    private fun mouseCharY(y: Int): Int {
+        return canvas!!.toCharY(y)
+    }
+
+    private fun mousePlot(x: Int, y: Int, dirty: HashSet<Board>) {
         if (x >= 0 && y >= 0 && x < width && y < height) {
-            cursorX = x;
-            cursorY = y;
-            canvas.setCursor(cursorX, cursorY);
-            var board = putTileDeferred(cursorX, cursorY, getBufferTile(), PUT_DEFAULT);
-            if (board != null) dirty.add(board);
+            cursorX = x
+            cursorY = y
+            canvas!!.setCursor(cursorX, cursorY)
+            val board = putTileDeferred(cursorX, cursorY, bufferTile, PUT_DEFAULT)
+            if (board != null) dirty.add(board)
         }
     }
 
-    private void operationDelete() {
-        Tile tile = getTileAt(cursorX, cursorY, false);
-        Tile underTile = new Tile(0, 0);
-        var tileStats = tile.getStats();
-        if (tileStats.size() > 0) {
-            int uid = tileStats.get(0).getUid();
-            int uco = tileStats.get(0).getUco();
-            underTile.setId(uid);
-            underTile.setCol(uco);
+    private fun operationDelete() {
+        val tile = getTileAt(cursorX, cursorY, false)
+        val underTile = Tile(0, 0)
+        checkNotNull(tile)
+        val tileStats: List<Stat> = tile.stats
+        if (tileStats.size > 0) {
+            val uid = tileStats[0].uid
+            val uco = tileStats[0].uco
+            underTile.id = uid
+            underTile.col = uco
         }
-        putTileAt(cursorX, cursorY, underTile, PUT_DEFAULT);
-        afterModification();
+        putTileAt(cursorX, cursorY, underTile, PUT_DEFAULT)
+        afterModification()
     }
 
-    private void operationGrabAndModify(boolean grab, boolean advanced) {
+    private fun operationGrabAndModify(grab: Boolean, advanced: Boolean) {
         if (grab) { // Enter also finishes a copy block operation
             if (blockStartX != -1) {
-                operationBlockEnd();
-                return;
+                operationBlockEnd()
+                return
             }
             if (globalEditor.isBlockBuffer()) {
-                blockPaste();
-                return;
+                blockPaste()
+                return
             }
             if (moveBlockW != 0) {
-                blockFinishMove();
-                return;
+                blockFinishMove()
+                return
             }
         }
-        var tile = getTileAt(cursorX, cursorY, false);
-        var board = getBoardAt(cursorX, cursorY);
-        int x = cursorX % boardW;
-        int y = cursorY % boardH;
+        val tile = getTileAt(cursorX, cursorY, false)
+        val board = getBoardAt(cursorX, cursorY)
+        val x = cursorX % boardW
+        val y = cursorY % boardH
         if (tile != null && board != null) {
-            openTileEditor(tile, board, x, y, resultTile -> {
+            openTileEditor(tile, board, x, y, TileEditorCallback { resultTile: Tile ->
                 // Put this tile down, subject to the following:
                 // - Any stat IDs on this tile that matches a stat ID on the destination tile go in in-place
                 // - If there are stats on the destination tile that weren't replaced, delete them
                 // - If there are stats on this tile that didn't go in, add them to the end
-
-                setStats(board, cursorX / boardW * boardW, cursorY / boardH * boardH, x, y, resultTile.getStats());
-                addRedraw(cursorX, cursorY, cursorX, cursorY);
-                board.setTileRaw(x, y, resultTile.getId(), resultTile.getCol());
-                if (grab) setBufferTile(getTileAt(cursorX, cursorY, true));
-
-                afterModification();
-            }, advanced);
+                setStats(board, cursorX / boardW * boardW, cursorY / boardH * boardH, x, y, resultTile.stats)
+                addRedraw(cursorX, cursorY, cursorX, cursorY)
+                board.setTileRaw(x, y, resultTile.id, resultTile.col)
+                if (grab) bufferTile = getTileAt(cursorX, cursorY, true)
+                afterModification()
+            }, advanced)
         }
     }
 
-    private void operationModifyBuffer(boolean advanced) {
-        openTileEditor(getBufferTile(), currentBoard, -1, -1, resultTile -> {
-            setBufferTile(resultTile);
-            afterUpdate();
-        }, advanced);
+    private fun operationModifyBuffer(advanced: Boolean) {
+        openTileEditor(bufferTile!!, currentBoard, -1, -1, TileEditorCallback { resultTile: Tile? ->
+            bufferTile = resultTile
+            afterUpdate()
+        }, advanced)
     }
 
-    private void operationStatList() {
-        Board board = getBoardAt(cursorX, cursorY);
-        int boardX = cursorX / boardW * boardW;
-        int boardY = cursorY / boardH * boardH;
-        if (board == null) return;
-        String[] contextOptions=new String[] {
-                "Modify",
-                "Modify (advanced)",
-                "Move to 1",
-                "Move up",
-                "Move down",
-                "Move to end"
-        };
-        KeyStroke upStroke = Util.getKeyStroke(globalEditor,"COMMA");
-        if(upStroke!=null) {
-            String upString = Util.keyStrokeString(upStroke);
-            if(upString!=null && !upString.isEmpty()) {
-                contextOptions[3]=contextOptions[3]+" ("+upString+")";
-            } else { upStroke = null; }
-        }
-        KeyStroke downStroke = Util.getKeyStroke(globalEditor,"PERIOD");
-        if(downStroke!=null) {
-            String downString = Util.keyStrokeString(downStroke);
-            if(downString!=null && !downString.isEmpty()) {
-                contextOptions[4]=contextOptions[4]+" ("+downString+")";
-            } else { downStroke=null; }
-        }
-
-        new StatSelector(this, board, e -> {
-            int val = StatSelector.getStatIdx(e.getActionCommand());
-            int option = StatSelector.getOption(e.getActionCommand());
-            var stat = board.getStat(val);
-
-            switch(option) {
-                case 0: case 1:
-                    int x = stat.getX() - 1;
-                    int y = stat.getY() - 1;
-
-                    openTileEditor(board.getStatsAt(x, y), board, x, y, resultTile -> {
-                        setStats(board, boardX, boardY, x, y, resultTile.getStats());
-                        if (resultTile.getId() != -1) {
-                            addRedraw(x + boardX, y + boardY, x + boardX, y + boardY);
-                            board.setTileRaw(x, y, resultTile.getId(), resultTile.getCol());
-                        }
-                        ((StatSelector) (e.getSource())).dataChanged();
-                        afterModification();
-                    }, option == 1, val);
-                    break;
-                case 2: case 3: case 4: case 5:
-                    int destination;
-                    switch(option) {
-                        case 2: destination=1; break;
-                        case 3: destination=val-1; break;
-                        case 4: destination=val+1; break;
-                        default: destination=board.getStatCount()-1;
-                    }
-                    if(moveStatTo(board,val,destination)) {
-                        ((StatSelector) (e.getSource())).dataChanged();
-                        ((StatSelector) (e.getSource())).focusStat(destination);
-                        afterModification();
-                    }
-                    break;
+    private fun operationStatList() {
+        val board = getBoardAt(cursorX, cursorY)
+        val boardX = cursorX / boardW * boardW
+        val boardY = cursorY / boardH * boardH
+        if (board == null) return
+        val contextOptions = arrayOf(
+            "Modify",
+            "Modify (advanced)",
+            "Move to 1",
+            "Move up",
+            "Move down",
+            "Move to end"
+        )
+        var upStroke: KeyStroke? = getKeyStroke(globalEditor, "COMMA")
+        if (upStroke != null) {
+            val upString = keyStrokeString(upStroke)
+            if (upString != null && !upString.isEmpty()) {
+                contextOptions[3] = contextOptions[3] + " (" + upString + ")"
+            } else {
+                upStroke = null
             }
-        }, contextOptions, upStroke, downStroke);
-    }
+        }
+        var downStroke: KeyStroke? = getKeyStroke(globalEditor, "PERIOD")
+        if (downStroke != null) {
+            val downString = keyStrokeString(downStroke)
+            if (downString != null && !downString.isEmpty()) {
+                contextOptions[4] = contextOptions[4] + " (" + downString + ")"
+            } else {
+                downStroke = null
+            }
+        }
 
-    private boolean moveStatTo(Board board, int src, int destination) {
-        if(src<1) { return false; }
-        if(destination<1) { destination=1; }
-        int length=board.getStatCount();
-        if(destination>=length) { destination=length-1; }
-        if(destination==src) { return false; }
-        board.moveStatTo(src,destination);
-        return true;
-    }
+        StatSelector(this, board, { e: ActionEvent ->
+            val `val` = getStatIdx(e.actionCommand)
+            val option = getOption(e.actionCommand)
+            val stat = board.getStat(`val`)
+            when (option) {
+                0, 1 -> {
+                    val x = stat!!.x - 1
+                    val y = stat.y - 1
 
+                    openTileEditor(board.getStatsAt(x, y), board, x, y, TileEditorCallback { resultTile: Tile ->
+                        setStats(board, boardX, boardY, x, y, resultTile.stats)
+                        if (resultTile.id != -1) {
+                            addRedraw(x + boardX, y + boardY, x + boardX, y + boardY)
+                            board.setTileRaw(x, y, resultTile.id, resultTile.col)
+                        }
+                        (e.source as StatSelector).dataChanged()
+                        afterModification()
+                    }, option == 1, `val`)
+                }
 
-    private void openTileEditor(Tile tile, Board board, int x, int y, TileEditorCallback callback, boolean advanced)
-    {
-        new TileEditor(this, board, tile, null, callback, x, y, advanced, -1, false);
-    }
-    private void openTileEditorExempt(Tile tile, Board board, int x, int y, TileEditorCallback callback, boolean advanced)
-    {
-        new TileEditor(this, board, tile, null, callback, x, y, advanced, -1, true);
-    }
-
-    private void openTileEditor(java.util.List<Stat> stats, Board board, int x, int y, TileEditorCallback callback, boolean advanced, int selected)
-    {
-        new TileEditor(this, board, null, stats, callback, x, y, advanced, selected, false);
-    }
-
-    private void setStats(Board board, int bx, int by, int x, int y, java.util.List<Stat> stats) {
-        // If any stats move, invalidate the entire board
-        boolean invalidateAll = false;
-
-        var destStats = board.getStatsAt(x, y);
-        ArrayList<Integer> statsToDelete = new ArrayList<>();
-        boolean[] statsAdded = new boolean[stats.size()];
-        boolean mustFinalise = false;
-
-        for (var destStat : destStats) {
-            Stat replacementStat = null;
-            boolean replacementStatMoved = false;
-            for (int i = 0; i < stats.size(); i++) {
-                var stat = stats.get(i);
-                if (stat.getStatId() == destStat.getStatId() && stat.getStatId() != -1) {
-                    if (stat.getX() != destStat.getX() || stat.getY() != destStat.getY()) {
-                        replacementStatMoved = true;
+                2, 3, 4, 5 -> {
+                    val destination = when (option) {
+                        2 -> 1
+                        3 -> `val` - 1
+                        4 -> `val` + 1
+                        else -> board.statCount - 1
                     }
-                    replacementStat = stat;
-                    statsAdded[i] = true;
-                    break;
+                    if (moveStatTo(board, `val`, destination)) {
+                        (e.source as StatSelector).dataChanged()
+                        (e.source as StatSelector).focusStat(destination)
+                        afterModification()
+                    }
+                }
+            }
+        }, contextOptions, upStroke, downStroke)
+    }
+
+    private fun moveStatTo(board: Board, src: Int, destination: Int): Boolean {
+        var destination = destination
+        if (src < 1) {
+            return false
+        }
+        if (destination < 1) {
+            destination = 1
+        }
+        val length = board.statCount
+        if (destination >= length) {
+            destination = length - 1
+        }
+        if (destination == src) {
+            return false
+        }
+        board.moveStatTo(src, destination)
+        return true
+    }
+
+
+    private fun openTileEditor(
+        tile: Tile,
+        board: Board?,
+        x: Int,
+        y: Int,
+        callback: TileEditorCallback,
+        advanced: Boolean
+    ) {
+        TileEditor(this, board!!, tile, null, callback, x, y, advanced, -1, false)
+    }
+
+    private fun openTileEditorExempt(
+        tile: Tile,
+        board: Board?,
+        x: Int,
+        y: Int,
+        callback: TileEditorCallback,
+        advanced: Boolean
+    ) {
+        TileEditor(this, board!!, tile, null, callback, x, y, advanced, -1, true)
+    }
+
+    private fun openTileEditor(
+        stats: List<Stat>,
+        board: Board,
+        x: Int,
+        y: Int,
+        callback: TileEditorCallback,
+        advanced: Boolean,
+        selected: Int
+    ) {
+        TileEditor(this, board, null, stats, callback, x, y, advanced, selected, false)
+    }
+
+    private fun setStats(board: Board, bx: Int, by: Int, x: Int, y: Int, stats: List<Stat>) {
+        // If any stats move, invalidate the entire board
+        var invalidateAll = false
+
+        val destStats = board.getStatsAt(x, y)
+        val statsToDelete = ArrayList<Int>()
+        val statsAdded = BooleanArray(stats.size)
+        var mustFinalise = false
+
+        for (destStat in destStats) {
+            var replacementStat: Stat? = null
+            var replacementStatMoved = false
+            for (i in stats.indices) {
+                val stat = stats[i]
+                if (stat.statId == destStat.statId && stat.statId != -1) {
+                    if (stat.x != destStat.x || stat.y != destStat.y) {
+                        replacementStatMoved = true
+                    }
+                    replacementStat = stat
+                    statsAdded[i] = true
+                    break
                 }
             }
             if (replacementStat != null) {
-                if (board.directReplaceStat(destStat.getStatId(), replacementStat)) {
-                    if (replacementStatMoved) invalidateAll = true;
-                    mustFinalise = true;
+                if (board.directReplaceStat(destStat.statId, replacementStat)) {
+                    if (replacementStatMoved) invalidateAll = true
+                    mustFinalise = true
                 }
             } else {
-                statsToDelete.add(destStat.getStatId());
+                statsToDelete.add(destStat.statId)
             }
         }
 
         if (board.directDeleteStats(statsToDelete)) {
-            mustFinalise = true;
+            mustFinalise = true
         }
 
-        for (int i = 0; i < stats.size(); i++) {
+        for (i in stats.indices) {
             if (!statsAdded[i]) {
-                var stat = stats.get(i);
-                if (stat.getX() != x + 1 || stat.getY() != y + 1) invalidateAll = true;
-                board.directAddStat(stat);
-                mustFinalise = true;
+                val stat = stats[i]
+                if (stat.x != x + 1 || stat.y != y + 1) invalidateAll = true
+                board.directAddStat(stat)
+                mustFinalise = true
             }
         }
 
 
 
         if (mustFinalise) {
-            board.finaliseStats();
+            board.finaliseStats()
         }
         if (invalidateAll) {
-            addRedraw(bx + 1, by + 1, bx + boardW - 2, by + boardH - 2);
+            addRedraw(bx + 1, by + 1, bx + boardW - 2, by + boardH - 2)
         }
     }
 
-    private Board getBoardAt(int x, int y) {
+    private fun getBoardAt(x: Int, y: Int): Board? {
         if (x < 0 || y < 0 || x >= width || y >= height) {
-            throw new IndexOutOfBoundsException("Attempted to getBoardAt() coordinate off map");
+            throw IndexOutOfBoundsException("Attempted to getBoardAt() coordinate off map")
         }
-        int gridX = x / boardW;
-        int gridY = y / boardH;
-        int boardIdx = grid[gridY][gridX];
-        if (boardIdx == -1) return null;
-        return boards.get(boardIdx);
+        val gridX = x / boardW
+        val gridY = y / boardH
+        val boardIdx = grid[gridY][gridX]
+        if (boardIdx == -1) return null
+        return boards[boardIdx]
     }
 
     /**
      *
      * @param putMode PUT_DEFAULT or PUT_PUSH_DOWN or PUT_REPLACE_BOTH
      */
-    private void putTileAt(int x, int y, Tile tile, int putMode) {
-        var board = putTileDeferred(x, y, tile, putMode);
-        if (board != null) board.finaliseStats();
+    private fun putTileAt(x: Int, y: Int, tile: Tile?, putMode: Int) {
+        val board = putTileDeferred(x, y, tile, putMode)
+        board?.finaliseStats()
     }
 
     /**
      *
      * @param putMode PUT_DEFAULT or PUT_PUSH_DOWN or PUT_REPLACE_BOTH
      */
-    private Board putTileDeferred(int x, int y, Tile tile, int putMode) {
-        var board = getBoardAt(x, y);
-        var currentTile = getTileAt(x, y, false);
+    private fun putTileDeferred(x: Int, y: Int, tile: Tile?, putMode: Int): Board? {
+        var putMode = putMode
+        val board = getBoardAt(x, y)
+        var currentTile = getTileAt(x, y, false)
         if (board != null && currentTile != null && tile != null) {
-            Tile placingTile = tile.clone();
+            val placingTile = tile.clone()
             // First, we will not allow putTileAt to erase stat 0
-            var currentTileStats = currentTile.getStats();
-            if (currentTileStats.size() > 0) {
-                if (currentTileStats.get(0).getStatId() == 0) {
-                    return board;
+            val currentTileStats: List<Stat> = currentTile.stats
+            if (currentTileStats.size > 0) {
+                if (currentTileStats[0].statId == 0) {
+                    return board
                 }
             }
 
             if (putMode == PUT_DEFAULT || putMode == PUT_PUSH_DOWN) {
-                var tileStats = placingTile.getStats();
+                val tileStats: List<Stat> = placingTile.stats
                 // Only check if we have exactly 1 stat
-                if (tileStats.size() == 1) {
-                    var tileStat = tileStats.get(0);
+                if (tileStats.size == 1) {
+                    val tileStat = tileStats[0]
 
                     if (putMode == PUT_DEFAULT) {
                         // If the tile currently there is floor, we will push it down
-                        if (ZType.isFloor(worldData.isSuperZZT(), currentTile)) {
-                            putMode = PUT_PUSH_DOWN;
+                        if (ZType.isFloor(worldData!!.isSuperZZT, currentTile)) {
+                            putMode = PUT_PUSH_DOWN
                         } else {
                             // Not a floor, so does it have one stat? If so, still push down (we will use its uid/uco)
-                            if (currentTileStats.size() == 1) {
-                                putMode = PUT_PUSH_DOWN;
+                            if (currentTileStats.size == 1) {
+                                putMode = PUT_PUSH_DOWN
                                 // replace currentTile with what was under it
-                                currentTile = new Tile(currentTileStats.get(0).getUid(), currentTileStats.get(0).getUco());
+                                currentTile = Tile(currentTileStats[0].uid, currentTileStats[0].uco)
                             }
                         }
                     }
                     if (putMode == PUT_PUSH_DOWN) {
-                        if (placingTile.getCol() < 16) {
-                            placingTile.setCol((currentTile.getCol() & 0x70) | placingTile.getCol());
+                        if (placingTile.col < 16) {
+                            placingTile.col = (currentTile.col and 0x70) or placingTile.col
                         }
-                        tileStat.setUid(currentTile.getId());
-                        tileStat.setUco(currentTile.getCol());
+                        tileStat.uid = currentTile.id
+                        tileStat.uco = currentTile.col
                     }
                 }
-
             }
             // Are we placing stat 0?
-            if (placingTile.getStats().size() > 0) {
-                if (placingTile.getStats().get(0).getStatId() == 0 ||
-                        placingTile.getStats().get(0).isPlayer()) {
+            if (!placingTile.stats.isEmpty()) {
+                if (placingTile.stats[0].statId == 0 ||
+                    placingTile.stats[0].isPlayer
+                ) {
                     // Find the stat 0 on this board
-                    var stat0 = board.getStat(0);
-                    var oldStat0x = stat0.getX() - 1;
-                    var oldStat0y = stat0.getY() - 1;
+                    val stat0 = board.getStat(0)
+                    val oldStat0x = stat0!!.x - 1
+                    val oldStat0y = stat0.y - 1
                     // If stat 0 isn't on the board, nevermind!
                     if (oldStat0x >= 0 && oldStat0x < boardW && oldStat0y >= 0 && oldStat0y < boardH) {
                         // See what other stats are there
-                        var oldStat0TileStats = board.getStatsAt(oldStat0x, oldStat0y);
-                        if (oldStat0TileStats.size() == 1) {
+                        val oldStat0TileStats = board.getStatsAt(oldStat0x, oldStat0y)
+                        if (oldStat0TileStats.size == 1) {
                             // Once we move stat0 there will be no other stats, so erase this
-                            board.setTileRaw(oldStat0x, oldStat0y, stat0.getUid(), stat0.getUco());
-                            int bx = x / boardW * boardW;
-                            int by = y / boardH * boardH;
-                            addRedraw(oldStat0x + bx, oldStat0y + by, oldStat0x + bx, oldStat0y + by);
+                            board.setTileRaw(oldStat0x, oldStat0y, stat0.uid, stat0.uco)
+                            val bx = x / boardW * boardW
+                            val by = y / boardH * boardH
+                            addRedraw(oldStat0x + bx, oldStat0y + by, oldStat0x + bx, oldStat0y + by)
                         } // Otherwise there are stats left, so leave the tile alone
                     }
                     // Fix uid/uco
-                    stat0.setUid(placingTile.getStats().get(0).getUid());
-                    stat0.setUco(placingTile.getStats().get(0).getUco());
+                    stat0.uid = placingTile.stats[0].uid
+                    stat0.uco = placingTile.stats[0].uco
                     // Place the tile here, but without stat0
-                    placingTile.getStats().remove(0);
-                    addRedraw(x, y, x, y);
-                    board.setTileDirect(x % boardW, y % boardH, placingTile);
+                    placingTile.stats.removeAt(0)
+                    addRedraw(x, y, x, y)
+                    board.setTileDirect(x % boardW, y % boardH, placingTile)
                     // Then move stat0 to the cursor
-                    stat0.setX(x % boardW + 1);
-                    stat0.setY(y % boardH + 1);
+                    stat0.x = x % boardW + 1
+                    stat0.y = y % boardH + 1
 
-                    return board;
+                    return board
                 }
             }
-            addRedraw(x, y, x, y);
-            board.setTileDirect(x % boardW, y % boardH, placingTile);
+            addRedraw(x, y, x, y)
+            board.setTileDirect(x % boardW, y % boardH, placingTile)
         }
-        return board;
+        return board
     }
 
-    private void updateCurrentBoard() {
-        cursorX = Util.clamp(cursorX, 0, width - 1);
-        cursorY = Util.clamp(cursorY, 0, height - 1);
-        int gridX = cursorX / boardW;
-        int gridY = cursorY / boardH;
-        setCurrentBoard(grid[gridY][gridX]);
-        String worldName = path == null ? "new world" : path.getName();
-        String boardInfo;
-        if (currentBoard != null) {
-            boardInfo = boardInfo = "Board #" + currentBoardIdx + " :: " + CP437.toUnicode(currentBoard.getName());
+    private fun updateCurrentBoard() {
+        cursorX = clamp(cursorX, 0, width - 1)
+        cursorY = clamp(cursorY, 0, height - 1)
+        val gridX = cursorX / boardW
+        val gridY = cursorY / boardH
+        setCurrentBoard(grid[gridY][gridX])
+        val worldName = if (path == null) "new world" else path!!.name
+        val boardInfo = if (currentBoard != null) {
+            "Board #" + boardIdx + " :: " + toUnicode(currentBoard!!.getName())
         } else {
-            boardInfo = "(no board)";
+            "(no board)"
         }
-        frame.setTitle("zloom2 [" + worldName + "] :: " + boardInfo + (isDirty() ? "*" : ""));
+        frame!!.title = "zloom2 [" + worldName + "] :: " + boardInfo + (if (isDirty) "*" else "")
     }
-    private Tile getTileAt(int x, int y, boolean copy) {
+
+    private fun getTileAt(x: Int, y: Int, copy: Boolean): Tile? {
         if (x < 0 || y < 0 || x >= width || y >= height) {
-            throw new IndexOutOfBoundsException("Attempted to read coordinate off map");
+            throw IndexOutOfBoundsException("Attempted to read coordinate off map")
         }
-        int boardX = x % boardW;
-        int boardY = y % boardH;
-        var board = getBoardAt(x, y);
-        if (board == null) {
-            return null;
-        } else {
-            return board.getTile(boardX, boardY, copy);
-        }
-    }
-    private void swapTile(int xFrom, int yFrom, int xTo, int yTo)
-    {
-        // Check if these are on the same board
-        var fromBoard = getBoardAt(xFrom, yFrom);
-        var board = getBoardAt(xTo, yTo);
-        if (fromBoard == board) {
-            // Move stats
-            int bxFrom = xFrom % boardW;
-            int byFrom = yFrom % boardH;
-            int bxTo = xTo & boardW;
-            int byTo = yTo & boardH;
-            var fromTileCol = board.getTileCol(bxFrom, byFrom);
-            var fromTileId = board.getTileId(bxFrom, byFrom);
-            var toTileCol = board.getTileCol(bxFrom, byFrom);
-            var toTileId = board.getTileId(bxFrom, byFrom);
-            board.setTileRaw(bxTo, byTo, fromTileId, fromTileCol);
-            board.setTileRaw(bxFrom, byFrom, toTileId, toTileCol);
-            for (int i = 0; i < board.getStatCount(); i++) {
-                var stat = board.getStat(i);
-                if (stat.getX() == bxTo + 1 && stat.getY() == byTo + 1) {
-                    stat.setX(bxFrom + 1);
-                    stat.setY(byFrom + 1);
-                } else if (stat.getX() == bxFrom + 1 && stat.getY() == byFrom + 1) {
-                    stat.setX(bxTo + 1);
-                    stat.setY(byTo + 1);
-                }
-            }
-        } else {
-            var fromTile = getTileAt(xFrom, yFrom, true);
-            var toTile = getTileAt(xTo, yTo, true);
-            putTileAt(xTo, yTo, fromTile, PUT_REPLACE_BOTH);
-            putTileAt(xFrom, yFrom, toTile, PUT_REPLACE_BOTH);
-        }
+        val boardX = x % boardW
+        val boardY = y % boardH
+        val board = getBoardAt(x, y)
+        return board?.getTile(boardX, boardY, copy)
     }
 
-    private void afterModification() {
-        drawBoard();
-        undoDirty = true;
-        afterUpdate();
+    private fun afterModification() {
+        drawBoard()
+        undoDirty = true
+        afterUpdate()
     }
 
-    private void scrollToCursor() {
-        int w, h, x, y;
+    private fun scrollToCursor() {
+        var w: Int
+        var h: Int
+        var x: Int
+        var y: Int
         if (centreView) {
-            canvas.revalidate();
-            var visibleRect = canvas.getVisibleRect();
-            w = Util.clamp(visibleRect.width, 0, canvas.getCharW(width));
-            h = Util.clamp(visibleRect.height, 0, canvas.getCharH(height));
-            int charW = canvas.getCharW(1);
-            int charH = canvas.getCharH(1);
-            x = Math.max(0, canvas.getCharW(cursorX) + (charW - w) / 2);
-            y = Math.max(0, canvas.getCharH(cursorY) + (charH - h) / 2);
-            centreView = false;
+            canvas!!.revalidate()
+            val visibleRect = canvas!!.visibleRect
+            w = clamp(visibleRect.width, 0, canvas!!.getCharW(width))
+            h = clamp(visibleRect.height, 0, canvas!!.getCharH(height))
+            val charW = canvas!!.getCharW(1)
+            val charH = canvas!!.getCharH(1)
+            x = max(0.0, (canvas!!.getCharW(cursorX) + (charW - w) / 2).toDouble()).toInt()
+            y = max(0.0, (canvas!!.getCharH(cursorY) + (charH - h) / 2).toDouble()).toInt()
+            centreView = false
         } else {
-            w = canvas.getCharW(1);
-            h = canvas.getCharH(1);
-            x = canvas.getCharW(cursorX);
-            y = canvas.getCharH(cursorY);
+            w = canvas!!.getCharW(1)
+            h = canvas!!.getCharH(1)
+            x = canvas!!.getCharW(cursorX)
+            y = canvas!!.getCharH(cursorY)
 
             // Expand this slightly
-            final int EXPAND_X = 4;
-            final int EXPAND_Y = 4;
-            x -= canvas.getCharW(EXPAND_X);
-            y -= canvas.getCharH(EXPAND_Y);
-            w += canvas.getCharW(EXPAND_X * 2);
-            h += canvas.getCharH(EXPAND_Y * 2);
+            val EXPAND_X = 4
+            val EXPAND_Y = 4
+            x -= canvas!!.getCharW(EXPAND_X)
+            y -= canvas!!.getCharH(EXPAND_Y)
+            w += canvas!!.getCharW(EXPAND_X * 2)
+            h += canvas!!.getCharH(EXPAND_Y * 2)
         }
-        var rect = new Rectangle(x, y, w, h);
-        canvas.scrollRectToVisible(rect);
+        val rect = Rectangle(x, y, w, h)
+        canvas!!.scrollRectToVisible(rect)
     }
 
-    private void afterChangeShowing() {
-        invalidateCache();
-        afterModification();
+    private fun afterChangeShowing() {
+        invalidateCache()
+        afterModification()
     }
 
-    private void afterUpdate() {
-        GlobalEditor.updateTimestamp();
+    private fun afterUpdate() {
+        updateTimestamp()
         if (undoDirty && mouseState != 1 && !fancyFillDialog) {
-            addUndo();
+            addUndo()
         }
-        validGracePeriod = false;
 
-        updateCurrentBoard();
-        scrollToCursor();
-        int boardX = cursorX % boardW;
-        int boardY = cursorY % boardH;
+        updateCurrentBoard()
+        scrollToCursor()
+        val boardX = cursorX % boardW
+        val boardY = cursorY % boardH
 
-        String s = "";
+        var s = ""
         if (currentBoard != null) {
-            int boardNameFieldLen = 22;
-            if (currentBoardIdx < 100) boardNameFieldLen++;
-            if (currentBoardIdx < 10) boardNameFieldLen++;
-            var boardName = CP437.toUnicode(currentBoard.getName());
-            boardNameFieldLen = Math.min(boardNameFieldLen, boardName.length());
-            String limitedName = boardName.substring(0, boardNameFieldLen);
+            var boardNameFieldLen = 22
+            if (boardIdx < 100) boardNameFieldLen++
+            if (boardIdx < 10) boardNameFieldLen++
+            val boardName = toUnicode(currentBoard!!.getName())
+            boardNameFieldLen = min(boardNameFieldLen.toDouble(), boardName.length.toDouble()).toInt()
+            val limitedName = boardName.substring(0, boardNameFieldLen)
 
-            s = String.format("Stats: %3d/%d   X/Y: %d,%d\n" +
-                            "%d: %s\nB.Mem: %5d  ",
-                    currentBoard.getStatCount() - 1, !worldData.isSuperZZT() ? 150 : 128,
-                    boardX + 1, boardY + 1,
-                    currentBoardIdx, limitedName, currentBoard.getCurrentSize());
+            s = String.format(
+                """
+    Stats: %3d/%d   X/Y: %d,%d
+    %d: %s
+    B.Mem: %5d  
+    """.trimIndent(),
+                currentBoard!!.statCount - 1, if (!worldData!!.isSuperZZT) 150 else 128,
+                boardX + 1, boardY + 1,
+                boardIdx, limitedName, currentBoard!!.currentSize
+            )
         }
 
-        s += String.format("W.Mem: %6d", getWorldSize());
+        s += String.format("W.Mem: %6d", worldSize)
 
-        infoBox.setText(s);
+        infoBox!!.text = s
 
-        updateEditingMode();
+        updateEditingMode()
 
-        bufferPane.removeAll();
-        bufferPaneContents = bufferPane;
-        blinkingImageIcons.clear();
-        var cursorTile = getTileAt(cursorX, cursorY, false);
-        addTileInfoDisplay("Cursor", cursorTile);
-        addTileInfoDisplay("Buffer", getBufferTile());
-        bufferPane.repaint();
+        bufferPane!!.removeAll()
+        bufferPaneContents = bufferPane
+        blinkingImageIcons.clear()
+        val cursorTile = getTileAt(cursorX, cursorY, false)
+        addTileInfoDisplay("Cursor", cursorTile)
+        addTileInfoDisplay("Buffer", bufferTile)
+        bufferPane!!.repaint()
     }
 
-    private void updateEditingMode() {
-        var enter = Util.keyStrokeString(Util.getKeyStroke(globalEditor, "Enter"));;
-        if (textEntry) editingModePane.display(Color.YELLOW, "Type to place text");
-        else if (blockStartX != -1) editingModePane.display(new Color[]{new Color(0, 127, 255), Color.CYAN}, enter + " on other corner");
-        else if (drawing) editingModePane.display(Color.GREEN, "Drawing");
-        else if (globalEditor.isBlockBuffer() || moveBlockW != 0) editingModePane.display(new Color[]{Color.ORANGE, Color.RED}, enter + " to place block");
-        else if (currentlyShowing == SHOW_STATS) editingModePane.display(new Color[]{Color.YELLOW, Color.RED}, "Showing Stats");
-        else if (currentlyShowing == SHOW_OBJECTS) editingModePane.display(new Color[]{Color.GREEN, Color.BLUE}, "Showing Objects");
-        else if (currentlyShowing == SHOW_INVISIBLES) editingModePane.display(new Color[]{Color.CYAN, Color.MAGENTA}, "Showing Invisibles");
-        else if (currentlyShowing == SHOW_EMPTIES) editingModePane.display(new Color[]{Color.LIGHT_GRAY, Color.GRAY}, "Showing Empties");
-        else if (currentlyShowing == SHOW_FAKES) editingModePane.display(new Color[]{Color.LIGHT_GRAY, Color.GRAY}, "Showing Fakes");
-        else if (currentlyShowing == SHOW_EMPTEXTS) editingModePane.display(new Color[]{Color.LIGHT_GRAY, Color.GRAY}, "Showing Empties as Text");
-        else editingModePane.display(Color.BLUE, "Editing");
+    private fun updateEditingMode() {
+        val enter = keyStrokeString(getKeyStroke(globalEditor, "Enter"))
+        if (textEntry) editingModePane!!.display(Color.YELLOW, "Type to place text")
+        else if (blockStartX != -1) editingModePane!!.display(
+            arrayOf(Color(0, 127, 255), Color.CYAN),
+            "$enter on other corner"
+        )
+        else if (drawing) editingModePane!!.display(Color.GREEN, "Drawing")
+        else if (globalEditor.isBlockBuffer() || moveBlockW != 0) editingModePane!!.display(
+            arrayOf(
+                Color.ORANGE,
+                Color.RED
+            ), "$enter to place block"
+        )
+        else if (currentlyShowing == SHOW_STATS) editingModePane!!.display(
+            arrayOf(Color.YELLOW, Color.RED),
+            "Showing Stats"
+        )
+        else if (currentlyShowing == SHOW_OBJECTS) editingModePane!!.display(
+            arrayOf(Color.GREEN, Color.BLUE),
+            "Showing Objects"
+        )
+        else if (currentlyShowing == SHOW_INVISIBLES) editingModePane!!.display(
+            arrayOf(Color.CYAN, Color.MAGENTA),
+            "Showing Invisibles"
+        )
+        else if (currentlyShowing == SHOW_EMPTIES) editingModePane!!.display(
+            arrayOf(Color.LIGHT_GRAY, Color.GRAY),
+            "Showing Empties"
+        )
+        else if (currentlyShowing == SHOW_FAKES) editingModePane!!.display(
+            arrayOf(Color.LIGHT_GRAY, Color.GRAY),
+            "Showing Fakes"
+        )
+        else if (currentlyShowing == SHOW_EMPTEXTS) editingModePane!!.display(
+            arrayOf(Color.LIGHT_GRAY, Color.GRAY),
+            "Showing Empties as Text"
+        )
+        else editingModePane!!.display(Color.BLUE, "Editing")
     }
 
-    private JLabel createLabel(Tile cursorTile) {
-        boolean szzt = worldData.isSuperZZT();
-        int chr = ZType.getChar(szzt, cursorTile);
-        int col = ZType.getColour(szzt, cursorTile);
-        String name = ZType.getName(szzt, cursorTile.getId());
-        char chBg = (char)((cursorTile.getCol()) | (32 << 8));
-        char chFg = (char)((cursorTile.getCol()) | (254 << 8));
-        String pattern = "@ " + chBg + chFg + chBg;
-        var imgBlinkOff = canvas.extractCharImage(chr, col, 2, 2, false, pattern);
-        var imgBlinkOn = canvas.extractCharImage(chr, col, 2, 2, true, pattern);
-        var tileLabelIcon = new BlinkingImageIcon(imgBlinkOff, imgBlinkOn);
+    private fun createLabel(cursorTile: Tile): JLabel {
+        val szzt = worldData!!.isSuperZZT
+        val chr = ZType.getChar(szzt, cursorTile)
+        val col = ZType.getColour(szzt, cursorTile)
+        val name = ZType.getName(szzt, cursorTile.id)
+        val chBg = ((cursorTile.col) or (32 shl 8)).toChar()
+        val chFg = ((cursorTile.col) or (254 shl 8)).toChar()
+        val pattern = "@ $chBg$chFg$chBg"
+        val imgBlinkOff = canvas!!.extractCharImage(chr, col, 2, 2, false, pattern)
+        val imgBlinkOn = canvas!!.extractCharImage(chr, col, 2, 2, true, pattern)
+        val tileLabelIcon = BlinkingImageIcon(imgBlinkOff, imgBlinkOn)
 
-        var tileLabel = new JLabel();
-        tileLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        tileLabel.setIcon(tileLabelIcon);
-        tileLabel.setText(name);
-        blinkingImageIcons.add(tileLabelIcon);
+        val tileLabel = JLabel()
+        tileLabel.font = Font(Font.SANS_SERIF, Font.BOLD, 14)
+        tileLabel.icon = tileLabelIcon
+        tileLabel.text = name
+        blinkingImageIcons.add(tileLabelIcon)
 
-        return tileLabel;
+        return tileLabel
     }
 
-    private void addTileInfoDisplay(String title, Tile cursorTile) {
-        if (cursorTile == null) return;
-        var tileInfoPanel = new JPanel(new BorderLayout());
-        var tileLabel = createLabel(cursorTile);
+    private fun addTileInfoDisplay(title: String, cursorTile: Tile?) {
+        if (cursorTile == null) return
+        val tileInfoPanel = JPanel(BorderLayout())
+        val tileLabel = createLabel(cursorTile)
 
         //tileInfoPanel.setText("<html>Test</html>");
         //tileInfoPanel.add(label);
-        tileInfoPanel.setBorder(BorderFactory.createTitledBorder(title));
-        tileInfoPanel.add(tileLabel, BorderLayout.NORTH);
-        if (!cursorTile.getStats().isEmpty()) {
-            var tileInfoBox = new JLabel();
-            var tileInfo = new StringBuilder();
-            tileInfo.append("<html>");
+        tileInfoPanel.border = BorderFactory.createTitledBorder(title)
+        tileInfoPanel.add(tileLabel, BorderLayout.NORTH)
+        if (!cursorTile.stats.isEmpty()) {
+            val tileInfoBox = JLabel()
+            val tileInfo = StringBuilder()
+            tileInfo.append("<html>")
 
-            boolean firstStat = true;
+            var firstStat = true
 
-            for (var stat : cursorTile.getStats()) {
+            for (stat in cursorTile.stats) {
                 if (!firstStat) {
-                    tileInfo.append("<hr></hr>");
+                    tileInfo.append("<hr></hr>")
                 }
-                firstStat = false;
+                firstStat = false
 
-                tileInfo.append("<table>");
-                tileInfo.append("<tr>");
-                int statId = stat.getStatId();
+                tileInfo.append("<table>")
+                tileInfo.append("<tr>")
+                val statId = stat.statId
 
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%s</td>", "Stat ID:", statId != -1 ? statId : ""));
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Cycle:", stat.getCycle()));
-                tileInfo.append("</tr><tr>");
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "X-Step:", stat.getStepX()));
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Y-Step:", stat.getStepY()));
-                tileInfo.append("</tr><tr>");
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Param 1:", stat.getP1()));
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Follower:", stat.getFollower()));
-                tileInfo.append("</tr><tr>");
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Param 2:", stat.getP2()));
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Leader:", stat.getLeader()));
-                tileInfo.append("</tr><tr>");
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Param 3:", stat.getP3()));
-                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Instr. Ptr:", stat.getIp()));
-                tileInfo.append("</tr><tr>");
+                tileInfo.append(
+                    String.format(
+                        "<th align=\"left\">%s</th><td>%s</td>",
+                        "Stat ID:",
+                        if (statId != -1) statId else ""
+                    )
+                )
+                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Cycle:", stat.cycle))
+                tileInfo.append("</tr><tr>")
+                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "X-Step:", stat.stepX))
+                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Y-Step:", stat.stepY))
+                tileInfo.append("</tr><tr>")
+                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Param 1:", stat.p1))
+                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Follower:", stat.follower))
+                tileInfo.append("</tr><tr>")
+                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Param 2:", stat.p2))
+                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Leader:", stat.leader))
+                tileInfo.append("</tr><tr>")
+                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Param 3:", stat.p3))
+                tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Instr. Ptr:", stat.ip))
+                tileInfo.append("</tr><tr>")
                 // Code
-                int codeLen = stat.getCodeLength();
+                val codeLen = stat.codeLength
                 if (codeLen != 0) {
                     if (codeLen >= 0) {
-                        tileInfo.append(String.format("<th colspan=\"2\" align=\"left\">%s</th><td colspan=\"2\">%d</td>", "Code length:", codeLen));
+                        tileInfo.append(
+                            String.format(
+                                "<th colspan=\"2\" align=\"left\">%s</th><td colspan=\"2\">%d</td>",
+                                "Code length:",
+                                codeLen
+                            )
+                        )
                     } else {
-                        int boundTo = -codeLen;
-                        String appendMessage = "";
-                        if (boundTo < currentBoard.getStatCount()) {
-                            var boundToStat = currentBoard.getStat(boundTo);
-                            appendMessage = " @ " + boundToStat.getX() + "," + boundToStat.getY();
+                        val boundTo = -codeLen
+                        var appendMessage = ""
+                        if (boundTo < currentBoard!!.statCount) {
+                            val boundToStat = currentBoard!!.getStat(boundTo)
+                            appendMessage = " @ " + boundToStat!!.x + "," + boundToStat.y
                         }
-                        tileInfo.append(String.format("<th align=\"left\">%s</th><td colspan=\"3\">%s</td>", "Bound to:", "#" + boundTo + appendMessage));
+                        tileInfo.append(
+                            String.format(
+                                "<th align=\"left\">%s</th><td colspan=\"3\">%s</td>",
+                                "Bound to:",
+                                "#$boundTo$appendMessage"
+                            )
+                        )
                     }
-                    tileInfo.append("</tr><tr>");
+                    tileInfo.append("</tr><tr>")
                 }
-                tileInfo.append("<th align=\"left\">Under:</th>");
-                String bgcol = canvas.htmlColour(stat.getUco() / 16);
-                String fgcol = canvas.htmlColour(stat.getUco() % 16);
-                tileInfo.append(String.format("<td align=\"left\"><span bgcolor=\"%s\" color=\"%s\">&nbsp;&nbsp;■&nbsp;&nbsp;</span></td>", bgcol, fgcol));
+                tileInfo.append("<th align=\"left\">Under:</th>")
+                val bgcol = canvas!!.htmlColour(stat.uco / 16)
+                val fgcol = canvas!!.htmlColour(stat.uco % 16)
+                tileInfo.append(
+                    String.format(
+                        "<td align=\"left\"><span bgcolor=\"%s\" color=\"%s\">&nbsp;&nbsp;■&nbsp;&nbsp;</span></td>",
+                        bgcol,
+                        fgcol
+                    )
+                )
 
-                tileInfo.append(String.format("<td align=\"left\" colspan=\"2\">%s</td>", ZType.getName(worldData.isSuperZZT(), stat.getUid())));
-                tileInfo.append("</tr>");
-                tileInfo.append("</table>");
+                tileInfo.append(
+                    String.format(
+                        "<td align=\"left\" colspan=\"2\">%s</td>",
+                        ZType.getName(worldData!!.isSuperZZT, stat.uid)
+                    )
+                )
+                tileInfo.append("</tr>")
+                tileInfo.append("</table>")
             }
 
-            tileInfo.append("</html>");
-            tileInfoBox.setHorizontalAlignment(SwingConstants.LEFT);
-            tileInfoBox.setText(tileInfo.toString());
-            tileInfoPanel.add(tileInfoBox, BorderLayout.CENTER);
+            tileInfo.append("</html>")
+            tileInfoBox.horizontalAlignment = SwingConstants.LEFT
+            tileInfoBox.text = tileInfo.toString()
+            tileInfoPanel.add(tileInfoBox, BorderLayout.CENTER)
         }
 
         //int w = bufferPane.getWidth() - 16;
-        //tileInfoPanel.setPreferredSize(new Dimension(w, tileInfoPanel.getPreferredSize().height));
-        bufferPaneContents.add(tileInfoPanel, BorderLayout.NORTH);
-        var childPanel = new JPanel(new BorderLayout());
-        bufferPaneContents.add(childPanel, BorderLayout.CENTER);
-        bufferPaneContents = childPanel;
+        //tileInfoPanel.setPreferredSize(new Dimension(w, tileInfoPanel.getPreferredSize().getHeight()));
+        bufferPaneContents!!.add(tileInfoPanel, BorderLayout.NORTH)
+        val childPanel = JPanel(BorderLayout())
+        bufferPaneContents!!.add(childPanel, BorderLayout.CENTER)
+        bufferPaneContents = childPanel
     }
 
-    private int getWorldSize() {
-        int size = worldData.boardListOffset();
-        for (var board : boards) {
-            size += board.getCurrentSize();
+    private val worldSize: Int
+        get() {
+            var size = worldData!!.boardListOffset()
+            for (board in boards) {
+                size += board!!.currentSize
+            }
+            return size
         }
-        return size;
+
+    val boardXOffset: Int
+        get() = cursorX / boardW * boardW
+
+    val boardYOffset: Int
+        get() = cursorY / boardH * boardH
+
+    fun replaceBoardList(newBoardList: ArrayList<Board>) {
+        atlases.clear()
+        currentAtlas = null
+        boards = newBoardList
     }
 
-    public int getBoardIdx() {
-        return currentBoardIdx;
-    }
-
-    public int getBoardXOffset() {
-        return cursorX / boardW * boardW;
-    }
-
-    public int getBoardYOffset() {
-        return cursorY / boardH * boardH;
-    }
-
-    public void replaceBoardList(ArrayList<Board> newBoardList) {
-        atlases.clear();
-        currentAtlas = null;
-        boards = newBoardList;
-    }
-
-    public void setWorldData(WorldData newWorldData) {
-        worldData = newWorldData;
-    }
-
-    public void mouseMotion(MouseEvent e, int heldDown) {
-        mouseState = heldDown;
-        mousePosX = e.getX();
-        mousePosY = e.getY();
-        mouseX = mouseCharX(mousePosX);
-        mouseY = mouseCharY(mousePosY);
+    fun mouseMotion(e: MouseEvent, heldDown: Int) {
+        mouseState = heldDown
+        mousePosX = e.x
+        mousePosY = e.y
+        mouseX = mouseCharX(mousePosX)
+        mouseY = mouseCharY(mousePosY)
 
         // Translate into local space
-        mouseScreenX = e.getXOnScreen() - frame.getLocationOnScreen().x;
-        mouseScreenY = e.getYOnScreen() - frame.getLocationOnScreen().y;
+        mouseScreenX = e.xOnScreen - frame!!.locationOnScreen.x
+        mouseScreenY = e.yOnScreen - frame!!.locationOnScreen.y
         if (heldDown == 1) {
-            mouseDraw();
-            oldMousePosX = mousePosX;
-            oldMousePosY = mousePosY;
+            mouseDraw()
+            oldMousePosX = mousePosX
+            oldMousePosY = mousePosY
         } else {
-            if (heldDown == 2) mouseGrab();
-            else if (heldDown == 3) mouseMove();
-            oldMousePosX = -1;
-            oldMousePosY = -1;
+            if (heldDown == 2) mouseGrab()
+            else if (heldDown == 3) mouseMove()
+            oldMousePosX = -1
+            oldMousePosY = -1
         }
 
         if (undoDirty && mouseState != 1 && !fancyFillDialog) {
-            addUndo();
+            addUndo()
         }
     }
 
-    public GlobalEditor getGlobalEditor() {
-        return globalEditor;
-    }
-
-    private void removeAtlas() {
-        int x = cursorX / boardW;
-        int y = cursorY / boardH;
-        int changeTo = grid[y][x];
+    private fun removeAtlas() {
+        val x = cursorX / boardW
+        val y = cursorY / boardH
+        var changeTo = grid[y][x]
         if (changeTo == -1) {
-            for (var row : grid) {
-                for (var brd : row) {
+            for (row in grid) {
+                for (brd in row) {
                     if (brd != -1) {
-                        changeTo = brd;
-                        break;
+                        changeTo = brd
+                        break
                     }
                 }
-                if (changeTo != -1) break;
+                if (changeTo != -1) break
             }
         }
-        Atlas atlas = atlases.get(changeTo);
-        var removeThese = new ArrayList<Integer>();
-        for (var i : atlases.keySet()) {
-            if (atlases.get(i) == atlas)
-                removeThese.add(i);
+        val atlas = atlases[changeTo]
+        val removeThese = ArrayList<Int>()
+        for (i in atlases.keys) {
+            if (atlases[i] == atlas) removeThese.add(i)
         }
-        for (var i : removeThese) {
-            atlases.remove(i);
+        for (i in removeThese) {
+            atlases.remove(i)
         }
-        currentAtlas = null;
-        changeBoard(changeTo);
+        currentAtlas = null
+        changeBoard(changeTo)
     }
 
-    private void atlas() {
-        if (currentBoard == null) return;
+    private fun atlas() {
+        if (currentBoard == null) return
         if (currentAtlas != null) {
-            removeAtlas();
-            return;
+            removeAtlas()
+            return
         }
 
-        var boardsSeen = new HashSet<Board>();
-        boardsSeen.add(currentBoard);
-        var map = new HashMap<ArrayList<Integer>, Board>();
-        map.put(pair(0, 0), currentBoard);
-        var stack = new ArrayDeque<Object>();
-        stack.add(0);
-        stack.add(0);
-        stack.add(currentBoard);
-        for (;;) {
+        val boardsSeen = HashSet<Board?>()
+        boardsSeen.add(currentBoard)
+        val map = HashMap<ArrayList<Int>, Board?>()
+        map[pair(0, 0)] = currentBoard
+        val stack = ArrayDeque<Any?>()
+        stack.add(0)
+        stack.add(0)
+        stack.add(currentBoard)
+        while (true) {
             // Board exits go NORTH, SOUTH, WEST, EAST
-            final int[][] dir = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
-            if (stack.isEmpty()) break;
-            int x = (int) stack.pop();
-            int y = (int) stack.pop();
-            Board board = (Board) stack.pop();
+            val dir = arrayOf(intArrayOf(0, -1), intArrayOf(0, 1), intArrayOf(-1, 0), intArrayOf(1, 0))
+            if (stack.isEmpty()) break
+            val x = stack.pop() as Int
+            val y = stack.pop() as Int
+            val board = stack.pop() as Board
 
-            for (int exit = 0; exit < 4; exit++) {
-                int dest = board.getExit(exit);
-                if (dest > 0 && dest < boards.size()) {
-                    var destBoard = boards.get(dest);
+            for (exit in 0..3) {
+                val dest = board.getExit(exit)
+                if (dest > 0 && dest < boards.size) {
+                    val destBoard = boards[dest]
                     if (!boardsSeen.contains(destBoard)) {
-                        int dx = x + dir[exit][0];
-                        int dy = y + dir[exit][1];
+                        val dx = x + dir[exit][0]
+                        val dy = y + dir[exit][1]
                         if (!map.containsKey(pair(dx, dy))) {
-                            map.put(pair(dx, dy), destBoard);
-                            boardsSeen.add(destBoard);
-                            stack.add(dx);
-                            stack.add(dy);
-                            stack.add(destBoard);
+                            map[pair(dx, dy)] = destBoard
+                            boardsSeen.add(destBoard)
+                            stack.add(dx)
+                            stack.add(dy)
+                            stack.add(destBoard)
                         }
                     }
                 }
             }
         }
 
-        int minX = 0, minY = 0, maxX = 0, maxY = 0;
-        for (var loc : map.keySet()) {
-            int x = loc.get(0);
-            int y = loc.get(1);
-            minX = Math.min(minX, x);
-            minY = Math.min(minY, y);
-            maxX = Math.max(maxX, x);
-            maxY = Math.max(maxY, y);
-            //System.out.printf("%d,%d: %s\n", loc.get(0), loc.get(1), CP437.toUnicode(map.get(loc).getName()));
+        var minX = 0
+        var minY = 0
+        var maxX = 0
+        var maxY = 0
+        for (loc in map.keys) {
+            val x = loc[0]
+            val y = loc[1]
+            minX = min(minX.toDouble(), x.toDouble()).toInt()
+            minY = min(minY.toDouble(), y.toDouble()).toInt()
+            maxX = max(maxX.toDouble(), x.toDouble()).toInt()
+            maxY = max(maxY.toDouble(), y.toDouble()).toInt()
+            //System.out.printf("%d,%d: %s\n", loc.get(0), loc.get(1), CP437.INSTANCE.toUnicode(map.get(loc).getName()));
         }
-        gridW = maxX - minX + 1;
-        gridH = maxY - minY + 1;
-        grid = new int[gridH][gridW];
-        var boardIdLookup = new HashMap<Board, Integer>();
-        for (int i = 0; i < boards.size(); i++) {
-            boardIdLookup.put(boards.get(i), i);
+        gridW = maxX - minX + 1
+        gridH = maxY - minY + 1
+        grid = Array(gridH) { IntArray(gridW) }
+        val boardIdLookup = HashMap<Board?, Int>()
+        for (i in boards.indices) {
+            boardIdLookup[boards[i]] = i
         }
-        for (int y = 0; y < gridH; y++) {
-            Arrays.fill(grid[y], -1);
+        for (y in 0 until gridH) {
+            Arrays.fill(grid[y], -1)
         }
-        var atlas = new Atlas(gridW, gridH, grid);
-        currentAtlas = atlas;
-        for (var loc : map.keySet()) {
-            int x = loc.get(0) - minX;
-            int y = loc.get(1) - minY;
-            var board = map.get(loc);
-            int boardIdx = boardIdLookup.get(board);
-            grid[y][x] = boardIdx;
-            atlases.put(boardIdx, atlas);
+        val atlas = Atlas(gridW, gridH, grid)
+        currentAtlas = atlas
+        for (loc in map.keys) {
+            val x = loc[0] - minX
+            val y = loc[1] - minY
+            val board = map[loc]
+            val boardIdx = boardIdLookup[board]!!
+            grid[y][x] = boardIdx
+            atlases[boardIdx] = atlas
         }
-        cursorX = (cursorX % boardW) + boardW * -minX;
-        cursorY = (cursorY % boardH) + boardH * -minY;
-        width = boardW * gridW;
-        height = boardH * gridH;
-        canvas.setCursor(cursorX, cursorY);
-        invalidateCache();
-        afterModification();
-        canvas.revalidate();
-        var rect = new Rectangle(canvas.getCharW(-minX * boardW),
-                canvas.getCharH(-minY * boardH),
-                canvas.getCharW(boardW),
-                canvas.getCharH(boardH));
-        canvas.scrollRectToVisible(rect);
-        resetUndoList();
+        cursorX = (cursorX % boardW) + boardW * -minX
+        cursorY = (cursorY % boardH) + boardH * -minY
+        width = boardW * gridW
+        height = boardH * gridH
+        canvas!!.setCursor(cursorX, cursorY)
+        invalidateCache()
+        afterModification()
+        canvas!!.revalidate()
+        val rect = Rectangle(
+            canvas!!.getCharW(-minX * boardW),
+            canvas!!.getCharH(-minY * boardH),
+            canvas!!.getCharW(boardW),
+            canvas!!.getCharH(boardH)
+        )
+        canvas!!.scrollRectToVisible(rect)
+        resetUndoList()
     }
 
-    private void atlasRemoveBoard() {
-        if (currentBoard == null) return;
-        if (currentAtlas == null) return;
-        atlases.remove(grid[cursorY / boardH][cursorX / boardW]);
-        grid[cursorY / boardH][cursorX / boardW] = -1;
-        boolean notEmpty = false;
-        for (int y = 0; y < gridH; y++) {
-            for (int x = 0; x < gridW; x++) {
-                if (grid[y][x] != -1) notEmpty = true;
+    private fun atlasRemoveBoard() {
+        if (currentBoard == null) return
+        if (currentAtlas == null) return
+        atlases.remove(grid[cursorY / boardH][cursorX / boardW])
+        grid[cursorY / boardH][cursorX / boardW] = -1
+        var notEmpty = false
+        for (y in 0 until gridH) {
+            for (x in 0 until gridW) {
+                if (grid[y][x] != -1) notEmpty = true
             }
         }
         if (!notEmpty) {
-            removeAtlas();
-            return;
+            removeAtlas()
+            return
         }
-        invalidateCache();
-        afterModification();
-        canvas.revalidate();
+        invalidateCache()
+        afterModification()
+        canvas!!.revalidate()
     }
 
-    @Override
-    public void keyTyped(KeyEvent e) {
+    override fun keyTyped(e: KeyEvent) {
         if (textEntry) {
-            char ch = e.getKeyChar();
-            if (ch < 256) {
+            val ch = e.keyChar
+            if (ch.code < 256) {
                 if (ch == '\n') {
-                    cursorX = textEntryX;
-                    cursorY = Util.clamp(cursorY + 1, 0, height - 1);
+                    cursorX = textEntryX
+                    cursorY = clamp(cursorY + 1, 0, height - 1)
                 } else {
-                    if (ch == 8) { // bksp
-                        cursorX = Util.clamp(cursorX - 1, 0, width - 1);
+                    if (ch.code == 8) { // bksp
+                        cursorX = clamp(cursorX - 1, 0, width - 1)
                     }
-                    int col = ch;
-                    if (ch == 8 || ch == 127) { // bksp or del
-                        col = ' ';
-                    }
-
-                    int id = (getTileColour(getBufferTile()) % 128) + 128;
-                    Tile textTile = new Tile(id, col);
-                    putTileAt(cursorX, cursorY, textTile, PUT_DEFAULT);
-
-                    if (ch != 8 && ch != 127) { // not bksp or del
-                        cursorX = Util.clamp(cursorX + 1, 0, width - 1);
+                    var col = ch.code
+                    if (ch.code == 8 || ch.code == 127) { // bksp or del
+                        col = ' '.code
                     }
 
-                    afterModification();
+                    val id = (getTileColour(bufferTile!!) % 128) + 128
+                    val textTile = Tile(id, col)
+                    putTileAt(cursorX, cursorY, textTile, PUT_DEFAULT)
+
+                    if (ch.code != 8 && ch.code != 127) { // not bksp or del
+                        cursorX = clamp(cursorX + 1, 0, width - 1)
+                    }
+
+                    afterModification()
                 }
-                canvas.setCursor(cursorX, cursorY);
+                canvas!!.setCursor(cursorX, cursorY)
             }
         }
     }
 
-    @Override
-    public void keyPressed(KeyEvent e) { }
-    @Override
-    public void keyReleased(KeyEvent e) { }
+    override fun keyPressed(e: KeyEvent) {}
+    override fun keyReleased(e: KeyEvent) {}
 
-    private void disableAlt() {
+    private fun disableAlt() {
         // From https://stackoverflow.com/a/3994002
-        frame.addFocusListener(new FocusListener() {
-            private final KeyEventDispatcher altDisabler = new KeyEventDispatcher() {
-                @Override
-                public boolean dispatchKeyEvent(KeyEvent e) {
-                    return e.getKeyCode() == 18;
-                }
-            };
+        frame!!.addFocusListener(object : FocusListener {
+            private val altDisabler = KeyEventDispatcher { e: KeyEvent -> e.keyCode == 18 }
 
-            @Override
-            public void focusGained(FocusEvent e) {
-                KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(altDisabler);
+            override fun focusGained(e: FocusEvent) {
+                KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(altDisabler)
             }
 
-            @Override
-            public void focusLost(FocusEvent e) {
-                KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(altDisabler);
+            override fun focusLost(e: FocusEvent) {
+                KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(altDisabler)
             }
-        });
+        })
     }
 
-    public Component getFrameForRelativePositioning() {
-        return canvasScrollPane;
-    }
-    public JFrame getFrame() {
-        return frame;
+    val frameForRelativePositioning: Component
+        get() = canvasScrollPane
+
+    fun wheelUp(e: MouseWheelEvent) {
+        operationZoomIn(true)
+        e.consume()
     }
 
-    public void wheelUp(MouseWheelEvent e) {
-        operationZoomIn(true);
-        e.consume();
+    fun wheelDown(e: MouseWheelEvent) {
+        operationZoomOut(true)
+        e.consume()
     }
 
-    public void wheelDown(MouseWheelEvent e) {
-        operationZoomOut(true);
-        e.consume();
+    fun removeBufferManager() {
+        currentBufferManager = null
     }
 
-    public void removeBufferManager() {
-        currentBufferManager = null;
+    override fun windowGainedFocus(e: WindowEvent) {
+        if (currentBufferManager != null) currentBufferManager!!.isAlwaysOnTop = true
     }
 
-    @Override
-    public void windowGainedFocus(WindowEvent e) {
-        if (currentBufferManager != null)
-            currentBufferManager.setAlwaysOnTop(true);
+    override fun windowLostFocus(e: WindowEvent) {
+        if (currentBufferManager != null) currentBufferManager!!.isAlwaysOnTop = false
     }
 
-    @Override
-    public void windowLostFocus(WindowEvent e) {
-        if (currentBufferManager != null)
-            currentBufferManager.setAlwaysOnTop(false);
+    fun refreshKeymapping() {
+        addKeybinds(frame!!.layeredPane)
     }
 
-    public void refreshKeymapping() {
-        addKeybinds(frame.getLayeredPane());
+    override fun popupMenuWillBecomeVisible(e: PopupMenuEvent) {
+        popupOpen = true
     }
 
-    public int getWidth() {
-        return width;
+    override fun popupMenuWillBecomeInvisible(e: PopupMenuEvent) {
+        popupOpen = false
+        frame!!.requestFocusInWindow()
     }
 
-    public int getHeight() {
-        return height;
+    override fun popupMenuCanceled(e: PopupMenuEvent) {
+        popupOpen = false
+        frame!!.requestFocusInWindow()
     }
 
-    @Override
-    public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-        popupOpen = true;
+    override fun menuSelected(e: MenuEvent) {
+        popupOpen = true
     }
 
-    @Override
-    public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
-        popupOpen = false;
-        frame.requestFocusInWindow();
+    override fun menuDeselected(e: MenuEvent) {
+        popupOpen = false
+        frame!!.requestFocusInWindow()
     }
 
-    @Override
-    public void popupMenuCanceled(PopupMenuEvent e) {
-        popupOpen = false;
-        frame.requestFocusInWindow();
+    override fun menuCanceled(e: MenuEvent) {
+        popupOpen = false
+        frame!!.requestFocusInWindow()
     }
 
-    @Override
-    public void menuSelected(MenuEvent e) {
-        popupOpen = true;
-    }
+    companion object {
+        const val BLINK_DELAY: Int = 267
 
-    @Override
-    public void menuDeselected(MenuEvent e) {
-        popupOpen = false;
-        frame.requestFocusInWindow();
-    }
+        private const val PUT_DEFAULT = 1
+        private const val PUT_PUSH_DOWN = 2
+        private const val PUT_REPLACE_BOTH = 3
 
-    @Override
-    public void menuCanceled(MenuEvent e) {
-        popupOpen = false;
-        frame.requestFocusInWindow();
+        const val SHOW_NOTHING: Int = 0
+        const val SHOW_STATS: Int = 1
+        const val SHOW_OBJECTS: Int = 2
+        const val SHOW_INVISIBLES: Int = 3
+        const val SHOW_EMPTIES: Int = 4
+        const val SHOW_EMPTEXTS: Int = 5
+        const val SHOW_FAKES: Int = 6
     }
 }

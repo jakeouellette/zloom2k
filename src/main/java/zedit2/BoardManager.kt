@@ -1,470 +1,452 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import javax.swing.table.AbstractTableModel;
-import javax.swing.table.TableCellEditor;
-import javax.swing.table.TableCellRenderer;
-import java.awt.*;
-import java.awt.event.*;
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.awt.BorderLayout
+import java.awt.Dialog
+import java.awt.GridLayout
+import java.awt.event.ActionEvent
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
+import java.io.File
+import java.io.IOException
+import javax.swing.*
+import javax.swing.event.ListSelectionEvent
+import javax.swing.table.AbstractTableModel
+import javax.swing.table.TableCellEditor
+import javax.swing.table.TableCellRenderer
 
-public class BoardManager {
-    private JDialog dialog = null;
-    private WorldEditor editor = null;
-    private WorldData worldData = null;
-    private java.util.List<Board> boards = null;
-    private JTable table = null;
-    private AbstractTableModel tableModel = null;
-    private boolean szzt;
-    private String[] boardSelectArray;
-    private JButton upButton, downButton, delButton, exportButton;
-    private boolean modal;
+public class BoardManager @JvmOverloads constructor(
+    private val editor: WorldEditor,
+    private var boards: List<Board>,
+    private val modal: Boolean = true
+) {
+    private var dialog: JDialog? = null
+    private var worldData: WorldData
+    private lateinit var table: JTable
+    private var tableModel: AbstractTableModel? = null
+    private val szzt: Boolean
+    private lateinit var boardSelectArray: Array<String?>
+    private var upButton: JButton? = null
+    private var downButton: JButton? = null
+    private var delButton: JButton? = null
 
-    private static final int COL_NUM = 0;
-    private static final int COL_NAME = 1;
-    private static final int COL_SHOTS = 2;
-    private static final int COL_TIMELIMIT = 3;
-    private static final int COL_PLAYERX = 4;
-    private static final int COL_PLAYERY = 5;
-    private static final int COL_EXITN = 6;
-    private static final int COL_EXITS = 7;
-    private static final int COL_EXITE = 8;
-    private static final int COL_EXITW = 9;
+    init {
+        // TODO(jakeouellette): Handle more gracefully this null check
+        worldData = editor.worldData!!
+        szzt = worldData.isSuperZZT
 
-    public static final String[] EXIT_NAMES = {"north", "south", "west", "east"};
-
-    public BoardManager(WorldEditor editor, java.util.List<Board> boards, boolean modal) {
-        this.modal = modal;
-        this.editor = editor;
-        this.boards = boards;
-        worldData = editor.getWorldData();
-        szzt = worldData.isSuperZZT();
-
-        updateBoardSelectArray();
-        generateTable();
+        updateBoardSelectArray()
+        generateTable()
     }
 
-    public BoardManager(WorldEditor editor, java.util.List<Board> boards) {
-        this(editor, boards, true);
-    }
-
-    public BoardManager(WorldEditor editor, java.util.List<Board> boards, int deleteBoard) {
-        this(editor, boards, false);
-        if (boards.size() > 1) {
-            table.clearSelection();
-            table.getRowSorter().setSortKeys(null);
-            table.addRowSelectionInterval(deleteBoard, deleteBoard);
-            SwingUtilities.invokeLater(this::delSelected);
+    constructor(editor: WorldEditor, boards: List<Board>, deleteBoard: Int) : this(editor, boards, false) {
+        if (boards.size > 1) {
+            table.clearSelection()
+            table.rowSorter.sortKeys = null
+            table.addRowSelectionInterval(deleteBoard, deleteBoard)
+            SwingUtilities.invokeLater { this.delSelected() }
         } else {
-            JOptionPane.showMessageDialog(dialog, "Can't delete the only board.", "Board deletion error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(
+                dialog,
+                "Can't delete the only board.",
+                "Board deletion error",
+                JOptionPane.ERROR_MESSAGE
+            )
         }
-        dialog.dispose();
+        dialog!!.dispose()
     }
 
-    private void generateTable() {
-        dialog = new JDialog();
-        if (modal) dialog.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
-        Util.addEscClose(dialog, dialog.getRootPane());
-        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        dialog.setTitle("Board list");
-        dialog.setIconImage(editor.getCanvas().extractCharImage(240, 0x1F, 2, 2, false, "$"));
-        dialog.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent e) {
-                editor.getCanvas().setIndicate(null, null);
+    private fun generateTable() {
+        val dialog = object : JDialog() {
+            init {
+                if (modal) this.modalityType = ModalityType.APPLICATION_MODAL
+                Util.addEscClose(this, this.rootPane)
+                this.defaultCloseOperation = DISPOSE_ON_CLOSE
+                this.title = "Board list"
+
+                this.setIconImage(editor.canvas.extractCharImage(240, 0x1F, 2, 2, false, "$"))
+                this.addWindowListener(object : WindowAdapter() {
+                    override fun windowClosed(e: WindowEvent) {
+                        editor.canvas.setIndicate(null, null)
+                    }
+                })
             }
-        });
+        }
+        this.dialog = dialog
 
-        final int COL_DARK = szzt ? -1 : 10;
-        final int COL_CAMERAX = szzt ? 10 : -1;
-        final int COL_CAMERAY = szzt ? 11 : -1;
-        final int COL_RESTART = szzt ? 12 : 11;
-        final int NUM_COLS = szzt ? 13 : 12;
 
-        tableModel = new AbstractTableModel() {
-            @Override
-            public int getRowCount() {
-                return boards.size();
+        val colDark = if (szzt) -1 else 10
+        val colCameraX = if (szzt) 10 else -1
+        val colCameraY = if (szzt) 11 else -1
+        val colRestart = if (szzt) 12 else 11
+        val numCols = if (szzt) 13 else 12
+
+        tableModel = object : AbstractTableModel() {
+            override fun getRowCount(): Int {
+                return boards.size
             }
 
-            @Override
-            public int getColumnCount() {
-                return NUM_COLS;
+            override fun getColumnCount(): Int {
+                return numCols
             }
 
-            @Override
-            public String getColumnName(int columnIndex) {
-                switch (columnIndex) {
-                    case COL_NUM: return "#";
-                    case COL_NAME: return "Board name";
-                    case COL_SHOTS: return "Shots";
-                    case COL_TIMELIMIT: return "Time limit";
-                    case COL_PLAYERX: return "Player X";
-                    case COL_PLAYERY: return "Player Y";
-                    case COL_EXITN: return "North exit";
-                    case COL_EXITS: return "South exit";
-                    case COL_EXITE: return "East exit";
-                    case COL_EXITW: return "West exit";
-                    default:
-                        if (columnIndex == COL_DARK) return "Dark";
-                        if (columnIndex == COL_CAMERAX) return "Camera X";
-                        if (columnIndex == COL_CAMERAY) return "Camera Y";
-                        if (columnIndex == COL_RESTART) return "Restart if hurt";
-                        return "?";
+            override fun getColumnName(columnIndex: Int): String {
+                when (columnIndex) {
+                    COL_NUM -> return "#"
+                    COL_NAME -> return "Board name"
+                    COL_SHOTS -> return "Shots"
+                    COL_TIMELIMIT -> return "Time limit"
+                    COL_PLAYERX -> return "Player X"
+                    COL_PLAYERY -> return "Player Y"
+                    COL_EXITN -> return "North exit"
+                    COL_EXITS -> return "South exit"
+                    COL_EXITE -> return "East exit"
+                    COL_EXITW -> return "West exit"
+                    else -> {
+                        if (columnIndex == colDark) return "Dark"
+                        if (columnIndex == colCameraX) return "Camera X"
+                        if (columnIndex == colCameraY) return "Camera Y"
+                        if (columnIndex == colRestart) return "Restart if hurt"
+                        return "?"
+                    }
                 }
             }
 
-            @Override
-            public Class<?> getColumnClass(int columnIndex) {
-                switch (columnIndex) {
-                    case COL_NUM:
-                    case COL_SHOTS:
-                    case COL_TIMELIMIT:
-                    case COL_PLAYERX:
-                    case COL_PLAYERY:
-                    case COL_EXITN:
-                    case COL_EXITS:
-                    case COL_EXITE:
-                    case COL_EXITW:
-                        return Integer.class;
-                    case COL_NAME: return String.class;
-                    default:
-                        if (columnIndex == COL_DARK) return Boolean.class;
-                        if (columnIndex == COL_CAMERAX) return Integer.class;
-                        if (columnIndex == COL_CAMERAY) return Integer.class;
-                        if (columnIndex == COL_RESTART) return Boolean.class;
-                        return null;
+            override fun getColumnClass(columnIndex: Int): Class<*>? {
+                when (columnIndex) {
+                    COL_NUM, COL_SHOTS, COL_TIMELIMIT, COL_PLAYERX, COL_PLAYERY, COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> return Int::class.java
+                    COL_NAME -> return String::class.java
+                    else -> {
+                        if (columnIndex == colDark) return Boolean::class.java
+                        if (columnIndex == colCameraX) return Int::class.java
+                        if (columnIndex == colCameraY) return Int::class.java
+                        if (columnIndex == colRestart) return Boolean::class.java
+                        return null
+                    }
                 }
             }
 
-            @Override
-            public boolean isCellEditable(int rowIndex, int columnIndex) {
-                return columnIndex != COL_NUM;
+            override fun isCellEditable(rowIndex: Int, columnIndex: Int): Boolean {
+                return columnIndex != COL_NUM
             }
 
-            @Override
-            public Object getValueAt(int rowIndex, int columnIndex) {
-                Board board = boards.get(rowIndex);
-                switch (columnIndex) {
-                    case COL_NUM: return rowIndex;
-                    case COL_NAME: return CP437.toUnicode(board.getName());
-                    case COL_SHOTS: return board.getShots();
-                    case COL_TIMELIMIT: return board.getTimeLimit();
-                    case COL_PLAYERX: return board.getPlayerX();
-                    case COL_PLAYERY: return board.getPlayerY();
-                    case COL_EXITN:
-                    case COL_EXITS:
-                    case COL_EXITE:
-                    case COL_EXITW: return board.getExit(columnToExit(columnIndex));
-                    default:
-                        if (columnIndex == COL_DARK) return board.isDark();
-                        if (columnIndex == COL_CAMERAX) return board.getCameraX();
-                        if (columnIndex == COL_CAMERAY) return board.getCameraY();
-                        if (columnIndex == COL_RESTART) return board.isRestartOnZap();
-                        return null;
+            override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
+                val board = boards[rowIndex]
+                when (columnIndex) {
+                    COL_NUM -> return rowIndex
+                    COL_NAME -> return CP437.toUnicode(board!!.getName())
+                    COL_SHOTS -> return board!!.getShots()
+                    COL_TIMELIMIT -> return board!!.getTimeLimit()
+                    COL_PLAYERX -> return board!!.getPlayerX()
+                    COL_PLAYERY -> return board!!.getPlayerY()
+                    COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> return board!!.getExit(columnToExit(columnIndex))
+                    else -> {
+                        if (columnIndex == colDark) return board!!.isDark
+                        if (columnIndex == colCameraX) return board!!.cameraX
+                        if (columnIndex == colCameraY) return board!!.cameraY
+                        if (columnIndex == colRestart) return board!!.isRestartOnZap()
+                        // TODO(jakeouellette): this might not be okay. (Was previously returning a null)
+                        throw RuntimeException("Unexpected column, did not map to any value.")
+                    }
                 }
             }
 
-            @Override
-            public void setValueAt(Object value, int rowIndex, int columnIndex) {
-                Board board = boards.get(rowIndex);
-                switch (columnIndex) {
-                    case COL_NAME: board.setName(CP437.toBytes((String) value)); return;
-                    case COL_SHOTS: board.setShots((Integer) value); return;
-                    case COL_TIMELIMIT: board.setTimeLimit((Integer) value); return;
-                    case COL_PLAYERX: board.setPlayerX((Integer) value); return;
-                    case COL_PLAYERY: board.setPlayerY((Integer) value); return;
-                    case COL_EXITN:
-                    case COL_EXITS:
-                    case COL_EXITE:
-                    case COL_EXITW:
-                        int boardIdx = -1;
-                        if (value instanceof String) {
-                            String boardName = (String) value;
+            override fun setValueAt(value: Any, rowIndex: Int, columnIndex: Int) {
+                val board = boards[rowIndex]
+                when (columnIndex) {
+                    COL_NAME -> {
+                        board!!.setName(CP437.toBytes(value as String))
+                        return
+                    }
 
-                            if (!boardName.equals("(no board)")) {
-                                int dot = boardName.indexOf('.');
-                                if (dot == -1) dot = boardName.length();
-                                try {
-                                    boardIdx = Integer.parseInt(boardName.substring(0, dot));
-                                } catch (NumberFormatException ignored) {
-                                }
-                            } else {
-                                boardIdx = 0;
-                            }
-                        } else {
-                            boardIdx = (Integer) value;
+                    COL_SHOTS -> {
+                        board!!.setShots((value as Int))
+                        return
+                    }
+
+                    COL_TIMELIMIT -> {
+                        board!!.setTimeLimit((value as Int))
+                        return
+                    }
+
+                    COL_PLAYERX -> {
+                        board!!.setPlayerX((value as Int))
+                        return
+                    }
+
+                    COL_PLAYERY -> {
+                        board!!.setPlayerY((value as Int))
+                        return
+                    }
+
+                    COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> {
+                        val boardIdx = getBoardIdx(value)
+                        if (boardIdx in 0..255) {
+                            board!!.setExit(columnToExit(columnIndex), boardIdx)
                         }
-                        if (boardIdx >= 0 && boardIdx <= 255) {
-                            board.setExit(columnToExit(columnIndex), boardIdx);
-                        }
-                        return;
-                    default:
-                        if (columnIndex == COL_DARK) board.setDark((Boolean) value);
-                        if (columnIndex == COL_CAMERAX) board.setCameraX((Integer) value);
-                        if (columnIndex == COL_CAMERAY) board.setCameraY((Integer) value);
-                        if (columnIndex == COL_RESTART) board.setRestartOnZap((Boolean) value);
+                        return
+                    }
+
+                    else -> {
+                        if (columnIndex == colDark) board!!.isDark = (value as Boolean)
+                        if (columnIndex == colCameraX) board!!.cameraX = (value as Int)
+                        if (columnIndex == colCameraY) board!!.cameraY = (value as Int)
+                        if (columnIndex == colRestart) board!!.setRestartOnZap((value as Boolean))
+                    }
                 }
             }
-        };
-        table = new JTable(tableModel) {
-            @Override
-            public TableCellRenderer getCellRenderer(int rowIndex, int columnIndex) {
-                TableCellRenderer renderer = new TableCellRenderer(){
-                    @Override
-                    public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                        JLabel label;
-                        int boardIdx = (Integer)value;
-                        if (boardIdx >= boards.size()) {
-                            label = new JLabel(String.format("%d. (invalid)", boardIdx));
+        }
+        table = object : JTable(tableModel) {
+            override fun getCellRenderer(rowIndex: Int, columnIndex: Int): TableCellRenderer {
+                val renderer =
+                    TableCellRenderer { table: JTable, value: Any, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int ->
+                        val label: JLabel
+                        val boardIdx = value as Int
+                        label = if (boardIdx >= boards.size) {
+                            JLabel(String.format("%d. (invalid)", boardIdx))
                         } else {
-                            label = new JLabel(boardSelectArray[boardIdx]);
+                            JLabel(boardSelectArray[boardIdx])
                         }
                         if (isSelected) {
-                            label.setOpaque(true);
-                            label.setBackground(table.getSelectionBackground());
-                            label.setForeground(table.getSelectionForeground());
+                            label.isOpaque = true
+                            label.background = table.selectionBackground
+                            label.foreground = table.selectionForeground
                         }
-                        return label;
+                        label
                     }
-                };
 
-                switch (columnIndex) {
-                    case COL_EXITN:
-                    case COL_EXITS:
-                    case COL_EXITE:
-                    case COL_EXITW:
-                        return renderer;
-                    default:
-                        return super.getCellRenderer(rowIndex, columnIndex);
+                return when (columnIndex) {
+                    COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> renderer
+                    else -> super.getCellRenderer(rowIndex, columnIndex)
                 }
             }
-            @Override
-            public TableCellEditor getCellEditor(int rowIndex, int columnIndex) {
-                switch (columnIndex) {
-                    case COL_EXITN:
-                    case COL_EXITS:
-                    case COL_EXITE:
-                    case COL_EXITW:
-                        JComboBox<String> exitBox = new JComboBox<>(boardSelectArray);
 
-                        Board board = boards.get(table.convertRowIndexToModel(rowIndex));
-                        int boardExit = board.getExit(columnToExit(columnIndex));
-                        if (boardExit >= 0 && boardExit < boardSelectArray.length) {
-                            exitBox.setSelectedIndex(boardExit);
+            override fun getCellEditor(rowIndex: Int, columnIndex: Int): TableCellEditor {
+                when (columnIndex) {
+                    COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> {
+                        val exitBox = JComboBox(boardSelectArray)
+
+                        val board = boards[table.convertRowIndexToModel(rowIndex)]
+                        val boardExit = board!!.getExit(columnToExit(columnIndex))
+                        if (boardExit >= 0 && boardExit < boardSelectArray.size) {
+                            exitBox.setSelectedIndex(boardExit)
                         } else {
-                            exitBox.setEditable(true);
+                            exitBox.setEditable(true)
                         }
-                        return new DefaultCellEditor(exitBox);
-                    default:
-                        return super.getCellEditor(rowIndex, columnIndex);
+                        return DefaultCellEditor(exitBox)
+                    }
+
+                    else -> return super.getCellEditor(rowIndex, columnIndex)
                 }
             }
-        };
-        table.setAutoCreateRowSorter(true);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        table.getSelectionModel().addListSelectionListener(e -> {
-            updateButtons();
-        });
+        }
+        table.setAutoCreateRowSorter(true)
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF)
+        table.getSelectionModel().addListSelectionListener { e: ListSelectionEvent? -> updateButtons() }
 
-        JScrollPane scroll = new JScrollPane(table);
-        JPanel buttonPanel = new JPanel(new GridLayout(0, 1));
-        upButton = new JButton("↑");
-        downButton = new JButton("↓");
-        delButton = new JButton("×");
-        exportButton = new JButton("Export");
-        updateButtons();
-        upButton.addActionListener(e -> moveSelected(-1));
-        downButton.addActionListener(e -> moveSelected(1));
-        delButton.addActionListener(e -> delSelected());
-        exportButton.addActionListener(e -> exportSelected());
-        String note = " (note: This will change board exits and passages.)";
-        upButton.setToolTipText("Move selected boards up" + note);
-        downButton.setToolTipText("Move selected boards down" + note);
-        delButton.setToolTipText("Delete selected boards" + note);
-        exportButton.setToolTipText("Export selected boards");
+        val scroll = JScrollPane(table)
+        val buttonPanel = JPanel(GridLayout(0, 1))
+        upButton = JButton("↑")
+        downButton = JButton("↓")
+        delButton = JButton("×")
+        val exportButton = JButton("Export")
+        updateButtons()
+        upButton!!.addActionListener { e: ActionEvent? -> moveSelected(-1) }
+        downButton!!.addActionListener { e: ActionEvent? -> moveSelected(1) }
+        delButton!!.addActionListener { e: ActionEvent? -> delSelected() }
+        exportButton.addActionListener { e: ActionEvent? -> exportSelected() }
+        val note = " (note: This will change board exits and passages.)"
+        upButton!!.toolTipText = "Move selected boards up$note"
+        downButton!!.toolTipText = "Move selected boards down$note"
+        delButton!!.toolTipText = "Delete selected boards$note"
+        exportButton.toolTipText = "Export selected boards"
 
-        buttonPanel.add(upButton);
-        buttonPanel.add(downButton);
-        buttonPanel.add(delButton);
-        buttonPanel.add(exportButton);
-        dialog.getContentPane().setLayout(new BorderLayout());
-        dialog.add(scroll, BorderLayout.CENTER);
-        dialog.add(buttonPanel, BorderLayout.EAST);
-        dialog.pack();
-        dialog.setLocationRelativeTo(editor.getFrameForRelativePositioning());
-        dialog.setVisible(true);
+        buttonPanel.add(upButton)
+        buttonPanel.add(downButton)
+        buttonPanel.add(delButton)
+        buttonPanel.add(exportButton)
+        dialog!!.contentPane.layout = BorderLayout()
+        dialog!!.add(scroll, BorderLayout.CENTER)
+        dialog!!.add(buttonPanel, BorderLayout.EAST)
+        dialog!!.pack()
+        dialog!!.setLocationRelativeTo(editor.frameForRelativePositioning)
+        dialog!!.isVisible = true
     }
 
-    private void exportSelected() {
-        if (table.getSelectedRows().length == 0) return;
-        var fileChooser = new JFileChooser();
-        fileChooser.setCurrentDirectory(editor.getGlobalEditor().getDefaultDirectory());
-        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        fileChooser.setAcceptAllFileFilterUsed(false);
+    private fun exportSelected() {
+        if (table.selectedRows.isEmpty()) return
+        val fileChooser = JFileChooser()
+        fileChooser.currentDirectory = editor.globalEditor.defaultDirectory
+        fileChooser.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+        fileChooser.isAcceptAllFileFilterUsed = false
         if (fileChooser.showOpenDialog(dialog) == JFileChooser.APPROVE_OPTION) {
-            File targetDir = fileChooser.getSelectedFile();
-            var boards = editor.getBoards();
-            for (int viewRow : table.getSelectedRows()) {
-                int modelRow = table.convertRowIndexToModel(viewRow);
-                File file = new File(targetDir, Integer.toString(modelRow) + ".brd");
+            val targetDir = fileChooser.selectedFile
+            val boards = editor.boards
+            for (viewRow in table.selectedRows) {
+                val modelRow = table.convertRowIndexToModel(viewRow)
+                val file = File(targetDir, "$modelRow.brd")
                 try {
-                    boards.get(modelRow).saveTo(file);
-                } catch (IOException e) {
-                    JOptionPane.showMessageDialog(dialog, e, "Error exporting board", JOptionPane.ERROR_MESSAGE);
+                    boards[modelRow].saveTo(file)
+                } catch (e: IOException) {
+                    JOptionPane.showMessageDialog(dialog, e, "Error exporting board", JOptionPane.ERROR_MESSAGE)
                 }
             }
         }
     }
 
-    private void updateBoardSelectArray() {
-        boardSelectArray = generateBoardSelectArray(boards, true);
+    private fun updateBoardSelectArray() {
+        boardSelectArray = generateBoardSelectArray(boards, true)
     }
 
-    public static String[] generateBoardSelectArray(java.util.List<Board> boards, boolean numPrefix) {
-        String[] boardList = new String[boards.size()];
-        boardList[0] = new String("(no board)");
-        for (int i = 1; i < boardList.length; i++) {
-            String name = CP437.toUnicode(boards.get(i).getName());
-            boardList[i] = numPrefix ? String.format("%d. %s", i, name) : name;
-        }
-        return boardList;
-    }
-
-    private void updateButtons() {
-        upButton.setEnabled(true);
-        downButton.setEnabled(true);
-        delButton.setEnabled(true);
-        var rows = table.getSelectedRows();
+    private fun updateButtons() {
+        upButton!!.isEnabled = true
+        downButton!!.isEnabled = true
+        delButton!!.isEnabled = true
+        val rows = table.selectedRows
 
         // Can't do anything if no rows are selected, or if all the rows are selected
-        if (rows.length == 0 || rows.length == boards.size()) {
-            upButton.setEnabled(false);
-            downButton.setEnabled(false);
-            delButton.setEnabled(false);
-            return;
+        if (rows.isEmpty() || rows.size == boards.size) {
+            upButton!!.isEnabled = false
+            downButton!!.isEnabled = false
+            delButton!!.isEnabled = false
+            return
         }
 
         // Can't move up if the top row is selected or down if the bottom row is selected
-        for (var viewRow : rows) {
-            int modelRow = table.convertRowIndexToModel(viewRow);
-            if (modelRow == 0) upButton.setEnabled(false);
-            if (modelRow == boards.size() - 1) downButton.setEnabled(false);
+        for (viewRow in rows) {
+            val modelRow = table.convertRowIndexToModel(viewRow)
+            if (modelRow == 0) upButton!!.isEnabled = false
+            if (modelRow == boards.size - 1) downButton!!.isEnabled = false
         }
     }
 
-    private int[] defaultMapping() {
-        var remapping = new int[boards.size()];
-        for (int i = 0; i < remapping.length; i++) {
-            remapping[i] = i;
+    private fun defaultMapping(): IntArray {
+        val remapping = IntArray(boards.size)
+        for (i in remapping.indices) {
+            remapping[i] = i
         }
-        return remapping;
+        return remapping
     }
 
-    private void delSelected() {
-        table.getRowSorter().setSortKeys(null);
+    private fun delSelected() {
+        table.rowSorter.sortKeys = null
 
-        var remapping = defaultMapping();
-        for (int viewRow : table.getSelectedRows()) {
-            int modelRow = table.convertRowIndexToModel(viewRow);
-            remapping[modelRow] = -1;
+        val remapping = defaultMapping()
+        for (viewRow in table.selectedRows) {
+            val modelRow = table.convertRowIndexToModel(viewRow)
+            remapping[modelRow] = -1
         }
 
         // Collapse it down
-        int write_head = 0;
-        for (int read_head = 0; read_head < remapping.length; read_head++) {
-            if (remapping[read_head] == -1) continue;
-            remapping[write_head] = remapping[read_head];
-            write_head++;
+        var writeHead = 0
+        for (readHead in remapping.indices) {
+            if (remapping[readHead] == -1) continue
+            remapping[writeHead] = remapping[readHead]
+            writeHead++
         }
-        while (write_head < remapping.length) {
-            remapping[write_head++] = -1;
+        while (writeHead < remapping.size) {
+            remapping[writeHead++] = -1
         }
 
-        doRemap(remapping, "deletion");
+        doRemap(remapping, "deletion")
     }
 
-    private void doRemap(int[] remapping, String desc) {
-        var newBoardList = new ArrayList<Board>();
-        var newWorldData = worldData.clone();
-        var oldToNew = new HashMap<Integer, Integer>();
+    private fun doRemap(remapping: IntArray, desc: String) {
+        val newBoardList = ArrayList<Board>()
+        val newWorldData = worldData.clone()
+        val oldToNew = HashMap<Int, Int>()
 
         // Create new board list through cloning. Keep the old just in case
-        for (int i = 0; i < remapping.length; i++) {
+        for (i in remapping.indices) {
             if (remapping[i] != -1) {
-                Board clonedBoard = boards.get(remapping[i]).clone();
-                if (i != remapping[i]) clonedBoard.setDirty();
-                newBoardList.add(clonedBoard);
-                oldToNew.put(remapping[i], i);
+                val clonedBoard = boards[remapping[i]].clone()
+                if (i != remapping[i]) clonedBoard.setDirty()
+                newBoardList.add(clonedBoard)
+                oldToNew[remapping[i]] = i
             }
         }
 
-        CompatWarning w = new CompatWarning(newWorldData.isSuperZZT());
+        val w = CompatWarning(newWorldData.isSuperZZT)
 
         // Deleted first board?
         if (remapping[0] != 0) {
-            w.warn(1, "This operation will change the title screen.");
+            w.warn(1, "This operation will change the title screen.")
         }
 
         // Update first board / current board
-        if (oldToNew.containsKey(newWorldData.getCurrentBoard())) {
-            newWorldData.setCurrentBoard(oldToNew.get(newWorldData.getCurrentBoard()));
+        if (oldToNew.containsKey(newWorldData.currentBoard)) {
+            newWorldData.currentBoard = oldToNew[newWorldData.currentBoard]!!
         } else {
-            w.warn(1, "Deleting world's first/current board. First/current board will be changed to title screen.");
-            newWorldData.setCurrentBoard(0);
+            w.warn(1, "Deleting world's first/current board. First/current board will be changed to title screen.")
+            newWorldData.currentBoard = 0
         }
 
-        for (int boardIdx = 0; boardIdx < newBoardList.size(); boardIdx++) {
-            Board board = newBoardList.get(boardIdx);
-            int oldBoardIdx = remapping[boardIdx];
-            w.setPrefix(String.format("Board #%d \"%s\"", oldBoardIdx, CP437.toUnicode(board.getName())));
+        for (boardIdx in newBoardList.indices) {
+            val board = newBoardList[boardIdx]
+            val oldBoardIdx = remapping[boardIdx]
+            w.setPrefix(String.format("Board #%d \"%s\"", oldBoardIdx, CP437.toUnicode(board!!.getName())))
 
             // Check exits. If we remap an exit to 0 or a nonexistent board we must give a warning
-            for (int exit = 0; exit < 4; exit++) {
-                int oldDestination = board.getExit(exit);
-                if (oldDestination != 0 && oldDestination < boards.size()) {
+            for (exit in 0..3) {
+                val oldDestination = board.getExit(exit)
+                if (oldDestination != 0 && oldDestination < boards.size) {
                     if (oldToNew.containsKey(oldDestination)) {
-                        int newDestination = oldToNew.get(oldDestination);
+                        val newDestination = oldToNew[oldDestination]!!
                         if (newDestination == 0) {
-                            w.warn(1, String.format("'s %s exit will lead to the title screen. That exit will be disabled.", EXIT_NAMES[exit]));
+                            w.warn(
+                                1,
+                                String.format(
+                                    "'s %s exit will lead to the title screen. That exit will be disabled.",
+                                    EXIT_NAMES[exit]
+                                )
+                            )
                         }
                         if (newDestination != oldDestination) {
-                            board.setExit(exit, newDestination);
-                            board.setDirty();
+                            board.setExit(exit, newDestination)
+                            board.setDirty()
                         }
                     } else {
-                        w.warn(1, String.format("'s %s exit leads to a board being deleted. That exit will be disabled.", EXIT_NAMES[exit]));
-                        board.setExit(exit, 0);
-                        board.setDirty();
+                        w.warn(
+                            1,
+                            String.format(
+                                "'s %s exit leads to a board being deleted. That exit will be disabled.",
+                                EXIT_NAMES[exit]
+                            )
+                        )
+                        board.setExit(exit, 0)
+                        board.setDirty()
                     }
                 }
             }
 
             // Check passages. We can only check passages that currently exist, so hopefully there's no stat muckery
-            for (int statIdx = 0; statIdx < board.getStatCount(); statIdx++) {
-                Stat stat = board.getStat(statIdx);
-                int x = stat.getX() - 1;
-                int y = stat.getY() - 1;
-                if (x >= 0 && y >= 0 && x < board.getWidth() && y < board.getHeight()) {
-                    int tid = board.getTileId(x, y);
+            for (statIdx in 0 until board.statCount) {
+                val stat = board.getStat(statIdx)
+                val x = stat!!.x - 1
+                val y = stat.y - 1
+                if (x >= 0 && y >= 0 && x < board.width && y < board.height) {
+                    val tid = board.getTileId(x, y)
 
                     // Passages are the same in ZZT and SuperZZT
                     if (tid == ZType.PASSAGE) {
-                        int oldDestination = stat.getP3();
-                        if (oldDestination < boards.size()) {
+                        val oldDestination = stat.p3
+                        if (oldDestination < boards.size) {
                             if (oldToNew.containsKey(oldDestination)) {
-                                int newDestination = oldToNew.get(oldDestination);
+                                val newDestination = oldToNew[oldDestination]!!
                                 if (newDestination != oldDestination) {
-                                    stat.setP3(newDestination);
-                                    board.dirtyStats();
+                                    stat.p3 = newDestination
+                                    board.dirtyStats()
                                 }
                             } else {
-                                w.warn(1, String.format(" has a passage at %d,%d pointing to a board being deleted. It will now point to the title screen.", x + 1, y + 1));
-                                stat.setP3(0);
-                                board.dirtyStats();
+                                w.warn(
+                                    1,
+                                    String.format(
+                                        " has a passage at %d,%d pointing to a board being deleted. It will now point to the title screen.",
+                                        x + 1,
+                                        y + 1
+                                    )
+                                )
+                                stat.p3 = 0
+                                board.dirtyStats()
                             }
                         }
                     }
@@ -472,68 +454,70 @@ public class BoardManager {
             }
         }
 
-        if (w.getWarningLevel() == 0) {
-            for (int i : remapping) {
+        if (w.warningLevel == 0) {
+            for (i in remapping) {
                 if (i == -1) {
                     // For any deletion, warn the user
-                    w.setPrefix("");
-                    w.warn(1, "Are you sure?");
-                    break;
+                    w.setPrefix("")
+                    w.warn(1, "Are you sure?")
+                    break
                 }
             }
         }
 
-        if (w.getWarningLevel() > 0) {
-            int result = JOptionPane.showConfirmDialog(dialog, w.getMessages(1),
-                    "Board " + desc + " warning",  JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (result != JOptionPane.OK_OPTION) return;
+        if (w.warningLevel > 0) {
+            val result = JOptionPane.showConfirmDialog(
+                dialog, w.getMessages(1),
+                "Board $desc warning", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE
+            )
+            if (result != JOptionPane.OK_OPTION) return
         }
 
         // Now remap all the selected boards
-        var selectedRows = new ArrayList<Integer>();
+        val selectedRows = ArrayList<Int>()
 
-        for (int viewRow : table.getSelectedRows()) {
-            int modelRow = table.convertRowIndexToModel(viewRow);
+        for (viewRow in table.selectedRows) {
+            val modelRow = table.convertRowIndexToModel(viewRow)
             if (oldToNew.containsKey(modelRow)) {
-                int remappedModelRow = oldToNew.get(modelRow);
-                selectedRows.add(remappedModelRow);
+                val remappedModelRow = oldToNew[modelRow]!!
+                selectedRows.add(remappedModelRow)
             }
         }
 
         // Update data structures here and in WorldEditor
-        boards = newBoardList;
-        worldData = newWorldData;
-        updateBoardSelectArray();
-        editor.setWorldData(newWorldData);
-        editor.replaceBoardList(newBoardList);
+        boards = newBoardList
+        worldData = newWorldData
+        updateBoardSelectArray()
+        editor.worldData = newWorldData
+        editor.replaceBoardList(newBoardList)
 
-        int oldCurrentBoardIdx = editor.getBoardIdx();
-        int newCurrentBoardIdx = 0;
+        val oldCurrentBoardIdx = editor.boardIdx
+        var newCurrentBoardIdx = 0
         if (oldToNew.containsKey(oldCurrentBoardIdx)) {
-            newCurrentBoardIdx = oldToNew.get(oldCurrentBoardIdx);
+            newCurrentBoardIdx = oldToNew[oldCurrentBoardIdx]!!
         }
         //if (newCurrentBoardIdx != oldCurrentBoardIdx) {
-        editor.changeBoard(newCurrentBoardIdx);
+        editor.changeBoard(newCurrentBoardIdx)
+
         //}
+        tableModel!!.fireTableDataChanged()
+        table.clearSelection()
 
-        tableModel.fireTableDataChanged();
-        table.clearSelection();
-
-        for (int remappedModelRow : selectedRows) {
-            int remappedViewRow = table.convertRowIndexToView(remappedModelRow);
-            table.addRowSelectionInterval(remappedViewRow, remappedViewRow);
+        for (remappedModelRow in selectedRows) {
+            val remappedViewRow = table.convertRowIndexToView(remappedModelRow)
+            table.addRowSelectionInterval(remappedViewRow, remappedViewRow)
         }
 
-        table.repaint();
+        table.repaint()
     }
 
-    private void moveSelected(int offset) {
-        table.getRowSorter().setSortKeys(null);
-        var remapping = defaultMapping();
-        boolean[] selected = new boolean[remapping.length];
-        for (int viewRow : table.getSelectedRows()) {
-            int modelRow = table.convertRowIndexToModel(viewRow);
-            selected[modelRow] = true;
+    private fun moveSelected(offset: Int) {
+        table.rowSorter.sortKeys = null
+        val remapping = defaultMapping()
+        val selected = BooleanArray(remapping.size)
+        for (viewRow in table.selectedRows) {
+            val modelRow = table.convertRowIndexToModel(viewRow)
+            selected[modelRow] = true
         }
 
         if (offset == 1) {
@@ -549,36 +533,83 @@ public class BoardManager {
             // 0{1 3}2 4  - y
             // 0{3 1}2 4  - *
             //{0 3}1 2 4  - n
-            for (int idx = remapping.length - 2; idx >= 0; idx--) {
+
+            for (idx in remapping.size - 2 downTo 0) {
                 if (selected[idx]) {
-                    int t = remapping[idx + 1];
-                    remapping[idx + 1] = remapping[idx];
-                    remapping[idx] = t;
+                    val t = remapping[idx + 1]
+                    remapping[idx + 1] = remapping[idx]
+                    remapping[idx] = t
                 }
             }
         } else if (offset == -1) {
             // 0 1 2 3 4
             // 0[1 2]3 4
             // 0 1[2 3]4
-            for (int idx = 1; idx < remapping.length; idx++) {
+            for (idx in 1 until remapping.size) {
                 if (selected[idx]) {
-                    int t = remapping[idx - 1];
-                    remapping[idx - 1] = remapping[idx];
-                    remapping[idx] = t;
+                    val t = remapping[idx - 1]
+                    remapping[idx - 1] = remapping[idx]
+                    remapping[idx] = t
                 }
             }
         }
 
-        doRemap(remapping, "reordering");
+        doRemap(remapping, "reordering")
     }
 
-    private int columnToExit(int column) {
-        switch (column) {
-            case COL_EXITN: return 0;
-            case COL_EXITS: return 1;
-            case COL_EXITE: return 3;
-            case COL_EXITW: return 2;
-            default: return -1;
+    private fun columnToExit(column: Int): Int {
+        return when (column) {
+            COL_EXITN -> 0
+            COL_EXITS -> 1
+            COL_EXITE -> 3
+            COL_EXITW -> 2
+            else -> -1
+        }
+    }
+
+    companion object {
+        private const val COL_NUM = 0
+        private const val COL_NAME = 1
+        private const val COL_SHOTS = 2
+        private const val COL_TIMELIMIT = 3
+        private const val COL_PLAYERX = 4
+        private const val COL_PLAYERY = 5
+        private const val COL_EXITN = 6
+        private const val COL_EXITS = 7
+        private const val COL_EXITE = 8
+        private const val COL_EXITW = 9
+
+        @JvmField
+        val EXIT_NAMES: Array<String> = arrayOf("north", "south", "west", "east")
+
+        private fun getBoardIdx(boardNameOrId: Any): Int {
+            var boardIdx = -1
+            if (boardNameOrId is String) {
+
+                if (boardNameOrId != "(no board)") {
+                    var dot = boardNameOrId.indexOf('.')
+                    if (dot == -1) dot = boardNameOrId.length
+                    try {
+                        boardIdx = boardNameOrId.substring(0, dot).toInt()
+                    } catch (ignored: NumberFormatException) {
+                    }
+                } else {
+                    boardIdx = 0
+                }
+            } else {
+                boardIdx = boardNameOrId as Int
+            }
+            return boardIdx
+        }
+
+        fun generateBoardSelectArray(boards: List<Board>, numPrefix: Boolean): Array<String?> {
+            val boardList = arrayOfNulls<String>(boards.size)
+            boardList[0] = "(no board)"
+            for (i in 1 until boardList.size) {
+                val name = CP437.toUnicode(boards[i].getName())
+                boardList[i] = if (numPrefix) String.format("%d. %s", i, name) else name
+            }
+            return boardList
         }
     }
 }

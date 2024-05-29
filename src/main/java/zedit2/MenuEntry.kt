@@ -1,88 +1,96 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import javax.swing.event.ChangeListener;
-import java.awt.event.ActionListener;
-import java.awt.event.InputEvent;
+import java.awt.event.ActionListener
+import javax.swing.JCheckBoxMenuItem
+import javax.swing.JMenu
+import javax.swing.JMenuItem
+import javax.swing.KeyStroke
+import javax.swing.event.ChangeListener
 
-public class MenuEntry {
-    private String title;
-    private String key;
-    private ActionListener act;
-    private ChangeListener cAct;
-    private int type;
-    private boolean init;
-    private JMenu submenu;
+class MenuEntry {
+    private var title: String? = null
+    private var key: String? = null
+    private var act: ActionListener? = null
+    private var cAct: ChangeListener? = null
+    private val type: Int
+    private var init = false
+    private var submenu: JMenu? = null
 
-    private static final int TYPE_MENUITEM = 1;
-    private static final int TYPE_SEPARATOR = 2;
-    private static final int TYPE_CHECKBOX = 3;
-    private static final int TYPE_SUBMENU = 4;
-
-    public MenuEntry(String title, String key, ActionListener act) {
-        type = TYPE_MENUITEM;
-        this.title = title;
-        this.key = key;
-        this.act = act;
-    }
-    public MenuEntry(String title, ChangeListener act, boolean init) {
-        type = TYPE_CHECKBOX;
-        this.title = title;
-        this.cAct = act;
-        this.init = init;
-    }
-    public MenuEntry() {
-        type = TYPE_SEPARATOR;
+    constructor(title: String?, key: String?, act: ActionListener?) {
+        type = TYPE_MENUITEM
+        this.title = title
+        this.key = key
+        this.act = act
     }
 
-    public MenuEntry(JMenu submenu, String key) {
-        type = TYPE_SUBMENU;
-        this.title = submenu.getText();
-        this.submenu = submenu;
-        this.key = key;
+    constructor(title: String?, act: ChangeListener?, init: Boolean) {
+        type = TYPE_CHECKBOX
+        this.title = title
+        this.cAct = act
+        this.init = init
     }
 
-    private void setTitle(GlobalEditor ge, JMenuItem item) {
-        String text = title;
+    constructor() {
+        type = TYPE_SEPARATOR
+    }
 
-        if (key != null) {
-            var keyStroke = KeyStroke.getKeyStroke(ge.getString("K_" + key));
-            var keyString = Util.keyStrokeString(keyStroke);
+    constructor(submenu: JMenu, key: String?) {
+        type = TYPE_SUBMENU
+        this.title = submenu.text
+        this.submenu = submenu
+        this.key = key
+    }
+
+    private fun setTitle(ge: GlobalEditor, item: JMenuItem?) {
+        var text = title
+
+        // TODO(jakeouellette): Added a check for "" to avoid NPE
+        if (key != null && key != "") {
+            val keyStr = ge.getString("K_$key")
+
+            val keyStroke = KeyStroke.getKeyStroke(keyStr)
+            val keyString = Util.keyStrokeString(keyStroke)
             if (keyString != null) {
-                text = String.format("%s (%s)", title, keyString);
+                text = String.format("%s (%s)", title, keyString)
             }
         }
-        item.setText(text);
+        item!!.text = text
     }
 
-    public void addToJMenu(GlobalEditor ge, JMenu menu) {
-        switch (type) {
-            case TYPE_MENUITEM: {
-                JMenuItem item = new JMenuItem();
-                setTitle(ge, item);
-                item.addActionListener(act);
-                menu.add(item);
-                break;
+    fun addToJMenu(ge: GlobalEditor, menu: JMenu) {
+        when (type) {
+            TYPE_MENUITEM -> {
+                val item = JMenuItem()
+                setTitle(ge, item)
+                item.addActionListener(act)
+                menu.add(item)
             }
-            case TYPE_CHECKBOX: {
-                var menuItem = new JCheckBoxMenuItem();
-                setTitle(ge, menuItem);
-                menuItem.setSelected(init);
-                menuItem.addChangeListener(cAct);
-                menu.add(menuItem);
-                break;
+
+            TYPE_CHECKBOX -> {
+                val menuItem = JCheckBoxMenuItem()
+                setTitle(ge, menuItem)
+                menuItem.isSelected = init
+                menuItem.addChangeListener(cAct)
+                menu.add(menuItem)
             }
-            case TYPE_SEPARATOR: {
-                menu.addSeparator();
-                break;
+
+            TYPE_SEPARATOR -> {
+                menu.addSeparator()
             }
-            case TYPE_SUBMENU: {
-                setTitle(ge, submenu);
-                menu.add(submenu);
-                break;
+
+            TYPE_SUBMENU -> {
+                setTitle(ge, submenu)
+                menu.add(submenu)
             }
-            default:
-                throw new RuntimeException("Invalid item value");
+
+            else -> throw RuntimeException("Invalid item value")
         }
+    }
+
+    companion object {
+        private const val TYPE_MENUITEM = 1
+        private const val TYPE_SEPARATOR = 2
+        private const val TYPE_CHECKBOX = 3
+        private const val TYPE_SUBMENU = 4
     }
 }

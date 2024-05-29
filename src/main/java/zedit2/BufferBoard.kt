@@ -1,98 +1,58 @@
-package zedit2;
+package zedit2
 
-public class BufferBoard extends Board {
-    private boolean szzt;
-    int w, h;
-    public BufferBoard(boolean szzt, int w, int h) {
-        this.szzt = szzt;
-        this.w = w;
-        this.h = h;
-        initialise();
+class BufferBoard(override val isSuperZZT: Boolean, override var width: Int, override var height: Int) : Board() {
+    init {
+        initialise()
     }
 
-    @Override
-    public boolean isSuperZZT() {
-        return szzt;
-    }
+    override var isDark: Boolean
+        get() = false
+        set(dark) {}
 
-    @Override
-    public int getWidth() {
-        return w;
-    }
+    override var message: ByteArray
+        get() = ByteArray(0)
+        set(message) {}
 
-    @Override
-    public int getHeight() {
-        return h;
-    }
+    override var cameraX: Int
+        get() = 0
+        set(x) {}
 
-    @Override
-    public boolean isDark() {
-        return false;
-    }
+    override var cameraY: Int
+        get() = 0
+        set(y) {}
 
-    @Override
-    public void setDark(boolean dark) { }
+    override val currentSize: Int
+        get() {
+            throw UnsupportedOperationException("Invalid for buffer boards")
+        }
 
-    @Override
-    public byte[] getMessage() { return new byte[0]; }
-
-    @Override
-    public void setMessage(byte[] message) { }
-
-    @Override
-    public int getCameraX() {
-        return 0;
-    }
-
-    @Override
-    public int getCameraY() {
-        return 0;
-    }
-
-    @Override
-    public void setCameraX(int x) { }
-
-    @Override
-    public void setCameraY(int y) { }
-
-    @Override
-    public int getCurrentSize() {
-        throw new UnsupportedOperationException("Invalid for buffer boards");
-    }
-
-    @Override
-    protected void drawCharacter(byte[] cols, byte[] chars, int pos, int x, int y) {
-        if (!szzt) {
-            cols[pos] = (byte) ZZTType.getColour(this, x, y);
-            chars[pos] = (byte) ZZTType.getChar(this, x, y);
+    public override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, x: Int, y: Int) {
+        if (!isSuperZZT) {
+            cols!![pos] = ZZTType.getColour(this, x, y).toByte()
+            chars!![pos] = ZZTType.getChar(this, x, y).toByte()
         } else {
-            cols[pos] = (byte) SZZTType.getColour(this, x, y);
-            chars[pos] = (byte) SZZTType.getChar(this, x, y);
+            cols!![pos] = SZZTType.getColour(this, x, y).toByte()
+            chars!![pos] = SZZTType.getChar(this, x, y).toByte()
         }
     }
 
-    @Override
-    public void write(CompatWarning warning, byte[] newData, int currentOffset) {
-        throw new UnsupportedOperationException("Invalid for buffer boards");
+    override fun write(warning: CompatWarning?, worldData: ByteArray, currentOffset: Int) {
+        throw UnsupportedOperationException("Invalid for buffer boards")
     }
 
-    @Override
-    public Board clone() {
-        Board other = new BufferBoard(szzt, w, h);
-        cloneInto(other);
-        return other;
+    override fun clone(): Board {
+        val other: Board = BufferBoard(isSuperZZT, width, height)
+        cloneInto(other)
+        return other
     }
 
-    @Override
-    public boolean isEqualTo(Board other) {
-        if (!(other instanceof BufferBoard)) return false;
-        if (!super.isEqualTo(other)) return false;
+    override fun isEqualTo(other: Board): Boolean {
+        if (other !is BufferBoard) return false
+        if (!super.isEqualTo(other)) return false
 
-        BufferBoard bufOther = (BufferBoard)other;
-        if (w != bufOther.w) return false;
-        if (h != bufOther.h) return false;
-        if (szzt != bufOther.szzt) return false;
-
-        return true;
+        val bufOther = other
+        if (width != bufOther.width) return false
+        if (height != bufOther.height) return false
+        return isSuperZZT == bufOther.isSuperZZT
     }
 }

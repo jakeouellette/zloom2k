@@ -1,73 +1,48 @@
-package zedit2;
+package zedit2
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import kotlin.math.max
 
-public class CompatWarning {
-    private boolean szzt;
-    private int warningLevel = 0;
-    private String prefix = "";
-    HashMap<Integer, ArrayList<String>> messages = new HashMap<>();
+class CompatWarning(val isSuperZZT: Boolean) {
+    var warningLevel: Int = 0
+        private set
+    private var prefix = ""
+    var messages: HashMap<Int, ArrayList<String>> = HashMap()
 
-    public CompatWarning(boolean szzt) {
-        this.szzt = szzt;
-    }
-
-    public void warn(int level, String message) {
-        warningLevel = Math.max(warningLevel, level);
+    fun warn(level: Int, message: String) {
+        warningLevel = max(warningLevel.toDouble(), level.toDouble()).toInt()
         if (!messages.containsKey(level)) {
-            messages.put(level, new ArrayList<>());
+            messages[level] = ArrayList()
         }
-        messages.get(level).add(prefix + message);
+        messages[level]!!.add(prefix + message)
     }
 
-    public void mergeIn(CompatWarning other, String prefix) {
-        warningLevel = Math.max(warningLevel, other.warningLevel);
-        for (int level : other.messages.keySet()) {
-            if (!messages.containsKey(level)) {
-                messages.put(level, new ArrayList<>());
-            }
-            for (var message : other.messages.get(level)) {
-                messages.get(level).add(message);
-            }
-        }
-    }
-
-    public int getWarningLevel() {
-        return warningLevel;
-    }
-
-    public String getMessages(int level) {
+    fun getMessages(level: Int): String {
         if (!messages.containsKey(level)) {
-            return "";
+            return ""
         } else {
-            int msgCount = 0;
-            var output = new StringBuilder();
-            var msgs = messages.get(level);
-            boolean firstLine = true;
-            for (var msg : msgs) {
+            var msgCount = 0
+            val output = StringBuilder()
+            val msgs = messages[level]!!
+            var firstLine = true
+            for (msg in msgs) {
                 if (firstLine) {
-                    firstLine = false;
+                    firstLine = false
                 } else {
-                    output.append('\n');
+                    output.append('\n')
                 }
-                if (msgs.size() > 1) output.append("‧ ");
-                output.append(msg);
-                msgCount++;
+                if (msgs.size > 1) output.append("‧ ")
+                output.append(msg)
+                msgCount++
                 if (msgCount > 10) {
-                    output.append(String.format("\n...%d other warnings hidden...", msgs.size() - msgCount));
-                    break;
+                    output.append(String.format("\n...%d other warnings hidden...", msgs.size - msgCount))
+                    break
                 }
             }
-            return output.toString();
+            return output.toString()
         }
     }
 
-    public void setPrefix(String s) {
-        prefix = s;
-    }
-
-    public boolean isSuperZZT() {
-        return szzt;
+    fun setPrefix(s: String) {
+        prefix = s
     }
 }

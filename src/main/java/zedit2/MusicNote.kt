@@ -1,260 +1,205 @@
-package zedit2;
+package zedit2
 
-import java.util.ArrayList;
+import java.util.*
+import kotlin.math.max
+import kotlin.math.min
 
-public class MusicNote {
-    public int delay = 0;
-    public int note = -1;
-    public int drum = -1;
-    public int octave = 0;
-    public int indicate_pos = 0;
-    public int indicate_len = 0;
-    public boolean rest = false;
-    public String original;
-    public int desired_octave = 0;
+class MusicNote {
+    var delay: Int = 0
+    var note: Int = -1
+    var drum: Int = -1
+    var octave: Int = 0
+    var indicate_pos: Int = 0
+    var indicate_len: Int = 0
+    var rest: Boolean = false
+    var original: String? = null
+    var desired_octave: Int = 0
 
-    public static int fixOctavesFor(int cursor, ArrayList<MusicNote> musicNotes) {
-        // See if we don't need to fix octaves
-        if (!musicNotes.get(cursor).isTransposable()) return cursor;
-        if (musicNotes.get(cursor).desired_octave == musicNotes.get(cursor).octave) return cursor;
+    val isTransposable: Boolean
+        get() = note >= 0
 
-        // Loop backwards, removing all octave changes between this note and the last playable note
-        boolean erasing;
-        int prevPlayableOctave = 4;
-        do {
-            erasing = false;
-            for (int i = cursor - 1; i >= 0; i--) {
-                if (musicNotes.get(i).isTransposable()) {
-                    prevPlayableOctave = musicNotes.get(i).octave;
-                    break;
-                }
-                if (musicNotes.get(i).original.equals("+") || musicNotes.get(i).original.equals("-")) {
-                    musicNotes.remove(i);
-                    cursor--;
-                    erasing = true;
-                    break;
-                }
-            }
-        } while (erasing);
+    fun transpose(by: Int): Boolean {
+        require(!(by != 1 && by != -1)) { "Can only be transposed by 1 semitone" }
+        if (note == -1) return true
 
-        // Now add more +s and -s to balance everything out
-        while (prevPlayableOctave != musicNotes.get(cursor).desired_octave) {
-            int changeBy;
-            if (prevPlayableOctave < musicNotes.get(cursor).desired_octave) {
-                changeBy = 1;
-            } else {
-                changeBy = -1;
-            }
-            prevPlayableOctave += changeBy;
-            var octaveChange = new MusicNote();
-            octaveChange.indicate_pos = musicNotes.get(cursor).indicate_pos;
-            octaveChange.indicate_len = 1;
-            octaveChange.octave = prevPlayableOctave;
-            octaveChange.desired_octave = octaveChange.octave;
-            octaveChange.original = changeBy == 1 ? "+" : "-";
-            musicNotes.get(cursor).indicate_pos++;
-            musicNotes.add(cursor, octaveChange);
-            cursor++;
-        }
-
-        // Now loop across the entire #play sequence and fix the octave #s up
-        int octave = 4;
-        for (int i = 0; i < musicNotes.size(); i++) {
-            switch (musicNotes.get(i).original) {
-                case "+":
-                    octave = Math.min(octave + 1, 7);
-                    break;
-                case "-":
-                    octave = Math.max(octave - 1, 2);
-                    break;
-                default:
-                    break;
-            }
-            musicNotes.get(i).octave = octave;
-        }
-
-        return cursor;
-    }
-
-    public boolean isTransposable() {
-        return note >= 0;
-    }
-
-    public static ArrayList<MusicNote> fromPlay(String code) {
-        int start = code.toUpperCase().indexOf("#PLAY");
-        if (start == -1) return null;
-        start += 5;
-
-        ArrayList<MusicNote> music = new ArrayList<>();
-        short delay = 1;
-        int octave = 4;
-
-        for (int pos = start; pos < code.length(); pos++) {
-            int indicate_pos = pos;
-            int indicate_len = 1;
-            int note = -1;
-            int drum = -1;
-            boolean rest = false;
-
-            switch (Character.toUpperCase(code.charAt(pos))) {
-                case 'T':
-                    delay = 1;
-                    break;
-                case 'S':
-                    delay = 2;
-                    break;
-                case 'I':
-                    delay = 4;
-                    break;
-                case 'Q':
-                    delay = 8;
-                    break;
-                case 'H':
-                    delay = 16;
-                    break;
-                case 'W':
-                    delay = 32;
-                    break;
-                case '3':
-                    delay /= 3;
-                    break;
-                case '.':
-                    delay += delay / 2;
-                    break;
-                case '+':
-                    octave = Math.min(octave + 1, 7);
-                    break;
-                case '-':
-                    octave = Math.max(octave - 1, 2);
-                    break;
-                case 'X':
-                    rest = true;
-                    break;
-                case 'C':
-                    note = 0;
-                    break;
-                case 'D':
-                    note = 2;
-                    break;
-                case 'E':
-                    note = 4;
-                    break;
-                case 'F':
-                    note = 5;
-                    break;
-                case 'G':
-                    note = 7;
-                    break;
-                case 'A':
-                    note = 9;
-                    break;
-                case 'B':
-                    note = 11;
-                    break;
-                case '#':
-                    break;
-                case '!':
-                    break;
-                case '0':
-                    drum = 0;
-                    break;
-                case '1':
-                    drum = 1;
-                    break;
-                case '2':
-                    drum = 2;
-                    break;
-                case '4':
-                    drum = 4;
-                    break;
-                case '5':
-                    drum = 5;
-                    break;
-                case '6':
-                    drum = 6;
-                    break;
-                case '7':
-                    drum = 7;
-                    break;
-                case '8':
-                    drum = 8;
-                    break;
-                case '9':
-                    drum = 9;
-                    break;
-                default:
-                    break;
-            }
-            if (pos + 1 < code.length() && note >= 0) {
-                char suffix = code.charAt(pos + 1);
-                if (suffix == '#') {
-                    note++;
-                    indicate_len = 2;
-                } else if (suffix == '!') {
-                    note--;
-                    indicate_len = 2;
-                }
-            }
-
-            if ((note < 0) || (note > 11)) note = -1;
-
-            if (delay == 0) delay = 256; // In ZZT, a delay of 0 plays for this long
-
-            MusicNote mus = new MusicNote();
-            mus.delay = delay;
-            mus.rest = rest;
-            mus.note = note;
-            mus.drum = drum;
-            mus.octave = octave;
-            mus.desired_octave = octave;
-            mus.indicate_pos = indicate_pos;
-            mus.indicate_len = indicate_len;
-            mus.original = code.substring(pos, pos + indicate_len);
-            music.add(mus);
-
-            pos += indicate_len - 1;
-        }
-        return music;
-    }
-
-    public boolean transpose(int by) {
-        if (by != 1 && by != -1) throw new IllegalArgumentException("Can only be transposed by 1 semitone");
-        if (note == -1) return true;
-
-        int new_note = note + by;
-        int new_octave = octave;
+        var new_note = note + by
+        var new_octave = octave
         if (new_note < 0) {
-            new_octave--;
-            new_note += 12;
+            new_octave--
+            new_note += 12
         } else if (new_note > 11) {
-            new_octave++;
-            new_note -= 12;
+            new_octave++
+            new_note -= 12
         }
-        if (new_octave < 2 || new_octave > 7) return false;
-        note = new_note;
+        if (new_octave < 2 || new_octave > 7) return false
+        note = new_note
         // Was the original note string in uppercase? If so, keep it in uppercase
-        boolean upper = false;
-        if (Character.isUpperCase(original.charAt(0))) upper = true;
-        String noteString = "?";
+        val upper = Character.isUpperCase(original!![0])
+        original = getString(upper)
 
-        switch (note) {
-            case 0: noteString = "c"; break;
-            case 1: noteString = "c#"; break;
-            case 2: noteString = "d"; break;
-            case 3: noteString = "d#"; break;
-            case 4: noteString = "e"; break;
-            case 5: noteString = "f"; break;
-            case 6: noteString = "f#"; break;
-            case 7: noteString = "g"; break;
-            case 8: noteString = "g#"; break;
-            case 9: noteString = "a"; break;
-            case 10: noteString = "a#"; break;
-            case 11: noteString = "b"; break;
+        desired_octave = new_octave
+        return true
+    }
+
+    private fun getString(upper: Boolean): String {
+        var noteString = "?"
+
+        when (note) {
+            0 -> noteString = "c"
+            1 -> noteString = "c#"
+            2 -> noteString = "d"
+            3 -> noteString = "d#"
+            4 -> noteString = "e"
+            5 -> noteString = "f"
+            6 -> noteString = "f#"
+            7 -> noteString = "g"
+            8 -> noteString = "g#"
+            9 -> noteString = "a"
+            10 -> noteString = "a#"
+            11 -> noteString = "b"
         }
-        if (upper) noteString = noteString.toUpperCase();
-        original = noteString;
+        if (upper) noteString = noteString.uppercase(Locale.getDefault())
+        return noteString
+    }
 
-        desired_octave = new_octave;
-        return true;
+    companion object {
+        fun fixOctavesFor(cursor: Int, musicNotes: ArrayList<MusicNote>): Int {
+            // See if we don't need to fix octaves
+            var cursor = cursor
+            if (!musicNotes[cursor].isTransposable) return cursor
+            if (musicNotes[cursor].desired_octave == musicNotes[cursor].octave) return cursor
+
+            // Loop backwards, removing all octave changes between this note and the last playable note
+            var erasing: Boolean
+            var prevPlayableOctave = 4
+            do {
+                erasing = false
+                for (i in cursor - 1 downTo 0) {
+                    if (musicNotes[i].isTransposable) {
+                        prevPlayableOctave = musicNotes[i].octave
+                        break
+                    }
+                    if (musicNotes[i].original == "+" || musicNotes[i].original == "-") {
+                        musicNotes.removeAt(i)
+                        cursor--
+                        erasing = true
+                        break
+                    }
+                }
+            } while (erasing)
+
+            // Now add more +s and -s to balance everything out
+            while (prevPlayableOctave != musicNotes[cursor].desired_octave) {
+                var changeBy = if (prevPlayableOctave < musicNotes[cursor].desired_octave) {
+                    1
+                } else {
+                    -1
+                }
+                prevPlayableOctave += changeBy
+                val octaveChange = MusicNote()
+                octaveChange.indicate_pos = musicNotes[cursor].indicate_pos
+                octaveChange.indicate_len = 1
+                octaveChange.octave = prevPlayableOctave
+                octaveChange.desired_octave = octaveChange.octave
+                octaveChange.original = if (changeBy == 1) "+" else "-"
+                musicNotes[cursor].indicate_pos++
+                musicNotes.add(cursor, octaveChange)
+                cursor++
+            }
+
+            // Now loop across the entire #play sequence and fix the octave #s up
+            var octave = 4
+            for (musicNote in musicNotes) {
+                when (musicNote.original) {
+                    "+" -> octave = min((octave + 1).toDouble(), 7.0).toInt()
+                    "-" -> octave = max((octave - 1).toDouble(), 2.0).toInt()
+                    else -> {}
+                }
+                musicNote.octave = octave
+            }
+
+            return cursor
+        }
+
+        fun fromPlay(code: String): ArrayList<MusicNote>? {
+            var start = code.uppercase(Locale.getDefault()).indexOf("#PLAY")
+            if (start == -1) return null
+            start += 5
+
+            val music = ArrayList<MusicNote>()
+            var delay: Short = 1
+            var octave = 4
+
+            var pos = start
+            while (pos < code.length) {
+                val indicate_pos = pos
+                var indicate_len = 1
+                var note = -1
+                var drum = -1
+                var rest = false
+
+                when (code[pos].uppercaseChar()) {
+                    'T' -> delay = 1
+                    'S' -> delay = 2
+                    'I' -> delay = 4
+                    'Q' -> delay = 8
+                    'H' -> delay = 16
+                    'W' -> delay = 32
+                    '3' -> delay = (delay / 3).toShort()
+                    '.' -> delay = (delay + delay / 2).toShort()
+                    '+' -> octave = min((octave + 1).toDouble(), 7.0).toInt()
+                    '-' -> octave = max((octave - 1).toDouble(), 2.0).toInt()
+                    'X' -> rest = true
+                    'C' -> note = 0
+                    'D' -> note = 2
+                    'E' -> note = 4
+                    'F' -> note = 5
+                    'G' -> note = 7
+                    'A' -> note = 9
+                    'B' -> note = 11
+                    '0' -> drum = 0
+                    '1' -> drum = 1
+                    '2' -> drum = 2
+                    '4' -> drum = 4
+                    '5' -> drum = 5
+                    '6' -> drum = 6
+                    '7' -> drum = 7
+                    '8' -> drum = 8
+                    '9' -> drum = 9
+                    else -> {}
+                }
+                if (pos + 1 < code.length && note >= 0) {
+                    val suffix = code[pos + 1]
+                    if (suffix == '#') {
+                        note++
+                        indicate_len = 2
+                    } else if (suffix == '!') {
+                        note--
+                        indicate_len = 2
+                    }
+                }
+
+                if ((note < 0) || (note > 11)) note = -1
+
+                if (delay.toInt() == 0) delay = 256 // In ZZT, a delay of 0 plays for this long
+
+
+                val mus = MusicNote()
+                mus.delay = delay.toInt()
+                mus.rest = rest
+                mus.note = note
+                mus.drum = drum
+                mus.octave = octave
+                mus.desired_octave = octave
+                mus.indicate_pos = indicate_pos
+                mus.indicate_len = indicate_len
+                mus.original = code.substring(pos, pos + indicate_len)
+                music.add(mus)
+
+                pos += indicate_len - 1
+                pos++
+            }
+            return music
+        }
     }
 }

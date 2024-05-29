@@ -1,5 +1,5 @@
-package zedit2;
+package zedit2
 
-public interface TileEditorCallback {
-    public void callback(Tile tile);
+fun interface TileEditorCallback {
+    fun callback(tile: Tile)
 }

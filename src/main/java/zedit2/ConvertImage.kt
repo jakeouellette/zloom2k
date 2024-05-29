@@ -1,468 +1,518 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import java.awt.*;
-import java.awt.event.*;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
+import java.awt.*
+import java.awt.event.*
+import java.awt.image.BufferedImage
+import java.util.*
+import javax.swing.*
+import javax.swing.Timer
+import javax.swing.event.ChangeEvent
+import javax.swing.event.ChangeListener
+import kotlin.math.max
 
-public class ConvertImage extends JDialog {
-    private Type t;
-    private final WorldEditor editor;
-    private BufferedImage image;
-    private boolean matcherEnabled = true;
+class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialog() {
+    private lateinit var image: BufferedImage
+    private var matcherEnabled = true
 
-    private JLabel sourceImageLabel;
-    private JLabel destImageLabel;
-    private Timer previewTimer;
+    private lateinit var sourceImageLabel: JLabel
+    private lateinit var destImageLabel: JLabel
+    private var previewTimer: Timer? = null
 
-    private JSpinner srcTop, srcBottom, srcLeft, srcRight, sizeW, sizeH, macroW, macroH, objCount;
-    private ChangeListener changeListener;
-    private boolean convertSetup = false;
-    private ArrayList<JCheckBox> elementCheckboxes;
-    private Converter converter;
-    private JButton ok;
-    private JCheckBox livePreviewChk;
+    private lateinit var srcTop: JSpinner
+    private lateinit var srcBottom: JSpinner
+    private lateinit var srcLeft: JSpinner
+    private lateinit var srcRight: JSpinner
+    private lateinit var sizeW: JSpinner
+    private lateinit var sizeH: JSpinner
+    private lateinit var macroW: JSpinner
+    private lateinit var macroH: JSpinner
+    private lateinit var objCount: JSpinner
+    private lateinit var changeListener: ChangeListener
+    private var convertSetup : Boolean = false
+    private lateinit var elementCheckboxes: ArrayList<JCheckBox>
+    private var converter: Converter? = null
+    private lateinit var ok: JButton
+    private lateinit var livePreviewChk: JCheckBox
 
-    private int checkingValue = 0;
+    private var checkingValue = 0
 
-    private int bufferW, bufferH;
-    private Tile[] buffer = null;
+    private var bufferW = 0
+    private var bufferH = 0
+    private var buffer: Array<Tile?>? = null
 
-    private HashSet<String> ditherOnly = new HashSet<>(Arrays.asList("Empty", "Water", "Floor", "Solid", "Normal", "Breakable"));
-    private HashSet<String> allGfx = new HashSet<>(Arrays.asList("Player", "Ammo", "Torch", "Gem", "Key", "Door", "Scroll", "Passage", "Duplicator",
-            "Bomb", "Energizer", "Bullet", "Water", "Floor", "Solid", "Normal", "Breakable", "Boulder", "SliderNS", "SliderEW",
-            "BlinkWall", "Ricochet", "HBlinkRay", "Bear", "Ruffian", "Slime", "Shark", "Pusher", "Lion", "Tiger",
-            "VBlinkRay", "Head", "Segment", "BlueText", "GreenText", "CyanText", "RedText", "PurpleText", "BrownText",
-            "BlackText", "CustomText"));
+    private val ditherOnly = HashSet(mutableListOf("Empty", "Water", "Floor", "Solid", "Normal", "Breakable"))
+    private val allGfx = HashSet(
+        mutableListOf(
+            "Player",
+            "Ammo",
+            "Torch",
+            "Gem",
+            "Key",
+            "Door",
+            "Scroll",
+            "Passage",
+            "Duplicator",
+            "Bomb",
+            "Energizer",
+            "Bullet",
+            "Water",
+            "Floor",
+            "Solid",
+            "Normal",
+            "Breakable",
+            "Boulder",
+            "SliderNS",
+            "SliderEW",
+            "BlinkWall",
+            "Ricochet",
+            "HBlinkRay",
+            "Bear",
+            "Ruffian",
+            "Slime",
+            "Shark",
+            "Pusher",
+            "Lion",
+            "Tiger",
+            "VBlinkRay",
+            "Head",
+            "Segment",
+            "BlueText",
+            "GreenText",
+            "CyanText",
+            "RedText",
+            "PurpleText",
+            "BrownText",
+            "BlackText",
+            "CustomText"
+        )
+    )
 
-    public ConvertImage(WorldEditor worldEditor, Image sourceImage) {
-        this.editor = worldEditor;
-        getBufferedImage(sourceImage, e -> createGUI());
+    init {
+        getBufferedImage(sourceImage) { e: ActionEvent? -> createGUI() }
     }
 
-    private void createGUI() {
-        setTitle("Convert Image");
-        setIconImage(editor.getCanvas().extractCharImage(20, 110, 1, 1, false, "$"));
-        Util.addEscClose(this, getRootPane());
-        setModalityType(JDialog.ModalityType.APPLICATION_MODAL);
-        setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent e) {
-                terminateConverter();
+    private fun createGUI() {
+        title = "Convert Image"
+        setIconImage(editor.canvas.extractCharImage(20, 110, 1, 1, false, "$"))
+        Util.addEscClose(this, getRootPane())
+        modalityType = ModalityType.APPLICATION_MODAL
+        defaultCloseOperation = DISPOSE_ON_CLOSE
+        addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(e: WindowEvent) {
+                terminateConverter()
             }
-        });
-        var cp = getContentPane();
-        var ge = editor.getGlobalEditor();
-        cp.setLayout(new BorderLayout());
+        })
+        val cp = contentPane
+        val ge = editor.globalEditor
+        cp.layout = BorderLayout()
 
-        changeListener = e -> convert();
+        changeListener = ChangeListener { e: ChangeEvent? -> convert() }
 
-        previewTimer = null;
-        sourceImageLabel = new JLabel();
-        destImageLabel = new JLabel();
-        sourceImageLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        sourceImageLabel.setVerticalAlignment(SwingConstants.CENTER);
-        destImageLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        destImageLabel.setVerticalAlignment(SwingConstants.CENTER);
+        previewTimer = null
+        sourceImageLabel = JLabel()
+        destImageLabel = JLabel()
+        sourceImageLabel!!.horizontalAlignment = SwingConstants.CENTER
+        sourceImageLabel!!.verticalAlignment = SwingConstants.CENTER
+        destImageLabel!!.horizontalAlignment = SwingConstants.CENTER
+        destImageLabel!!.verticalAlignment = SwingConstants.CENTER
 
-        var l = new JScrollPane(sourceImageLabel);
-        var r = new JScrollPane(destImageLabel);
-        l.setPreferredSize(new Dimension(256, 256));
-        r.setPreferredSize(new Dimension(256, 256));
-        AdjustmentListener adjListenerH = e -> scrollMatch(e, l, r, true);
-        AdjustmentListener adjListenerV = e -> scrollMatch(e, l, r, false);
-        l.getHorizontalScrollBar().addAdjustmentListener(adjListenerH);
-        l.getVerticalScrollBar().addAdjustmentListener(adjListenerV);
-        r.getHorizontalScrollBar().addAdjustmentListener(adjListenerH);
-        r.getVerticalScrollBar().addAdjustmentListener(adjListenerV);
-        var imgPane = new JPanel(new GridLayout(1, 2, 4, 4));
-        imgPane.add(l);
-        imgPane.add(r);
+        val l = JScrollPane(sourceImageLabel)
+        val r = JScrollPane(destImageLabel)
+        l.preferredSize = Dimension(256, 256)
+        r.preferredSize = Dimension(256, 256)
+        val adjListenerH = AdjustmentListener { e: AdjustmentEvent -> scrollMatch(e, l, r, true) }
+        val adjListenerV = AdjustmentListener { e: AdjustmentEvent -> scrollMatch(e, l, r, false) }
+        l.horizontalScrollBar.addAdjustmentListener(adjListenerH)
+        l.verticalScrollBar.addAdjustmentListener(adjListenerV)
+        r.horizontalScrollBar.addAdjustmentListener(adjListenerH)
+        r.verticalScrollBar.addAdjustmentListener(adjListenerV)
+        val imgPane = JPanel(GridLayout(1, 2, 4, 4))
+        imgPane.add(l)
+        imgPane.add(r)
 
-        var cfgPane = new JPanel(new BorderLayout());
+        val cfgPane = JPanel(BorderLayout())
 
         //var splitPane = new JPanel(JSplitPane.VERTICAL_SPLIT, imgPane, cfgPane);
-        var splitPane = new JPanel(new BorderLayout());
-        splitPane.add(imgPane, BorderLayout.CENTER);
-        splitPane.add(cfgPane, BorderLayout.SOUTH);
+        val splitPane = JPanel(BorderLayout())
+        splitPane.add(imgPane, BorderLayout.CENTER)
+        splitPane.add(cfgPane, BorderLayout.SOUTH)
 
-        var optionsBox = new JPanel(new GridLayout(0, 1, 0, 0));
+        val optionsBox = JPanel(GridLayout(0, 1, 0, 0))
 
-        int w = image.getWidth();
-        int h = image.getHeight();
-        srcLeft = addSpinner(optionsBox, "Left:", new SpinnerNumberModel(0, 0, w - 1, 1));
-        srcRight = addSpinner(optionsBox, "Right:", new SpinnerNumberModel(w - 1, 0, w - 1, 1));
-        srcTop = addSpinner(optionsBox, "Top:", new SpinnerNumberModel(0, 0, h - 1, 1));
-        srcBottom = addSpinner(optionsBox, "Bottom:", new SpinnerNumberModel(h - 1, 0, h - 1, 1));
-        macroW = addSpinner(optionsBox, "Macroblock W:", new SpinnerListModel(new Integer[]{1, 2, 4, 8}));
-        macroH = addSpinner(optionsBox, "Macroblock H:", new SpinnerListModel(new Integer[]{1, 2, 7, 14}));
-        macroW.setValue(ge.getInt("CONVERT_MACROW", 8));
-        macroH.setValue(ge.getInt("CONVERT_MACROH", 14));
+        val w = image!!.width
+        val h = image!!.height
+        srcLeft = addSpinner(optionsBox, "Left:", SpinnerNumberModel(0, 0, w - 1, 1))
+        srcRight = addSpinner(optionsBox, "Right:", SpinnerNumberModel(w - 1, 0, w - 1, 1))
+        srcTop = addSpinner(optionsBox, "Top:", SpinnerNumberModel(0, 0, h - 1, 1))
+        srcBottom = addSpinner(optionsBox, "Bottom:", SpinnerNumberModel(h - 1, 0, h - 1, 1))
+        macroW = addSpinner(optionsBox, "Macroblock W:", SpinnerListModel(arrayOf(1, 2, 4, 8)))
+        macroH = addSpinner(optionsBox, "Macroblock H:", SpinnerListModel(arrayOf(1, 2, 7, 14)))
+        macroW!!.value = ge.getInt("CONVERT_MACROW", 8)
+        macroH!!.value = ge.getInt("CONVERT_MACROH", 14)
 
-        int defaultCharW = Math.max(1, (w + 4) / 8);
-        int defaultCharH = Math.max(1, (h + 7) / 14);
-        if (defaultCharW > editor.getWidth()) {
-            defaultCharW = editor.getWidth();
-            defaultCharH = Math.max(1, (h * 8 * editor.getWidth() / w + 7) / 14);
+        var defaultCharW = max(1.0, ((w + 4) / 8).toDouble()).toInt()
+        var defaultCharH = max(1.0, ((h + 7) / 14).toDouble()).toInt()
+        if (defaultCharW > editor.width) {
+            defaultCharW = editor.width
+            defaultCharH = max(1.0, ((h * 8 * editor.width / w + 7) / 14).toDouble()).toInt()
         }
-        if (defaultCharH > editor.getHeight()) {
-            defaultCharH = editor.getHeight();
-            defaultCharW = Math.max(1, (w * 14 * editor.getHeight() / h + 4) / 8);
+        if (defaultCharH > editor.height) {
+            defaultCharH = editor.height
+            defaultCharW = max(1.0, ((w * 14 * editor.height / h + 4) / 8).toDouble()).toInt()
         }
 
-        sizeW = addSpinner(optionsBox, "Output Width:", new SpinnerNumberModel(defaultCharW, 1, editor.getWidth(), 1));
-        sizeH = addSpinner(optionsBox, "Output Height:", new SpinnerNumberModel(defaultCharH, 1, editor.getHeight(), 1));
-        objCount = addSpinner(optionsBox, "Max Stats:", new SpinnerNumberModel(0, 0, 32767, 1));
+        sizeW = addSpinner(optionsBox, "Output Width:", SpinnerNumberModel(defaultCharW, 1, editor.width, 1))
+        sizeH = addSpinner(optionsBox, "Output Height:", SpinnerNumberModel(defaultCharH, 1, editor.height, 1))
+        objCount = addSpinner(optionsBox, "Max Stats:", SpinnerNumberModel(0, 0, 32767, 1))
 
-        objCount.setValue(ge.getInt("CONVERT_MAXSTATS", 0));
+        objCount!!.value = ge.getInt("CONVERT_MAXSTATS", 0)
 
-        var usePanel = new JPanel(new GridLayout(0, 5));
+        val usePanel = JPanel(GridLayout(0, 5))
 
-        var leftPane = new JPanel(new BorderLayout());
-        leftPane.add(optionsBox, BorderLayout.CENTER);
+        val leftPane = JPanel(BorderLayout())
+        leftPane.add(optionsBox, BorderLayout.CENTER)
 
-        cfgPane.add(leftPane, BorderLayout.WEST);
-        cfgPane.add(usePanel, BorderLayout.CENTER);
+        cfgPane.add(leftPane, BorderLayout.WEST)
+        cfgPane.add(usePanel, BorderLayout.CENTER)
 
-        var buttonBar = new JPanel(new BorderLayout());
-        var buttonGroup = new JPanel(new GridLayout(1, 0, 4, 0));
-        buttonGroup.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-        leftPane.add(buttonBar, BorderLayout.SOUTH);
-        buttonBar.add(buttonGroup, BorderLayout.EAST);
+        val buttonBar = JPanel(BorderLayout())
+        val buttonGroup = JPanel(GridLayout(1, 0, 4, 0))
+        buttonGroup.border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
+        leftPane.add(buttonBar, BorderLayout.SOUTH)
+        buttonBar.add(buttonGroup, BorderLayout.EAST)
 
-        livePreviewChk = new JCheckBox("Preview Output Image", ge.getBoolean("CONVERT_LIVEPREVIEW", true));
+        livePreviewChk = JCheckBox("Preview Output Image", ge.getBoolean("CONVERT_LIVEPREVIEW", true))
 
-        buttonBar.add(livePreviewChk, BorderLayout.NORTH);
+        buttonBar.add(livePreviewChk, BorderLayout.NORTH)
 
-        ok = new JButton("OK");
-        getRootPane().setDefaultButton(ok);
-        ok.setEnabled(false);
-        ok.addActionListener(e -> {
-            var szzt = editor.getWorldData().isSuperZZT();
-            ge.setBlockBuffer(bufferW, bufferH, buffer, false, szzt);
-            ge.setInt("CONVERT_MACROW", (int) macroW.getValue());
-            ge.setInt("CONVERT_MACROH", (int) macroH.getValue());
-            ge.setInt("CONVERT_MAXSTATS", (int) objCount.getValue());
-            ge.setString(szzt ? "CONVERT_SZZT_TYPES" : "CONVERT_ZZT_TYPES", getElementsString());
-            ge.setBoolean("CONVERT_LIVEPREVIEW", livePreviewChk.isSelected());
-            dispose();
-        });
-        var cancel = new JButton("Cancel");
-        cancel.addActionListener(e -> dispose());
-        buttonGroup.add(ok);
-        buttonGroup.add(cancel);
-
-        boolean szzt = editor.getWorldData().isSuperZZT();
-        elementCheckboxes = new ArrayList<>();
-        ItemListener itemListener = e -> convert();
-        HashSet<String> alreadySelected = new HashSet<>();
-
-        for (int i = 0; i < 255; i++) {
-            String name = ZType.getName(szzt, i);
-            if (name.startsWith("Unknown")) continue;
-            var chkb = new JCheckBox(name);
-            chkb.setSelected(alreadySelected.contains(name));
-            var minSize = chkb.getMinimumSize();
-            minSize.height -= 8;
-            minSize.width -= 8;
-            chkb.setPreferredSize(minSize);
-            chkb.addItemListener(itemListener);
-            elementCheckboxes.add(chkb);
-            usePanel.add(chkb);
+        ok = JButton("OK")
+        getRootPane().defaultButton = ok
+        ok.isEnabled = false
+        ok.addActionListener { e: ActionEvent? ->
+            val szzt = editor.worldData.isSuperZZT
+            // TODO(jakeouellette): Confirm buffer is never null here.
+            // TODO(jakeouellette): Consider a different initialization strategy
+            val nonNullTiles : Array<Tile> = buffer!!.map { tile : Tile? ->
+                tile ?: throw RuntimeException("Tile uninitialized past initialization phase, unexpected.")
+            }.toTypedArray()
+            ge.setBlockBuffer(bufferW, bufferH, nonNullTiles!!, false, szzt)
+            ge.setInt("CONVERT_MACROW", macroW!!.value as Int)
+            ge.setInt("CONVERT_MACROH", macroH!!.value as Int)
+            ge.setInt("CONVERT_MAXSTATS", objCount!!.value as Int)
+            ge.setString(if (szzt) "CONVERT_SZZT_TYPES" else "CONVERT_ZZT_TYPES", elementsString)
+            ge.setBoolean("CONVERT_LIVEPREVIEW", livePreviewChk!!.isSelected)
+            dispose()
         }
-        setElementsString(ge.getString(szzt ? "CONVERT_SZZT_TYPES" : "CONVERT_ZZT_TYPES"));
+        val cancel = JButton("Cancel")
+        cancel.addActionListener { e: ActionEvent? -> dispose() }
+        buttonGroup.add(ok)
+        buttonGroup.add(cancel)
 
-        addButton(usePanel, "Select all", e -> {
-            for (var chkb : elementCheckboxes) chkb.setSelected(true);
-        });
-        addButton(usePanel, "Deselect all", e -> {
-            for (var chkb : elementCheckboxes) chkb.setSelected(false);
-        });
-        addButton(usePanel, "Dither only", e -> {
-            for (var chkb : elementCheckboxes) chkb.setSelected(ditherOnly.contains(chkb.getText()));
-        });
-        addButton(usePanel, "All gfx", e -> {
-            for (var chkb : elementCheckboxes) chkb.setSelected(allGfx.contains(chkb.getText()));
-        });
-        usePanel.setBorder(BorderFactory.createTitledBorder("Element use"));
+        val szzt = editor.worldData.isSuperZZT
+        elementCheckboxes = ArrayList()
+        val itemListener = ItemListener { e: ItemEvent? -> convert() }
+        val alreadySelected = HashSet<String>()
+
+        for (i in 0..254) {
+            val name = ZType.getName(szzt, i)
+            if (name.startsWith("Unknown")) continue
+            val chkb = JCheckBox(name)
+            chkb.isSelected = alreadySelected.contains(name)
+            val minSize = chkb.minimumSize
+            minSize.height -= 8
+            minSize.width -= 8
+            chkb.preferredSize = minSize
+            chkb.addItemListener(itemListener)
+            elementCheckboxes!!.add(chkb)
+            usePanel.add(chkb)
+        }
+        // TODO(jakeouellette): Confirm non-nullable
+        elementsString = ge.getString(if (szzt) "CONVERT_SZZT_TYPES" else "CONVERT_ZZT_TYPES")!!
+
+        addButton(usePanel, "Select all") { e: ActionEvent? ->
+            for (chkb in elementCheckboxes!!) chkb.isSelected = true
+        }
+        addButton(usePanel, "Deselect all") { e: ActionEvent? ->
+            for (chkb in elementCheckboxes!!) chkb.isSelected = false
+        }
+        addButton(usePanel, "Dither only") { e: ActionEvent? ->
+            for (chkb in elementCheckboxes!!) chkb.isSelected = ditherOnly.contains(chkb.text)
+        }
+        addButton(usePanel, "All gfx") { e: ActionEvent? ->
+            for (chkb in elementCheckboxes!!) chkb.isSelected = allGfx.contains(chkb.text)
+        }
+        usePanel.border = BorderFactory.createTitledBorder("Element use")
 
         // Crop Source N / S / E / W
         // Destination W / H
         // Macroblock W (1, 2, 4, 8) / H (1, 2, 7, 14)
         // Objects
         // Types to use
+        cp.add(splitPane, BorderLayout.CENTER)
 
-        cp.add(splitPane, BorderLayout.CENTER);
-
-        pack();
-        setLocationRelativeTo(editor.getFrameForRelativePositioning());
-        convertSetup = true;
-        convert();
-        setVisible(true);
+        pack()
+        setLocationRelativeTo(editor.frameForRelativePositioning)
+        convertSetup = true
+        convert()
+        isVisible = true
     }
 
-    private void setElementsString(String string) {
-        if (string == null) return;
-        if (string.length() != elementCheckboxes.size()) return;
-        for (int i = 0; i < string.length(); i++) {
-            elementCheckboxes.get(i).setSelected(string.charAt(i) == 'X');
+    private var elementsString: String
+        get() {
+            val str = StringBuilder(elementCheckboxes!!.size)
+            for (chkb in elementCheckboxes!!) {
+                str.append(if (chkb.isSelected) 'X' else '.')
+            }
+            return str.toString()
         }
-    }
-
-    private String getElementsString() {
-        StringBuilder str = new StringBuilder(elementCheckboxes.size());
-        for (var chkb : elementCheckboxes) {
-            str.append(chkb.isSelected() ? 'X' : '.');
+        private set(string) {
+            if (string == null) return
+            if (string.length != elementCheckboxes!!.size) return
+            for (i in 0 until string.length) {
+                elementCheckboxes!![i].isSelected = string[i] == 'X'
+            }
         }
-        return str.toString();
+
+    private fun addButton(usePanel: JPanel, buttonText: String, listener: ActionListener) {
+        val button = JButton(buttonText)
+        usePanel.add(button)
+
+        button.addActionListener(listener)
+        val minSize = button.minimumSize
+        minSize.height -= 8
+        button.preferredSize = minSize
     }
 
-    private void addButton(JPanel usePanel, String buttonText, ActionListener listener) {
-        JButton button = new JButton(buttonText);
-        usePanel.add(button);
 
-        button.addActionListener(listener);
-        var minSize = button.getMinimumSize();
-        minSize.height -= 8;
-        button.setPreferredSize(minSize);
-    }
+    private fun convert() {
+        if (!convertSetup) return
+        terminateConverter()
+        ok!!.isEnabled = false
+        buffer = null
 
-
-    private void convert() {
-        if (!convertSetup) return;
-        terminateConverter();
-        ok.setEnabled(false);
-        buffer = null;
-
-        int left = (int) srcLeft.getValue();
-        int right = (int) srcRight.getValue();
-        int top = (int) srcTop.getValue();
-        int bottom = (int) srcBottom.getValue();
-        int mw = (int) macroW.getValue();
-        int mh = (int) macroH.getValue();
-        int outw = (int) sizeW.getValue();
-        int outh = (int) sizeH.getValue();
-        int maxObjs = (int) objCount.getValue();
+        val left = srcLeft!!.value as Int
+        val right = srcRight!!.value as Int
+        val top = srcTop!!.value as Int
+        val bottom = srcBottom!!.value as Int
+        val mw = macroW!!.value as Int
+        val mh = macroH!!.value as Int
+        val outw = sizeW!!.value as Int
+        val outh = sizeH!!.value as Int
+        val maxObjs = objCount!!.value as Int
 
 
+        val croppedSourceImage = cropImage(image, left, right, top, bottom)
+        val scaledImage = scaleImage(croppedSourceImage, outw * DosCanvas.CHAR_W, outh * DosCanvas.CHAR_H)
+        updateSourceImage(scaledImage)
+        val outputImage = BufferedImage(outw * DosCanvas.CHAR_W, outh * DosCanvas.CHAR_H, BufferedImage.TYPE_INT_RGB)
+        val outg = outputImage.graphics
+        outg.color = Color(0x7F7F7F)
+        outg.fillRect(0, 0, outputImage.width, outputImage.height)
+        updateDestImage(outputImage)
 
-        var croppedSourceImage = cropImage(image, left, right, top, bottom);
-        var scaledImage = scaleImage(croppedSourceImage, outw * DosCanvas.CHAR_W, outh * DosCanvas.CHAR_H);
-        updateSourceImage(scaledImage);
-        var outputImage = new BufferedImage(outw * DosCanvas.CHAR_W, outh * DosCanvas.CHAR_H, BufferedImage.TYPE_INT_RGB);
-        var outg = outputImage.getGraphics();
-        outg.setColor(new Color(0x7F7F7F));
-        outg.fillRect(0, 0, outputImage.getWidth(), outputImage.getHeight());
-        updateDestImage(outputImage);
-
-        boolean szzt = editor.getWorldData().isSuperZZT();
-        converter = new Converter(szzt, outw, outh, mw, mh, maxObjs, scaledImage);
-        checkingValue++;
-        converter.setCheckVal(checkingValue);
+        val szzt = editor.worldData.isSuperZZT
+        converter = Converter(szzt, outw, outh, mw, mh, maxObjs, scaledImage!!)
+        checkingValue++
+        converter!!.setCheckVal(checkingValue)
         //var usableElements = new ArrayList<Integer>();
-        boolean anySelected = false;
-        for (var chkb : elementCheckboxes) {
-            if (chkb.isSelected()) {
-                var elementName = chkb.getText();
-                var id = ZType.getId(szzt, elementName);
+        var anySelected = false
+        for (chkb in elementCheckboxes!!) {
+            if (chkb.isSelected) {
+                val elementName = chkb.text
+                val id = ZType.getId(szzt, elementName)
                 //usableElements.add(id);
-                var tile = new Tile(id, 15);
-                var chr = ZType.getChar(szzt, tile);
-                converter.addElement(id, chr);
-                anySelected = true;
+                val tile = Tile(id, 15)
+                val chr = ZType.getChar(szzt, tile)
+                converter!!.addElement(id, chr)
+                anySelected = true
             }
         }
 
-        var output = new Tile[outw * outh];
-        var outputChr = new int[outw * outh];
-        var outputVcol = new int[outw * outh];
-        Arrays.fill(outputChr, -1);
-        converter.setBlink(editor.getGlobalEditor().getBoolean("BLINKING", true));
-        converter.setGfx(editor.getCanvas());
-        converter.setCallback(new ConverterCallback() {
-            @Override
-            public void converted(int checkVal, int x, int y, int id, int col, int chr, int vcol) {
+        val output = arrayOfNulls<Tile>(outw * outh)
+        val outputChr = IntArray(outw * outh)
+        val outputVcol = IntArray(outw * outh)
+        Arrays.fill(outputChr, -1)
+        converter!!.setBlink(editor.globalEditor.getBoolean("BLINKING", true))
+        converter!!.setGfx(editor.canvas)
+        converter!!.setCallback(object : ConverterCallback {
+            override fun converted(checkVal: Int, x: Int, y: Int, id: Int, col: Int, chr: Int, vcol: Int) {
                 //System.out.println("Converted called from: " + Thread.currentThread());
-                if (checkVal != checkingValue) return;
-                Tile t;
+                if (checkVal != checkingValue) return
+                val t: Tile
                 if (id == ZType.OBJECT && chr != 32) {
-                    var stat = new Stat(szzt);
-                    stat.setCycle(3);
-                    stat.setP1(chr);
-                    t = new Tile(id, col, stat);
+                    val stat = Stat(szzt)
+                    stat.cycle = 3
+                    stat.p1 = chr
+                    t = Tile(id, col, stat)
                 } else {
-                    t = new Tile(id, col);
+                    t = Tile(id, col)
                 }
-                output[y * outw + x] = t;
-                outputChr[y * outw + x] = chr;
-                outputVcol[y * outw + x] = vcol;
+                output[y * outw + x] = t
+                outputChr[y * outw + x] = chr
+                outputVcol[y * outw + x] = vcol
             }
 
-            @Override
-            public void finished(int checkVal) {
-                if (checkVal != checkingValue) return;
+            override fun finished(checkVal: Int) {
+                if (checkVal != checkingValue) return
                 //System.out.println("finished called from: " + Thread.currentThread());
-                bufferW = outw;
-                bufferH = outh;
-                buffer = output;
-                ok.setEnabled(true);
-                SwingUtilities.invokeLater(new Runnable() {
-                    @Override
-                    public void run() {
-                        updatePreview(outw, outh, outputChr, outputVcol, outputImage);
-                    }
-                });
-                previewTimer.stop();
-                previewTimer = null;
+                bufferW = outw
+                bufferH = outh
+                buffer = output
+                ok.isEnabled = true
+                SwingUtilities.invokeLater { updatePreview(outw, outh, outputChr, outputVcol, outputImage) }
+                previewTimer!!.stop()
+                previewTimer = null
             }
-        });
+        })
 
         if (anySelected) {
-            converter.beginConvert();
-            previewTimer = createPreviewTimer(outw, outh, outputChr, outputVcol, outputImage);
-            previewTimer.start();
+            converter!!.beginConvert()
+            previewTimer = createPreviewTimer(outw, outh, outputChr, outputVcol, outputImage)
+            previewTimer!!.start()
         }
 
         //(outw, outh, mw, mh, maxObjs, usableElements, scaledImage);
     }
 
-    private void updatePreview(int outw, int outh, int[] outputChr, int[] outputVcol, BufferedImage outputImage) {
-        if (!livePreviewChk.isSelected()) return;
+    private fun updatePreview(
+        outw: Int,
+        outh: Int,
+        outputChr: IntArray,
+        outputVcol: IntArray,
+        outputImage: BufferedImage
+    ) {
+        if (!livePreviewChk!!.isSelected) return
         //System.out.println("updatePreview called from: " + Thread.currentThread());
-        var g = outputImage.getGraphics();
-        var canvas = editor.getCanvas();
-        for (int y = 0; y < outh; y++) {
-            for (int x = 0; x < outw; x++) {
-                int i = y * outw + x;
-                int chr = outputChr[i];
+        val g = outputImage.graphics
+        val canvas = editor.canvas
+        for (y in 0 until outh) {
+            for (x in 0 until outw) {
+                val i = y * outw + x
+                val chr = outputChr[i]
                 if (chr != -1) {
-                    int vcol = outputVcol[i];
-                    var tileGfx = canvas.extractCharImage(chr, vcol, 1, 1, false, "$");
-                    g.drawImage(tileGfx, x * DosCanvas.CHAR_W, y * DosCanvas.CHAR_H, null);
+                    val vcol = outputVcol[i]
+                    val tileGfx = canvas.extractCharImage(chr, vcol, 1, 1, false, "$")
+                    g.drawImage(tileGfx, x * DosCanvas.CHAR_W, y * DosCanvas.CHAR_H, null)
                 }
             }
         }
-        updateDestImage(outputImage);
+        updateDestImage(outputImage)
     }
 
-    private Timer createPreviewTimer(int outw, int outh, int[] outputChr, int[] outputVcol, BufferedImage outputImage) {
-        Timer timer = new Timer(250, (e) -> {
-            updatePreview(outw, outh, outputChr, outputVcol, outputImage);
-        });
-        timer.setRepeats(true);
-        timer.setCoalesce(true);
-        return timer;
+    private fun createPreviewTimer(
+        outw: Int,
+        outh: Int,
+        outputChr: IntArray,
+        outputVcol: IntArray,
+        outputImage: BufferedImage
+    ): Timer {
+        val timer = Timer(250) { e: ActionEvent? -> updatePreview(outw, outh, outputChr, outputVcol, outputImage) }
+        timer.isRepeats = true
+        timer.isCoalesce = true
+        return timer
     }
 
-    private void updateSourceImage(BufferedImage scaledImage) {
-        var image = superZZTScale(scaledImage);
+    private fun updateSourceImage(scaledImage: BufferedImage?) {
+        val image = superZZTScale(scaledImage)
 
-        sourceImageLabel.setIcon(new ImageIcon(image));
+        sourceImageLabel!!.icon = ImageIcon(image)
     }
 
-    private Image superZZTScale(BufferedImage scaledImage) {
-        if (editor.getWorldData().isSuperZZT()) {
-            return scaledImage.getScaledInstance(scaledImage.getWidth() * 2, scaledImage.getHeight(), Image.SCALE_REPLICATE);
+    private fun superZZTScale(scaledImage: BufferedImage?): Image? {
+        if (editor.worldData.isSuperZZT) {
+            return scaledImage!!.getScaledInstance(scaledImage.width * 2, scaledImage.height, Image.SCALE_REPLICATE)
         }
-        return scaledImage;
+        return scaledImage
     }
 
-    private void updateDestImage(BufferedImage outputImage) {
-        var image = superZZTScale(outputImage);
-        destImageLabel.setIcon(new ImageIcon(image));
+    private fun updateDestImage(outputImage: BufferedImage) {
+        val image = superZZTScale(outputImage)
+        destImageLabel!!.icon = ImageIcon(image)
     }
 
-    private void terminateConverter() {
+    private fun terminateConverter() {
+        val converter = this.converter
         if (converter != null) {
-            converter.stop();
-            converter = null;
+            converter.stop()
+            this.converter = null
         }
     }
 
 
-    private BufferedImage scaleImage(BufferedImage croppedSourceImage, int w, int h) {
-        if (croppedSourceImage.getWidth() == w && croppedSourceImage.getHeight() == h) return croppedSourceImage;
-        var newImg = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        var g = newImg.getGraphics();
-        var g2 = (Graphics2D) g;
-        RenderingHints rh = new RenderingHints(
-                RenderingHints.KEY_INTERPOLATION,
-                RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        g2.setRenderingHints(rh);
-        g.drawImage(croppedSourceImage, 0, 0, newImg.getWidth(), newImg.getHeight(),
-                0,0, croppedSourceImage.getWidth(), croppedSourceImage.getHeight(), null);
-        return newImg;
+    private fun scaleImage(croppedSourceImage: BufferedImage?, w: Int, h: Int): BufferedImage? {
+        if (croppedSourceImage!!.width == w && croppedSourceImage.height == h) return croppedSourceImage
+        val newImg = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        val g = newImg.graphics
+        val g2 = g as Graphics2D
+        val rh = RenderingHints(
+            RenderingHints.KEY_INTERPOLATION,
+            RenderingHints.VALUE_INTERPOLATION_BICUBIC
+        )
+        g2.setRenderingHints(rh)
+        g.drawImage(
+            croppedSourceImage, 0, 0, newImg.width, newImg.height,
+            0, 0, croppedSourceImage.width, croppedSourceImage.height, null
+        )
+        return newImg
     }
 
-    private BufferedImage cropImage(BufferedImage image, int left, int right, int top, int bottom) {
-        if (left == 0 && top == 0 && right == image.getWidth() - 1 && bottom == image.getHeight() - 1) return image;
+    private fun cropImage(image: BufferedImage?, left: Int, right: Int, top: Int, bottom: Int): BufferedImage? {
+        if (left == 0 && top == 0 && right == image!!.width - 1 && bottom == image.height - 1) return image
 
-        int width = Math.max(1, right - left);
-        int height = Math.max(1, bottom - top);
-        var newImg = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        var g = newImg.getGraphics();
-        g.drawImage(image, -left, -top, null);
-        return newImg;
+        val width = max(1.0, (right - left).toDouble()).toInt()
+        val height = max(1.0, (bottom - top).toDouble()).toInt()
+        val newImg = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+        val g = newImg.graphics
+        g.drawImage(image, -left, -top, null)
+        return newImg
     }
 
-    private void getBufferedImage(Image sourceImage, ActionListener act) {
-        int w = sourceImage.getWidth(null);
-        int h = sourceImage.getHeight(null);
+    private fun getBufferedImage(sourceImage: Image, act: ActionListener) {
+        val w = sourceImage.getWidth(null)
+        val h = sourceImage.getHeight(null)
         if (w == -1 || h == -1) {
-            waitForBufferedImage(sourceImage, act);
+            waitForBufferedImage(sourceImage, act)
         }
-        image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        boolean drawnImage = image.getGraphics().drawImage(sourceImage, 0, 0, null);
+        image = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        val drawnImage = image!!.graphics.drawImage(sourceImage, 0, 0, null)
         if (!drawnImage) {
-            waitForBufferedImage(sourceImage, act);
+            waitForBufferedImage(sourceImage, act)
         }
-        ActionEvent e = new ActionEvent(this, ActionEvent.ACTION_PERFORMED, "Buffered image");
-        act.actionPerformed(e);
+        val e = ActionEvent(this, ActionEvent.ACTION_PERFORMED, "Buffered image")
+        act.actionPerformed(e)
     }
 
-    private void waitForBufferedImage(Image sourceImage, ActionListener act) {
-        var timer = new Timer(10, new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                getBufferedImage(sourceImage, act);
-            }
-        });
-        timer.start();
+    private fun waitForBufferedImage(sourceImage: Image, act: ActionListener) {
+        val timer = Timer(10) { e: ActionEvent? -> getBufferedImage(sourceImage, act) }
+        timer.start()
     }
 
-    private JSpinner addSpinner(JPanel optionsBox, String label, SpinnerModel model) {
-        JPanel indivBox = new JPanel(new GridLayout(1, 2, 4, 0));
-        indivBox.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-        var lbl = new JLabel(label);
-        lbl.setHorizontalAlignment(SwingConstants.RIGHT);
-        indivBox.add(lbl);
-        var spinner = new JSpinner(model);
-        final ConvertImage obj = this;
-        spinner.addChangeListener(changeListener);
-        indivBox.add(spinner);
-        optionsBox.add(indivBox);
-        return spinner;
+    private fun addSpinner(optionsBox: JPanel, label: String, model: SpinnerModel): JSpinner {
+        val indivBox = JPanel(GridLayout(1, 2, 4, 0))
+        indivBox.border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
+        val lbl = JLabel(label)
+        lbl.horizontalAlignment = SwingConstants.RIGHT
+        indivBox.add(lbl)
+        val spinner = JSpinner(model)
+        spinner.addChangeListener(changeListener)
+        indivBox.add(spinner)
+        optionsBox.add(indivBox)
+        return spinner
     }
 
-    private void scrollMatch(AdjustmentEvent e, JScrollPane l, JScrollPane r, boolean horiz) {
+    private fun scrollMatch(e: AdjustmentEvent, l: JScrollPane, r: JScrollPane, horiz: Boolean) {
         if (matcherEnabled) {
-            matcherEnabled = false;
-            var scrollBar = e.getSource();
+            matcherEnabled = false
+            val scrollBar = e.source
             if (horiz) {
-                l.getHorizontalScrollBar().setValue(e.getValue());
-                r.getHorizontalScrollBar().setValue(e.getValue());
+                l.horizontalScrollBar.value = e.value
+                r.horizontalScrollBar.value = e.value
             } else {
-                l.getVerticalScrollBar().setValue(e.getValue());
-                r.getVerticalScrollBar().setValue(e.getValue());
+                l.verticalScrollBar.value = e.value
+                r.verticalScrollBar.value = e.value
             }
 
-            matcherEnabled = true;
+            matcherEnabled = true
         }
     }
 }

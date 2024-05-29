@@ -1,178 +1,161 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.StringSelection;
-import java.awt.datatransfer.Transferable;
-import java.awt.datatransfer.UnsupportedFlavorException;
-import java.awt.event.*;
-import java.io.IOException;
+import java.awt.BorderLayout
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.StringSelection
+import java.awt.datatransfer.Transferable
+import java.awt.datatransfer.UnsupportedFlavorException
+import java.awt.event.MouseEvent
+import java.awt.event.MouseListener
+import java.awt.event.WindowEvent
+import java.awt.event.WindowListener
+import java.io.IOException
+import javax.swing.*
 
-public class BufferManager extends JDialog implements WindowListener, MouseListener {
-    private WorldEditor editor;
-    private JList<String> list;
-    private BufferModel listModel;
-    private JScrollPane scrollPane;
-    private static final int MAX_HEIGHT = 640;
-    public BufferManager(WorldEditor editor) {
-        this.editor = editor;
-        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        addWindowListener(this);
-        setIconImage(editor.getCanvas().extractCharImage(228, 0x5F, 1, 1, false, "$"));
-        setTitle("Buffer Manager");
-        getContentPane().setLayout(new BorderLayout());
-        listModel = new BufferModel(this, editor);
-        list = new JList<>(listModel);
-        list.setLayoutOrientation(JList.HORIZONTAL_WRAP);
-        list.setCellRenderer(listModel);
-        list.addMouseListener(this);
-        list.setDropMode(DropMode.ON);
-        list.setDragEnabled(true);
+class BufferManager(private val editor: WorldEditor) : JDialog(), WindowListener, MouseListener {
+    private var list: JList<String?>
+    private val listModel: BufferModel
+
+    init {
+        defaultCloseOperation = DISPOSE_ON_CLOSE
+        addWindowListener(this)
+        setIconImage(editor.canvas.extractCharImage(228, 0x5F, 1, 1, false, "$"))
+        title = "Buffer Manager"
+        contentPane.layout = BorderLayout()
+        listModel = BufferModel(this, editor)
+        list = JList(listModel)
+        list.layoutOrientation = JList.HORIZONTAL_WRAP
+        list.setCellRenderer(listModel)
+        list.addMouseListener(this)
+        list.dropMode = DropMode.ON
+        list.dragEnabled = true
         // http://www.java2s.com/example/java/swing/drag-and-drop-custom-transferhandler-for-a-jlist.html
-        list.setTransferHandler(new TransferHandler() {
-            @Override
-            public int getSourceActions(JComponent c) {
-                return TransferHandler.COPY_OR_MOVE;
+        list.transferHandler = object : TransferHandler() {
+            override fun getSourceActions(c: JComponent): Int {
+                return COPY_OR_MOVE
             }
 
-            @Override
-            protected Transferable createTransferable(JComponent source) {
-                @SuppressWarnings("unchecked")
-                JList<String> sourceList = (JList<String>) source;
-                String data = sourceList.getSelectedValue();
-                if (data == null) return null;
-                Transferable t = new StringSelection(String.format("%d:%s", sourceList.getSelectedIndex(), data));
-                return t;
+            override fun createTransferable(source: JComponent): Transferable {
+                val sourceList = source as JList<String>
+                // TODO(jakeouellette): confirm this doesn't create a problem by throwing, previously allowed null
+                val data = sourceList.selectedValue ?: throw RuntimeException("Unexpected unselected value")
+                return StringSelection(String.format("%d:%s", sourceList.selectedIndex, data))
             }
 
-            @Override
-            protected void exportDone(JComponent source, Transferable data, int action) {
-                @SuppressWarnings("unchecked")
-                JList<String> sourceList = (JList<String>) source;
-                if (data == null) return;
-                int from = -1;
+            override fun exportDone(source: JComponent, data: Transferable, action: Int) {
+                val sourceList = source as JList<String>
+                if (data == null) return
+                var from = -1
                 try {
-                    var stringData = (String)(data.getTransferData(DataFlavor.stringFlavor));
-                    from = BufferManager.getBufferDataIdx(stringData);
-                } catch (UnsupportedFlavorException | IOException e) {
-                    e.printStackTrace();
+                    val stringData = data.getTransferData(DataFlavor.stringFlavor) as String
+                    from = getBufferDataIdx(stringData)
+                } catch (e: UnsupportedFlavorException) {
+                    e.printStackTrace()
+                } catch (e: IOException) {
+                    e.printStackTrace()
                 }
 
-                if (action == TransferHandler.MOVE && from != -1) {
-                    BufferModel listModel = (BufferModel) sourceList.getModel();
-                    listModel.remove(from);
+                if (action == MOVE && from != -1) {
+                    val listModel = sourceList.model as BufferModel
+                    listModel.remove(from)
                 }
             }
 
-            @Override
-            public boolean canImport(TransferHandler.TransferSupport support) {
-                if (!support.isDrop()) {
-                    return false;
+            override fun canImport(support: TransferSupport): Boolean {
+                if (!support.isDrop) {
+                    return false
                 }
-                return support.isDataFlavorSupported(DataFlavor.stringFlavor);
+                return support.isDataFlavorSupported(DataFlavor.stringFlavor)
             }
 
-            @Override
-            public boolean importData(TransferHandler.TransferSupport support) {
+            override fun importData(support: TransferSupport): Boolean {
                 if (!this.canImport(support)) {
-                    return false;
+                    return false
                 }
-                Transferable t = support.getTransferable();
-                String data = null;
+                val t = support.transferable
+                val data: String
                 try {
-                    data = (String) t.getTransferData(DataFlavor.stringFlavor);
-                } catch (UnsupportedFlavorException | IOException e) {
-                    e.printStackTrace();
-                    return false;
+                    data = t.getTransferData(DataFlavor.stringFlavor) as String
+                } catch (e: UnsupportedFlavorException) {
+                    e.printStackTrace()
+                    return false
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                    return false
                 }
-                int from = getBufferDataIdx(data);
+                val from = getBufferDataIdx(data)
 
-                JList.DropLocation dropLocation = (JList.DropLocation) support.getDropLocation();
+                val dropLocation = support.dropLocation as JList.DropLocation
 
-                int dropIndex = dropLocation.getIndex();
-                @SuppressWarnings("unchecked")
-                JList<String> targetList = (JList<String>) support.getComponent();
+                val dropIndex = dropLocation.index
+                val targetList = support.component as JList<String>
 
                 // Do insert
+                val listModel = targetList.model as BufferModel
 
-                BufferModel listModel = (BufferModel) targetList.getModel();
-
-                if (dropLocation.isInsert()) {
-                    return listModel.add(dropIndex, from, data);
+                return if (dropLocation.isInsert) {
+                    listModel.add(dropIndex, from, data)
                 } else {
-                    return listModel.set(dropIndex, from, data);
+                    listModel.set(dropIndex, from, data)
                 }
             }
-        });
-        //addWindowFocusListener(this);
-        setResizable(false);
-        scrollPane = new JScrollPane(list);
-        //scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-        //scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
-        getContentPane().add(scrollPane, BorderLayout.CENTER);
-        resizeList();
-        setLocationRelativeTo(editor.getFrameForRelativePositioning());
-        setFocusableWindowState(false);
-        setAlwaysOnTop(true);
-        setVisible(true);
+        }
+        isResizable = false
+        val scrollPane = JScrollPane(list)
+        contentPane.add(scrollPane, BorderLayout.CENTER)
+        resizeList()
+        setLocationRelativeTo(editor.frameForRelativePositioning)
+        focusableWindowState = false
+        isAlwaysOnTop = true
+        isVisible = true
     }
 
-    public static int getBufferDataIdx(String stringData) {
-        int colonPos = stringData.indexOf(':');
-        return Integer.parseInt(stringData.substring(0, colonPos));
-    }
-    public static String getBufferDataString(String stringData) {
-        int colonPos = stringData.indexOf(':');
-        return stringData.substring(colonPos + 1);
+    fun updateBuffer(num: Int) {
+        listModel.updateBuffer(num)
     }
 
-    public void updateBuffer(int num) {
-        listModel.updateBuffer(num);
+    fun updateSelected(num: Int) {
+        listModel.updateSelected(num)
     }
 
-    public void updateSelected(int num) {
-        listModel.updateSelected(num);
+    override fun windowClosed(e: WindowEvent) {
+        editor.removeBufferManager()
     }
 
-    public void windowClosed(WindowEvent e) {
-        editor.removeBufferManager();
-    }
-
-    public void mouseClicked(MouseEvent e) {
-        int cell = list.locationToIndex(e.getPoint());
-        if (cell == -1) return;
-        var bounds = list.getCellBounds(cell, cell);
-        if (bounds == null) return;
-        int x = e.getX();
-        int y = e.getY();
-        if (x >= bounds.x && y >= bounds.y && x < bounds.x + bounds.width && y < bounds.y + bounds.height) {
-            editor.operationGetFromBuffer(listModel.idxToBufNum(cell));
+    override fun mouseClicked(e: MouseEvent) {
+        val cell = list!!.locationToIndex(e.point)
+        if (cell == -1) return
+        val bounds = list.getCellBounds(cell, cell) ?: return
+        val x = e.x
+        val y = e.y
+        if (x >= bounds.x && y >= bounds.y && x < bounds.x + bounds.getWidth() && y < bounds.y + bounds.getHeight()) {
+            editor.operationGetFromBuffer(listModel.idxToBufNum(cell))
         }
 
-        e.consume();
+        e.consume()
     }
 
-    public void windowOpened(WindowEvent e) { }
-    public void windowClosing(WindowEvent e) { }
-    public void windowIconified(WindowEvent e) { }
-    public void windowDeiconified(WindowEvent e) { }
-    public void windowActivated(WindowEvent e) { }
-    public void windowDeactivated(WindowEvent e) { }
+    override fun windowOpened(e: WindowEvent) {}
+    override fun windowClosing(e: WindowEvent) {}
+    override fun windowIconified(e: WindowEvent) {}
+    override fun windowDeiconified(e: WindowEvent) {}
+    override fun windowActivated(e: WindowEvent) {}
+    override fun windowDeactivated(e: WindowEvent) {}
 
-    public void mousePressed(MouseEvent e) { }
-    public void mouseReleased(MouseEvent e) { }
-    public void mouseEntered(MouseEvent e) { }
-    public void mouseExited(MouseEvent e) { }
+    override fun mousePressed(e: MouseEvent) {}
+    override fun mouseReleased(e: MouseEvent) {}
+    override fun mouseEntered(e: MouseEvent) {}
+    override fun mouseExited(e: MouseEvent) {}
 
-    public void resizeList() {
+    fun resizeList() {
         if (list != null) {
             //System.out.println("Before (actual): " + scrollPane.getSize());
             //int beforeHeight = scrollPane.getHeight();
             //int beforeWidth = scrollPane.getWidth();
-            list.setVisibleRowCount((listModel.getSize() + 4) / 5);
-            //int afterHeight = scrollPane.getPreferredSize().height;
-            //int afterWidth = scrollPane.getPreferredSize().width;
+            list.visibleRowCount = (listModel.size + 4) / 5
+
+            //int afterHeight = scrollPane.getPreferredSize().getHeight();
+            //int afterWidth = scrollPane.getPreferredSize().getWidth();
             //int maxHeight = Math.max(beforeHeight, afterHeight);
             //int maxWidth = Math.max(beforeWidth, afterWidth);
 
@@ -180,11 +163,24 @@ public class BufferManager extends JDialog implements WindowListener, MouseListe
 //                maxHeight = Math.min(maxHeight, MAX_HEIGHT);
 //            }
 //            scrollPane.setPreferredSize(new Dimension(maxWidth, maxHeight));
-            pack();
+            pack()
+
             //if (maxHeight > MAX_HEIGHT) {
             //    scrollPane.setPreferredSize(new Dimension(maxWidth, maxHeight));
             //}
+        }
+    }
 
+    companion object {
+        fun getBufferDataIdx(stringData: String): Int {
+            val colonPos = stringData.indexOf(':')
+            return stringData.substring(0, colonPos).toInt()
+        }
+
+        @JvmStatic
+        fun getBufferDataString(stringData: String): String {
+            val colonPos = stringData.indexOf(':')
+            return stringData.substring(colonPos + 1)
         }
     }
 }

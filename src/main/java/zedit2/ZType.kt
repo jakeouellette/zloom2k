@@ -1,202 +1,183 @@
-package zedit2;
+package zedit2
 
-import java.util.HashMap;
+open class ZType {
+    companion object {
+        private var zztTypes: HashMap<String, Int>? = null
+        private var szztTypes: HashMap<String, Int>? = null
 
-public class ZType {
-    private static HashMap<String, Integer> zztTypes = null;
-    private static HashMap<String, Integer> szztTypes = null;
-
-    public static String getName(boolean szzt, int id) {
-        String name = null;
-        if (id == -1) return "Unknown";
-        if (!szzt) {
-            name = ZZTType.getName(id);
-        } else {
-            name = SZZTType.getName(id);
-        }
-        if (name == null) {
-            name = String.format("Unknown (%d)", id);
-        }
-        return name;
-    }
-    public static int getId(boolean szzt, String name) {
-        HashMap<String, Integer> types;
-        if (!szzt) {
-            if (zztTypes == null) {
-                zztTypes = buildTypesMap(szzt);
+        fun getName(szzt: Boolean, id: Int): String {
+            var name: String?
+            if (id == -1) return "Unknown"
+            name = if (!szzt) {
+                ZZTType.getName(id)
+            } else {
+                SZZTType.getName(id)
             }
-            types = zztTypes;
-        } else {
-            if (szztTypes == null) {
-                szztTypes = buildTypesMap(szzt);
+            if (name == null) {
+                name = String.format("Unknown (%d)", id)
             }
-            types = szztTypes;
+            return name
         }
-        return types.getOrDefault(name, -1);
-    }
 
-    private static HashMap<String, Integer> buildTypesMap(boolean szzt) {
-        HashMap<String, Integer> types = new HashMap<>();
-        for (int i = 0; i < 256; i++) {
-            types.put(getName(szzt, i), i);
-        }
-        return types;
-    }
-
-    public static int getChar(boolean szzt, Tile tile)
-    {
-        if (tile.getId() == -1) return '?';
-        BufferBoard board = new BufferBoard(szzt, 1, 1);
-        board.setTile(0, 0, tile);
-        if (!szzt) {
-            return ZZTType.getChar(board, 0, 0);
-        } else {
-            return SZZTType.getChar(board, 0, 0);
-        }
-    }
-    public static int getColour(boolean szzt, Tile tile)
-    {
-        if (tile.getId() == -1) return 15;
-        BufferBoard board = new BufferBoard(szzt, 1, 1);
-        board.setTile(0, 0, tile);
-        if (!szzt) {
-            return ZZTType.getColour(board, 0, 0);
-        } else {
-            return SZZTType.getColour(board, 0, 0);
-        }
-    }
-    public static boolean isFloor(boolean szzt, Tile tile)
-    {
-        if (!szzt) {
-            return ZZTType.isFloor(tile);
-        } else {
-            return SZZTType.isFloor(tile);
-        }
-    }
-    public static int getTextColour(boolean szzt, int id) {
-        if (!szzt) {
-            return ZZTType.getTextColour(id);
-        } else {
-            return SZZTType.getTextColour(id);
-        }
-    }
-    public static boolean isText(boolean szzt, int id) {
-        return getTextColour(szzt, id) != -1;
-    }
-    public static int getTextId(boolean szzt, int colour) {
-        if (!szzt) {
-            return ZZTType.getTextId(colour);
-        } else {
-            return SZZTType.getTextId(colour);
-        }
-    }
-
-    public static Tile convert(Tile input, boolean szzt) {
-        var stats = input.getStats();
-        var newPadding = new byte[szzt ? 0 : 8];
-        for (var stat : stats) {
-            stat.setPadding(newPadding);
-        }
-        var tileId = input.getId();
-        if (szzt) { // ZZT to SZZT
-            switch (tileId) {
-                case ZZTType.TORCH:
-                case ZZTType.SHARK:
-                case ZZTType.WATER:
-                    tileId = ZZTType.EMPTY;
-                    stats = null;
-                    break;
-                case ZZTType.STAR: tileId = SZZTType.STAR; break;
-                case ZZTType.BULLET: tileId = SZZTType.BULLET; break;
-                case ZZTType.HBLINKRAY: tileId = SZZTType.HBLINKRAY; break;
-                case ZZTType.VBLINKRAY: tileId = SZZTType.VBLINKRAY; break;
-                default:
-                    if (tileId >= ZZTType.CUSTOMTEXT && tileId <= ZZTType.BLACKTEXT)
-                        tileId = tileId - ZZTType.CUSTOMTEXT + SZZTType.CUSTOMTEXT;
-                    break;
+        fun getId(szzt: Boolean, name: String): Int {
+            val types: HashMap<String, Int>?
+            if (!szzt) {
+                if (zztTypes == null) {
+                    zztTypes = buildTypesMap(szzt)
+                }
+                types = zztTypes
+            } else {
+                if (szztTypes == null) {
+                    szztTypes = buildTypesMap(szzt)
+                }
+                types = szztTypes
             }
-        } else {
-            switch (tileId) {
-                case SZZTType.LAVA:
-                case SZZTType.FLOOR:
-                case SZZTType.WATERN:
-                case SZZTType.WATERE:
-                case SZZTType.WATERW:
-                case SZZTType.WATERS:
-                case SZZTType.ROTON:
-                case SZZTType.DRAGONPUP:
-                case SZZTType.PAIRER:
-                case SZZTType.SPIDER:
-                case SZZTType.WEB:
-                case SZZTType.STONE:
-                    tileId = ZZTType.EMPTY;
-                    stats = null;
-                    break;
-                case SZZTType.STAR: tileId = ZZTType.STAR; break;
-                case SZZTType.BULLET: tileId = ZZTType.BULLET; break;
-                case SZZTType.HBLINKRAY: tileId = ZZTType.HBLINKRAY; break;
-                case SZZTType.VBLINKRAY: tileId = ZZTType.VBLINKRAY; break;
-                default:
-                    if (tileId >= SZZTType.CUSTOMTEXT && tileId <= SZZTType.BLACKTEXT)
-                        tileId = tileId - SZZTType.CUSTOMTEXT + ZZTType.CUSTOMTEXT;
-                    break;
+            return types!!.getOrDefault(name, -1)
+        }
+
+        private fun buildTypesMap(szzt: Boolean): HashMap<String, Int> {
+            val types = HashMap<String, Int>()
+            for (i in 0..255) {
+                types[getName(szzt, i)] = i
+            }
+            return types
+        }
+
+        fun getChar(szzt: Boolean, tile: Tile): Int {
+            if (tile.id == -1) return throw UnsupportedOperationException("Id cannot be -1")
+            val board = BufferBoard(szzt, 1, 1)
+            board.setTile(0, 0, tile)
+            return if (!szzt) {
+                ZZTType.getChar(board, 0, 0)
+            } else {
+                SZZTType.getChar(board, 0, 0)
             }
         }
 
-        return new Tile(tileId, input.getCol(), stats);
-    }
-
-    public static Tile[] convert(Tile[] input, boolean szzt) {
-        var outputTiles = new Tile[input.length];
-        for (int i = 0; i < input.length; i++) {
-            outputTiles[i] = convert(input[i], szzt);
+        fun getColour(szzt: Boolean, tile: Tile): Int {
+            if (tile.id == -1) return 15
+            val board = BufferBoard(szzt, 1, 1)
+            board.setTile(0, 0, tile)
+            return if (!szzt) {
+                ZZTType.getColour(board, 0, 0)
+            } else {
+                SZZTType.getColour(board, 0, 0)
+            }
         }
-        return outputTiles;
+
+        fun isFloor(szzt: Boolean, tile: Tile?): Boolean {
+            return if (!szzt) {
+                ZZTType.isFloor(tile!!)
+            } else {
+                SZZTType.isFloor(tile!!)
+            }
+        }
+
+        fun getTextColour(szzt: Boolean, id: Int): Int {
+            return if (!szzt) {
+                ZZTType.getTextColour(id)
+            } else {
+                SZZTType.getTextColour(id)
+            }
+        }
+
+        fun isText(szzt: Boolean, id: Int): Boolean {
+            return getTextColour(szzt, id) != -1
+        }
+
+        fun convert(input: Tile, szzt: Boolean): Tile {
+            var stats: List<Stat>? = input.stats
+            val newPadding = ByteArray(if (szzt) 0 else 8)
+            for (stat in stats!!) {
+                stat.padding = newPadding
+            }
+            var tileId = input.id
+            if (szzt) { // ZZT to SZZT
+                when (tileId) {
+                    ZZTType.TORCH, ZZTType.SHARK, ZZTType.WATER -> {
+                        tileId = EMPTY
+                        stats = null
+                    }
+
+                    ZZTType.STAR -> tileId = SZZTType.STAR
+                    ZZTType.BULLET -> tileId = SZZTType.BULLET
+                    ZZTType.HBLINKRAY -> tileId = SZZTType.HBLINKRAY
+                    ZZTType.VBLINKRAY -> tileId = SZZTType.VBLINKRAY
+                    else -> if (tileId >= ZZTType.CUSTOMTEXT && tileId <= ZZTType.BLACKTEXT) tileId =
+                        tileId - ZZTType.CUSTOMTEXT + SZZTType.CUSTOMTEXT
+                }
+            } else {
+                when (tileId) {
+                    SZZTType.LAVA, SZZTType.FLOOR, SZZTType.WATERN, SZZTType.WATERE, SZZTType.WATERW, SZZTType.WATERS, SZZTType.ROTON, SZZTType.DRAGONPUP, SZZTType.PAIRER, SZZTType.SPIDER, SZZTType.WEB, SZZTType.STONE -> {
+                        tileId = EMPTY
+                        stats = null
+                    }
+
+                    SZZTType.STAR -> tileId = ZZTType.STAR
+                    SZZTType.BULLET -> tileId = ZZTType.BULLET
+                    SZZTType.HBLINKRAY -> tileId = ZZTType.HBLINKRAY
+                    SZZTType.VBLINKRAY -> tileId = ZZTType.VBLINKRAY
+                    else -> if (tileId >= SZZTType.CUSTOMTEXT && tileId <= SZZTType.BLACKTEXT) tileId =
+                        tileId - SZZTType.CUSTOMTEXT + ZZTType.CUSTOMTEXT
+                }
+            }
+
+            return Tile(tileId, input.col, stats!!)
+        }
+
+        fun convert(input: Array<Tile>, szzt: Boolean): Array<Tile> {
+            val outputTiles = arrayOfNulls<Tile>(input.size)
+            for (i in input.indices) {
+                outputTiles[i] = convert(input[i], szzt)
+            }
+            // TODO(jakeouellette): Better handle tile nullability
+            return outputTiles.map { tile : Tile? -> tile!!}.toTypedArray()
+        }
+
+        const val EMPTY: Int = 0
+        const val BOARDEDGE: Int = 1
+        const val MESSENGER: Int = 2
+        const val MONITOR: Int = 3
+        const val PLAYER: Int = 4
+        const val AMMO: Int = 5
+
+        const val GEM: Int = 7
+        const val KEY: Int = 8
+        const val DOOR: Int = 9
+        const val SCROLL: Int = 10
+        const val PASSAGE: Int = 11
+        const val DUPLICATOR: Int = 12
+        const val BOMB: Int = 13
+        const val ENERGIZER: Int = 14
+
+        const val CLOCKWISE: Int = 16
+        const val COUNTER: Int = 17
+
+        const val FOREST: Int = 20
+        const val SOLID: Int = 21
+        const val NORMAL: Int = 22
+        const val BREAKABLE: Int = 23
+        const val BOULDER: Int = 24
+        const val SLIDERNS: Int = 25
+        const val SLIDEREW: Int = 26
+        const val FAKE: Int = 27
+        const val INVISIBLE: Int = 28
+        const val BLINKWALL: Int = 29
+        const val TRANSPORTER: Int = 30
+        const val LINE: Int = 31
+        const val RICOCHET: Int = 32
+
+        const val BEAR: Int = 34
+        const val RUFFIAN: Int = 35
+        const val OBJECT: Int = 36
+        const val SLIME: Int = 37
+
+        const val SPINNINGGUN: Int = 39
+        const val PUSHER: Int = 40
+        const val LION: Int = 41
+        const val TIGER: Int = 42
+
+        const val HEAD: Int = 44
+        const val SEGMENT: Int = 45
     }
-
-    public static final int EMPTY = 0;
-    public static final int BOARDEDGE = 1;
-    public static final int MESSENGER = 2;
-    public static final int MONITOR = 3;
-    public static final int PLAYER = 4;
-    public static final int AMMO = 5;
-
-    public static final int GEM = 7;
-    public static final int KEY = 8;
-    public static final int DOOR = 9;
-    public static final int SCROLL = 10;
-    public static final int PASSAGE = 11;
-    public static final int DUPLICATOR = 12;
-    public static final int BOMB = 13;
-    public static final int ENERGIZER = 14;
-
-    public static final int CLOCKWISE = 16;
-    public static final int COUNTER = 17;
-
-    public static final int FOREST = 20;
-    public static final int SOLID = 21;
-    public static final int NORMAL = 22;
-    public static final int BREAKABLE = 23;
-    public static final int BOULDER = 24;
-    public static final int SLIDERNS = 25;
-    public static final int SLIDEREW = 26;
-    public static final int FAKE = 27;
-    public static final int INVISIBLE = 28;
-    public static final int BLINKWALL = 29;
-    public static final int TRANSPORTER = 30;
-    public static final int LINE = 31;
-    public static final int RICOCHET = 32;
-
-    public static final int BEAR = 34;
-    public static final int RUFFIAN = 35;
-    public static final int OBJECT = 36;
-    public static final int SLIME = 37;
-
-    public static final int SPINNINGGUN = 39;
-    public static final int PUSHER = 40;
-    public static final int LION = 41;
-    public static final int TIGER = 42;
-
-    public static final int HEAD = 44;
-    public static final int SEGMENT = 45;
 }

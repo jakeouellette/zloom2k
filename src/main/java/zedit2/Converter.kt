@@ -1,317 +1,298 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.PriorityQueue;
-import java.util.function.Consumer;
+import java.awt.image.BufferedImage
+import java.util.*
+import java.util.function.Consumer
+import javax.swing.SwingUtilities
 
-import static zedit2.DosCanvas.*;
+class Converter(
+    private val szzt: Boolean,
+    private val outw: Int,
+    private val outh: Int,
+    private val mw: Int,
+    private val mh: Int,
+    private val maxObjs: Int,
+    scaledImage: BufferedImage
+) {
+    private val scaledImage: BufferedImage = scaledImage.getSubimage(0, 0, scaledImage.width, scaledImage.height)
+    private var blinking = true
 
-public class Converter {
-    private final boolean szzt;
-    private final int outw;
-    private final int outh;
-    private final int mw;
-    private final int mh;
-    private final int maxObjs;
-    private final BufferedImage scaledImage;
-    private boolean blinking = true;
+    private val elementIdsList = ArrayList<Int>()
+    private val elementCharsList = ArrayList<Int>()
+    private lateinit var elementIds: IntArray
+    private lateinit var elementChars: IntArray
+    private lateinit var palette: ByteArray
+    private lateinit var charset: ByteArray
+    private lateinit var colChrCombos: Array<BooleanArray>
+    private lateinit var charRmse: DoubleArray
+    private lateinit var objRmse: DoubleArray
+    private lateinit var objChr: Array<IntArray>
+    private lateinit var objCol: Array<IntArray>
 
-    private ArrayList<Integer> elementIdsList = new ArrayList<>();
-    private ArrayList<Integer> elementCharsList = new ArrayList<>();
-    private int[] elementIds;
-    private int[] elementChars;
-    private byte[] palette;
-    private byte[] charset;
-    private boolean[][] colChrCombos;
-    private double[] charRmse;
-    private double[] objRmse;
-    private int[][] objChr;
-    private int[][] objCol;
+    private lateinit var charGfx: Array<ByteArray>
 
-    private byte[][] charGfx;
+    private var running = false
+    private var thread: Thread? = null
+    private var callback: ConverterCallback? = null
+    private var checkVal = 0
 
-    private boolean running = false;
-    private Thread thread;
-    private ConverterCallback callback;
-    private int checkVal;
-
-    public Converter(boolean szzt, int outw, int outh, int mw, int mh, int maxObjs, BufferedImage scaledImage) {
-        this.szzt = szzt;
-        this.outw = outw;
-        this.outh = outh;
-        this.mw = mw;
-        this.mh = mh;
-        this.maxObjs = maxObjs;
-        this.scaledImage = scaledImage.getSubimage(0, 0, scaledImage.getWidth(), scaledImage.getHeight());
+    fun addElement(id: Int, chr: Int) {
+        elementIdsList.add(id)
+        elementCharsList.add(chr)
     }
 
-    public void addElement(int id, int chr) {
-        elementIdsList.add(id);
-        elementCharsList.add(chr);
+    fun beginConvert() {
+        thread = Thread { this.convertThread() }
+        running = true
+        thread!!.start()
     }
 
-    public void beginConvert() {
-        thread = new Thread() {
-            @Override
-            public void run() {
-                convertThread();
-            }
-        };
-        running = true;
-        thread.start();
-    }
+    private fun convertThread() {
+        finaliseSetup()
 
-    private void convertThread() {
-        finaliseSetup();
-
-        ArrayList<ArrayList<Integer>> coords = new ArrayList<>();
-        for (int y = 0; y < outh; y++) {
-            for (int x = 0; x < outw; x++) {
-                coords.add(Util.pair(x, y));
+        val coords = ArrayList<ArrayList<Int>>()
+        for (y in 0 until outh) {
+            for (x in 0 until outw) {
+                coords.add(Util.pair(x, y))
             }
         }
-        Consumer<? super ArrayList<Integer>> act = (Consumer<ArrayList<Integer>>) integers -> convChar(integers.get(0), integers.get(1));
-        coords.parallelStream().forEach(act);
+        coords.parallelStream().forEach(Consumer { integers: ArrayList<Int> ->
+            convChar(
+                integers[0], integers[1]
+            )
+        })
 
         if (maxObjs > 0) {
-            PriorityQueue<ConvObj> best = new PriorityQueue<>();
-            for (int y = 0; y < outh; y++) {
-                for (int x = 0; x < outw; x++) {
-                    int pos = y * outw + x;
-                    double objImprovement = charRmse[pos] - objRmse[pos];
-                    best.add(new ConvObj(objImprovement, x, y));
+            val best = PriorityQueue<ConvObj>()
+            for (y in 0 until outh) {
+                for (x in 0 until outw) {
+                    val pos = y * outw + x
+                    val objImprovement = charRmse[pos] - objRmse[pos]
+                    best.add(ConvObj(objImprovement, x, y))
                 }
             }
-            for (int i = 0; i < maxObjs; i++) {
-                if (!running) return;
-                var conv = best.poll();
-                if (conv == null) break;
-                if (conv.getRmseImprovement() <= 0.0000) break;
+            for (i in 0 until maxObjs) {
+                if (!running) return
+                val conv = best.poll() ?: break
+                if (conv.rmseImprovement <= 0.0000) break
                 //System.out.printf("%dth best: rmse improvement %f\n", i, conv.getRmseImprovement());
-                int x = conv.getX();
-                int y = conv.getY();
-                int id = ZType.OBJECT;
-                int chr = objChr[y][x];
-                int col = objCol[y][x];
-                callback.converted(checkVal, x, y, id, col, chr, col);
+                val x = conv.x
+                val y = conv.y
+                val id = ZType.OBJECT
+                val chr = objChr[y][x]
+                val col = objCol[y][x]
+                callback!!.converted(checkVal, x, y, id, col, chr, col)
             }
         }
 
-        /*
-        for (int y = 0; y < outh; y++) {
-            for (int x = 0; x < outw; x++) {
-                System.out.printf("%d / %d\n", y * outw + x + 1, outh * outw + 1);
-                convChar(x, y);
-                if (!running) return;
-            }
-        }
-         */
-
-        if (running) callback.finished(checkVal);
+        if (running) callback!!.finished(checkVal)
     }
 
 
-
-    private void finaliseSetup() {
+    private fun finaliseSetup() {
         // Write this into a proper array so we can access it faster
 
-        elementIds = new int[elementIdsList.size()];
-        elementChars = new int[elementCharsList.size()];
-        for (int i = 0; i < elementIds.length; i++) {
-            elementIds[i] = elementIdsList.get(i);
-            elementChars[i] = elementCharsList.get(i);
+        elementIds = IntArray(elementIdsList.size)
+        elementChars = IntArray(elementCharsList.size)
+        for (i in elementIds.indices) {
+            elementIds[i] = elementIdsList[i]
+            elementChars[i] = elementCharsList[i]
         }
 
         // Reduce charset down to macroblocks
-        int gfxW = CHAR_W / mw * CHAR_COUNT;
-        int gfxH = CHAR_H / mh;
-        charGfx = new byte[gfxH][gfxW];
-        byte add = (byte) (112 / mw / mh);
-        for (int row = 0; row < CHAR_H; row++) {
-            for (int chr = 0; chr < CHAR_COUNT; chr++) {
-                byte charByte = charset[chr * CHAR_H + row];
-                for (int col = 0; col < CHAR_W; col++) {
-                    byte mask = (byte) (128 >> col);
-                    if ((charByte & mask) != 0) {
-                        charGfx[row / mh][(chr * CHAR_W + col) / mw] += add;
+        val gfxW = DosCanvas.CHAR_W / mw * DosCanvas.CHAR_COUNT
+        val gfxH = DosCanvas.CHAR_H / mh
+        charGfx = Array(gfxH) { ByteArray(gfxW) }
+        val add = (112 / mw / mh).toByte()
+        for (row in 0 until DosCanvas.CHAR_H) {
+            for (chr in 0 until DosCanvas.CHAR_COUNT) {
+                val charByte = charset[chr * DosCanvas.CHAR_H + row]
+                for (col in 0 until DosCanvas.CHAR_W) {
+                    val mask = (128 shr col).toByte()
+                    if ((charByte.toInt() and mask.toInt()) != 0) {
+                        charGfx[row / mh][(chr * DosCanvas.CHAR_W + col) / mw] =
+                            (charGfx[row / mh][(chr * DosCanvas.CHAR_W + col) / mw] + add).toByte()
                     }
                 }
             }
         }
 
         // Allocate room for rmse storage
-        charRmse = new double[outw * outh];
-        objRmse = new double[outw * outh];
-        objChr = new int[outh][outw];
-        objCol = new int[outh][outw];
+        charRmse = DoubleArray(outw * outh)
+        objRmse = DoubleArray(outw * outh)
+        objChr = Array(outh) { IntArray(outw) }
+        objCol = Array(outh) { IntArray(outw) }
 
         // Generate col/chr combos
-        int colRange = blinking ? 128 : 256;
-        colChrCombos = new boolean[colRange][CHAR_COUNT];
+        val colRange = if (blinking) 128 else 256
+        colChrCombos = Array(colRange) { BooleanArray(DosCanvas.CHAR_COUNT) }
 
-        for (int i = 0; i < colRange; i++) {
-            Arrays.fill(colChrCombos[i], true);
+        for (i in 0 until colRange) {
+            Arrays.fill(colChrCombos[i], true)
         }
-
     }
 
-    private void convChar(int charX, int charY) {
-        if (!running) return;
-        int[] fullrgb = scaledImage.getRGB(charX * CHAR_W, charY * CHAR_H, CHAR_W, CHAR_H, null, 0, CHAR_W);
-        double[][][] lab = new double[CHAR_H / mh][CHAR_W / mw][3];
-        for (int y = 0; y < CHAR_H; y++) {
-            for (int x = 0; x < CHAR_W; x++) {
-                int rgb = fullrgb[y * CHAR_W + x];
-                int r = (rgb & 0xFF0000) >> 16;
-                int g = (rgb & 0x00FF00) >> 8;
-                int b = rgb & 0x0000FF;
-                var l = Util.rgbToLab(r, g, b);
-                for (int c = 0; c < 3; c++) {
-                    lab[y / mh][x / mw][c] += l[c];
+    private fun convChar(charX: Int, charY: Int) {
+        if (!running) return
+        val fullrgb = scaledImage.getRGB(
+            charX * DosCanvas.CHAR_W,
+            charY * DosCanvas.CHAR_H,
+            DosCanvas.CHAR_W,
+            DosCanvas.CHAR_H,
+            null,
+            0,
+            DosCanvas.CHAR_W
+        )
+        val lab = Array(DosCanvas.CHAR_H / mh) { Array(DosCanvas.CHAR_W / mw) { DoubleArray(3) } }
+        for (y in 0 until DosCanvas.CHAR_H) {
+            for (x in 0 until DosCanvas.CHAR_W) {
+                val rgb = fullrgb[y * DosCanvas.CHAR_W + x]
+                val r = (rgb and 0xFF0000) shr 16
+                val g = (rgb and 0x00FF00) shr 8
+                val b = rgb and 0x0000FF
+                val l = Util.rgbToLab(r, g, b)
+                for (c in 0..2) {
+                    lab[y / mh][x / mw][c] += l[c]
                 }
             }
         }
-        double div = mw * mh;
-        for (int y = 0; y < CHAR_H / mh; y++) {
-            for (int x = 0; x < CHAR_W / mw; x++) {
-                for (int c = 0; c < 3; c++) {
-                    lab[y][x][c] /= div;
+        val div = (mw * mh).toDouble()
+        for (y in 0 until DosCanvas.CHAR_H / mh) {
+            for (x in 0 until DosCanvas.CHAR_W / mw) {
+                for (c in 0..2) {
+                    lab[y][x][c] /= div
                 }
             }
         }
-        int colRange = blinking ? 128 : 256;
-        double lowest = Double.MAX_VALUE;
-        int bestChr = -1, bestId = -1, bestCol = -1, bestVCol = -1;
-        var combos = colChrCombos.clone();
+        val colRange = if (blinking) 128 else 256
+        var lowest = Double.MAX_VALUE
+        var bestChr = -1
+        var bestId = -1
+        var bestCol = -1
+        var bestVCol = -1
+        val combos = colChrCombos.clone()
 
-        for (int elementIdx = 0; elementIdx < elementChars.length; elementIdx++) {
-            int elementId = elementIds[elementIdx];
-            int elementChar = elementChars[elementIdx];
+        for (elementIdx in elementChars.indices) {
+            val elementId = elementIds[elementIdx]
+            val elementChar = elementChars[elementIdx]
 
-            int textColour = ZType.getTextColour(szzt, elementId);
+            val textColour = ZType.getTextColour(szzt, elementId)
             if (textColour == -1) {
                 // Not text, so use the char
-                for (int col = 0; col < (elementId == ZType.EMPTY ? 1 : colRange); col++) {
-                    if (!running) return;
-                    combos[col][elementChar] = false;
-                    double rmse = cmpChr(elementChar, col, lab);
+                for (col in 0 until (if (elementId == ZType.EMPTY) 1 else colRange)) {
+                    if (!running) return
+                    combos[col][elementChar] = false
+                    val rmse = cmpChr(elementChar, col, lab)
                     if (rmse < lowest) {
-                        lowest = rmse;
-                        bestId = elementId;
-                        bestChr = elementChar;
-                        bestCol = col;
-                        bestVCol = col;
+                        lowest = rmse
+                        bestId = elementId
+                        bestChr = elementChar
+                        bestCol = col
+                        bestVCol = col
                     }
                 }
             } else {
                 // Text, so use the col
                 if (textColour < colRange) {
-                    for (int chr = 0; chr < CHAR_COUNT; chr++) {
-                        if (!running) return;
-                        combos[textColour][chr] = false;
-                        double rmse = cmpChr(chr, textColour, lab);
+                    for (chr in 0 until DosCanvas.CHAR_COUNT) {
+                        if (!running) return
+                        combos[textColour][chr] = false
+                        val rmse = cmpChr(chr, textColour, lab)
                         if (rmse < lowest) {
-                            lowest = rmse;
-                            bestId = elementId;
-                            bestChr = chr;
-                            bestCol = chr;
-                            bestVCol = textColour;
+                            lowest = rmse
+                            bestId = elementId
+                            bestChr = chr
+                            bestCol = chr
+                            bestVCol = textColour
                         }
                     }
                 }
             }
         }
-        {
-            final int chr = bestChr;
-            final int col = bestCol;
-            final int id = bestId;
-            final int vcol = bestVCol;
-            charRmse[charY * outw + charX] = lowest;
-            if (!running) return;
-            SwingUtilities.invokeLater(() -> {
-                callback.converted(checkVal, charX, charY, id, col, chr, vcol);
-            });
+        run {
+            val chr = bestChr
+            val col = bestCol
+            val id = bestId
+            val vcol = bestVCol
+            charRmse[charY * outw + charX] = lowest
+            if (!running) return
+            SwingUtilities.invokeLater { callback!!.converted(checkVal, charX, charY, id, col, chr, vcol) }
         }
 
         if (maxObjs > 0) {
-            lowest = Double.MAX_VALUE;
+            lowest = Double.MAX_VALUE
 
-            for (int col = 0; col < colRange; col++) {
-                for (int chr = 0; chr < CHAR_COUNT; chr++) {
-                    if (!running) return;
+            for (col in 0 until colRange) {
+                for (chr in 0 until DosCanvas.CHAR_COUNT) {
+                    if (!running) return
                     if (combos[col][chr]) {
-                        double rmse = cmpChr(chr, col, lab);
+                        val rmse = cmpChr(chr, col, lab)
                         if (rmse < lowest) {
-                            lowest = rmse;
-                            bestChr = chr;
-                            bestCol = col;
+                            lowest = rmse
+                            bestChr = chr
+                            bestCol = col
                         }
                     }
                 }
             }
 
-            objRmse[charY * outw + charX] = lowest;
-            objChr[charY][charX] = bestChr;
-            objCol[charY][charX] = bestCol;
+            objRmse[charY * outw + charX] = lowest
+            objChr[charY][charX] = bestChr
+            objCol[charY][charX] = bestCol
         }
     }
 
-    private double[] palLab(int col) {
-        int r = palette[col * 3 + 0];
-        int g = palette[col * 3 + 1];
-        int b = palette[col * 3 + 2];
-        r = r * 255 / 63;
-        g = g * 255 / 63;
-        b = b * 255 / 63;
-        return Util.rgbToLab(r, g, b);
+    private fun palLab(col: Int): DoubleArray {
+        var r = palette[col * 3 + 0].toInt()
+        var g = palette[col * 3 + 1].toInt()
+        var b = palette[col * 3 + 2].toInt()
+        r = r * 255 / 63
+        g = g * 255 / 63
+        b = b * 255 / 63
+        return Util.rgbToLab(r, g, b)
     }
 
-    private double cmpChr(int elementChar, int col, double[][][] lab) {
-        var bg = palLab(col / 16);
-        var fg = palLab(col % 16);
-        int offX = elementChar * CHAR_W / mw;
-        double rmse = 0.0;
-        for (int y = 0; y < CHAR_H / mh; y++) {
-            for (int x = 0; x < CHAR_W / mw; x++) {
-                double fgMult = charGfx[y][x + offX] / 112.0;
-                double bgMult = (112 - charGfx[y][x + offX]) / 112.0;
-                for (int c = 0; c < 3; c++) {
-                    double diff = bg[c] * bgMult + fg[c] * fgMult - lab[y][x][c];
-                    rmse += diff * diff;
+    private fun cmpChr(elementChar: Int, col: Int, lab: Array<Array<DoubleArray>>): Double {
+        val bg = palLab(col / 16)
+        val fg = palLab(col % 16)
+        val offX = elementChar * DosCanvas.CHAR_W / mw
+        var rmse = 0.0
+        for (y in 0 until DosCanvas.CHAR_H / mh) {
+            for (x in 0 until DosCanvas.CHAR_W / mw) {
+                val fgMult = charGfx[y][x + offX] / 112.0
+                val bgMult = (112 - charGfx[y][x + offX]) / 112.0
+                for (c in 0..2) {
+                    val diff = bg[c] * bgMult + fg[c] * fgMult - lab[y][x][c]
+                    rmse += diff * diff
                 }
             }
         }
-        return rmse;
+        return rmse
     }
 
-    public void stop() {
-        if (!running) return;
-        running = false;
+    fun stop() {
+        if (!running) return
+        running = false
         try {
-            thread.join();
-        } catch (InterruptedException e) {
-            return;
+            thread!!.join()
+        } catch (ignored: InterruptedException) {
         }
     }
 
-    public void setGfx(DosCanvas canvas) {
-        palette = canvas.getPalette().clone();
-        charset = canvas.getCharset().clone();
+    fun setGfx(canvas: DosCanvas) {
+        palette = canvas.paletteData!!.clone()
+        charset = canvas.charset.clone()
     }
 
-    public void setBlink(boolean blinking) {
-        this.blinking = blinking;
+    fun setBlink(blinking: Boolean) {
+        this.blinking = blinking
     }
 
-    public void setCallback(ConverterCallback converterCallback) {
-        this.callback = converterCallback;
+    fun setCallback(converterCallback: ConverterCallback?) {
+        this.callback = converterCallback
     }
 
-    public void setCheckVal(int checkVal) {
-        this.checkVal = checkVal;
+    fun setCheckVal(checkVal: Int) {
+        this.checkVal = checkVal
     }
 }

@@ -1,243 +1,229 @@
-package zedit2;
+package zedit2
 
-import java.io.*;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Properties;
+import zedit2.CP437.registerFont
+import zedit2.Clip.Companion.decode
+import zedit2.Clip.Companion.encode
+import java.io.File
+import java.io.FileReader
+import java.io.FileWriter
+import java.io.IOException
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.util.*
+import kotlin.math.sqrt
 
-public class GlobalEditor {
-    private static long timestamp = 0;
-    public int f3char;
-    private static GlobalEditor globalInstance = null;
+object GlobalEditor {
+    @JvmField
+    var f3char: Int = 0
+    private var editorsOpened = 0
+    private var bufferTile = Tile(0, 15)
+    private var bufferTileSzzt = false
+    private var properties: Properties? = null
+    var blockBufferW: Int = 0
+        private set
+    var blockBufferH: Int = 0
+        private set
+    var blockBuffer: Array<Tile>? = null
+    private var blockBufferSzzt = false
+    var blockBufferRepeated: Boolean = false
+        private set
 
-    private int editorsOpened = 0;
-    private Tile bufferTile = new Tile(0, 15);
-    private boolean bufferTileSzzt;
-    private Properties properties;
-    private static final String PROPERTIES_FILE = "zedit2.cfg";
+    @JvmField
+    var defaultDirectory: File = Util.jarPath
+    var currentBufferNum: Int = -1
+        private set
+    private var currentBufferManager: BufferManager? = null
 
-    private int blockBufferW, blockBufferH;
-    private Tile blockBuffer[];
-    private boolean blockBufferSzzt;
-    private boolean blockBufferRepeated;
+    private var configFile: File? = null
 
-    private File defaultDirectory = Util.getJarPath();
-    private int currentBufferNum = -1;
-    private BufferManager currentBufferManager = null;
-
-    private File configFile = null;
-
-    private GlobalEditor() {
-        CP437.registerFont();
-        initProperties();
+    init {
+        registerFont()
+        initProperties()
         if (isKey("DEFAULT_DIRECTORY")) {
-            defaultDirectory = new File(Util.evalConfigDir(getString("DEFAULT_DIRECTORY")));
+            defaultDirectory = File(Util.evalConfigDir(getString("DEFAULT_DIRECTORY")!!))
         }
     }
 
-    public static void updateTimestamp()
-    {
-        timestamp = System.nanoTime();
-    }
-
-    public static long getTimestamp()
-    {
-        return timestamp;
-    }
-
-    public static GlobalEditor getGlobalEditor() {
-        if (globalInstance == null) {
-            globalInstance = new GlobalEditor();
-        }
-        return globalInstance;
-    }
-
-    public void editorClosed() {
-        editorsOpened--;
+    fun editorClosed() {
+        editorsOpened--
         if (editorsOpened == 0) {
-            writeOutProperties();
-            System.exit(0);
+            writeOutProperties()
+            System.exit(0)
         }
     }
 
-    public Tile getBufferTile(boolean szzt) {
-        if (szzt == bufferTileSzzt)
-            return bufferTile;
+    fun getBufferTile(szzt: Boolean): Tile {
+        return if (szzt == bufferTileSzzt) bufferTile
         else {
-            return ZType.convert(bufferTile, szzt);
+            ZType.convert(bufferTile, szzt)
         }
     }
 
-    public void setBufferTile(Tile tile, boolean szzt) {
-        if (tile == null) return;
-        bufferTile = tile;
-        bufferTileSzzt = szzt;
-        clearBufferSelected();
+    fun setBufferTile(tile: Tile?, szzt: Boolean) {
+        if (tile == null) return
+        bufferTile = tile
+        bufferTileSzzt = szzt
+        clearBufferSelected()
     }
 
-    public void setBlockBuffer(int w, int h, Tile[] data, boolean repeated, boolean szzt) {
-        blockBufferW = w;
-        blockBufferH = h;
-        blockBuffer = data;
-        blockBufferRepeated = repeated;
-        blockBufferSzzt = szzt;
-        clearBufferSelected();
+    fun setBlockBuffer(w: Int, h: Int, data: Array<Tile>?, repeated: Boolean, szzt: Boolean) {
+        blockBufferW = w
+        blockBufferH = h
+        blockBuffer = data
+        blockBufferRepeated = repeated
+        blockBufferSzzt = szzt
+        clearBufferSelected()
     }
 
-    public String encodeBuffer() {
-        String result;
+    fun encodeBuffer(): String {
+        val result: String
         if (isBlockBuffer()) {
-            result = Clip.encode(blockBufferW, blockBufferH, blockBuffer, blockBufferSzzt);
+            // TODO(jakeouellette): Avoid BlockBuffer being null going forward.
+            result = encode(blockBufferW, blockBufferH, blockBuffer!!, blockBufferSzzt)
         } else {
-            Tile[] tiles = {bufferTile};
-            result = Clip.encode(1, 1, tiles, bufferTileSzzt);
+            val tiles = arrayOf(bufferTile)
+            result = encode(1, 1, tiles, bufferTileSzzt)
         }
-        return result;
-    }
-    public void decodeBuffer(String encodedBuffer) {
-        Clip clip = Clip.decode(encodedBuffer);
-        if (clip.getW() == 1 && clip.getH() == 1) {
-            bufferTile = clip.getTiles()[0];
-            bufferTileSzzt = clip.isSzzt();
-        } else {
-            blockBufferW = clip.getW();
-            blockBufferH = clip.getH();
-            blockBuffer = clip.getTiles();
-            blockBufferSzzt = clip.isSzzt();
-            blockBufferRepeated = false;
-        }
-        clearBufferSelected();
+        return result
     }
 
-    public void clearBufferSelected() {
-        currentBufferNum = -1;
+    fun decodeBuffer(encodedBuffer: String?) {
+        val clip = decode(encodedBuffer)
+        if (clip.w == 1 && clip.h == 1) {
+            bufferTile = clip.tiles[0]
+            bufferTileSzzt = clip.isSzzt
+        } else {
+            blockBufferW = clip.w
+            blockBufferH = clip.h
+            blockBuffer = clip.tiles
+            blockBufferSzzt = clip.isSzzt
+            blockBufferRepeated = false
+        }
+        clearBufferSelected()
+    }
+
+    fun clearBufferSelected() {
+        currentBufferNum = -1
         if (currentBufferManager != null) {
-            currentBufferManager.updateSelected(currentBufferNum);
-            currentBufferManager = null;
+            currentBufferManager!!.updateSelected(currentBufferNum)
+            currentBufferManager = null
         }
     }
 
-    public int getBlockBufferW() {
-        return blockBufferW;
-    }
-    public int getBlockBufferH() {
-        return blockBufferH;
-    }
-    public boolean getBlockBufferRepeated() {
-        return blockBufferRepeated;
-    }
-    public Tile[] getBlockBuffer(boolean szzt) {
-        if (szzt == blockBufferSzzt)
-            return blockBuffer;
-        else
-            return ZType.convert(blockBuffer, szzt);
-    }
-    public boolean isBlockBuffer() {
-        return blockBufferW != 0;
+    fun getBlockBuffer(szzt: Boolean): Array<Tile> {
+        // TODO(jakeouellette): Avoid null issues with blockbuffer.
+        return if (szzt == blockBufferSzzt) blockBuffer!!
+        else ZType.convert(blockBuffer!!, szzt)
     }
 
-    private void writeOutProperties() {
+    fun isBlockBuffer(): Boolean {
+        return blockBufferW != 0
+    }
+
+    private fun writeOutProperties() {
         // configFile
         if (writeOutProperties(configFile)) {
-            return;
+            return
         }
 
-        Path[] tryPaths = getPaths();
-        for (Path path : tryPaths) {
+        val tryPaths = paths
+        for (path in tryPaths) {
             if (writeOutProperties(path)) {
-                return;
+                return
             }
         }
     }
-    private boolean writeOutProperties(Path path) {
-        File file = Paths.get(path.toString(), PROPERTIES_FILE).toFile();
-        return writeOutProperties(file);
+
+    private fun writeOutProperties(path: Path): Boolean {
+        val file = Paths.get(path.toString(), PROPERTIES_FILE).toFile()
+        return writeOutProperties(file)
     }
-    private boolean writeOutProperties(File file) {
-        if (file == null) return false;
+
+    private fun writeOutProperties(file: File?): Boolean {
+        if (file == null) return false
         try {
-            var fw = new FileWriter(file);
-            properties.store(fw, "ZEdit v" + Main.VERSION + " Configuration");
-            fw.close();
-            System.out.println("Wrote properties to " + file);
-        } catch (IOException e) {
-            System.out.println("Failed to write to " + file);
-            return false;
+            val fw = FileWriter(file)
+            properties!!.store(fw, "ZEdit v" + Main.VERSION + " Configuration")
+            fw.close()
+            println("Wrote properties to $file")
+        } catch (e: IOException) {
+            println("Failed to write to $file")
+            return false
         }
-        return true;
+        return true
     }
 
-    public void editorOpened() {
-        editorsOpened++;
+    fun editorOpened() {
+        editorsOpened++
     }
 
 
+    fun initProperties() {
+        System.out.println("Initializing properties...");
+        properties = Properties()
+        var foundProperties = false
 
-    public void initProperties() {
-        properties = new Properties();
-        boolean foundProperties = false;
-
-        Path[] tryPaths = getPaths();
-        for (Path path : tryPaths) {
-            File file = lookForProperties(path);
+        val tryPaths = paths
+        for (path in tryPaths) {
+            val file = lookForProperties(path)
             if (file != null) {
-                configFile = file;
-                foundProperties = true;
-                break;
+                configFile = file
+                foundProperties = true
+                break
             }
         }
 
         if (!foundProperties) {
-            System.err.println("Unable to locate properties file.");
+            System.err.println("Unable to locate properties file.")
         }
 
-        newConfigOption("ZOOM", "1");
-        newConfigOption("ONE_WORLD_AT_A_TIME", "true");
-        newConfigOption("ZOOM_FACTOR", String.valueOf(Math.sqrt(2)));
-        newConfigOption("MIN_ZOOM", "0.0625");
-        newConfigOption("MAX_ZOOM", "8.0");
-        newConfigOption("ATLAS_GRID", "true");
-        newConfigOption("BLINKING", "true");
+        newConfigOption("ZOOM", "1")
+        newConfigOption("ONE_WORLD_AT_A_TIME", "true")
+        newConfigOption("ZOOM_FACTOR", sqrt(2.0).toString())
+        newConfigOption("MIN_ZOOM", "0.0625")
+        newConfigOption("MAX_ZOOM", "8.0")
+        newConfigOption("ATLAS_GRID", "true")
+        newConfigOption("BLINKING", "true")
 
-        newConfigOption("HELPBROWSER_WIDTH", "800");
-        newConfigOption("HELPBROWSER_HEIGHT", "600");
+        newConfigOption("HELPBROWSER_WIDTH", "800")
+        newConfigOption("HELPBROWSER_HEIGHT", "600")
 
-        newConfigOption("SHOW_INVISIBLES", "false");
+        newConfigOption("SHOW_INVISIBLES", "false")
 
-        newConfigOption("RECENT_MAX", "10");
+        newConfigOption("RECENT_MAX", "10")
 
-        newConfigOption("UNDO_BUFFER_SIZE", "100");
+        newConfigOption("UNDO_BUFFER_SIZE", "100")
 
         //newConfigOption("DEFAULT_DIRECTORY", "C:/Users/" + System.getProperty("user.name") + "/Dropbox/YHWH/zzt/zzt");
         //newConfigOption("SCREENSHOT_DIR", "C:/Users/" + System.getProperty("user.name") + "/Dropbox/YHWH/zzt/screenshots");
-        newConfigOption("SCREENSHOT_NAME", "Screenshot {date} {time}.png");
-        newConfigOption("DEFAULT_SZZT", "false");
-        newConfigOption("TEST_SWITCH_BOARD", "true");
+        newConfigOption("SCREENSHOT_NAME", "Screenshot {date} {time}.png")
+        newConfigOption("DEFAULT_SZZT", "false")
+        newConfigOption("TEST_SWITCH_BOARD", "true")
         //setConfigOption("LOAD_FILE", "C:/Users/" + System.getProperty("user.name") + "/Dropbox/YHWH/zzt/zzt/TOWN.ZZT");
         //newConfigOption("ZZT_TEST_PATH", "C:/Users/" + System.getProperty("user.name") + "/Dropbox/YHWH/zzt/zzt");
         //setConfigOption("ZZT_TEST_PATH", "");
-        newConfigOption("ZZT_TEST_COMMAND", "zeta86.exe");
-        newConfigOption("ZZT_TEST_PARAMS", "-t -e zzt.exe");
-        newConfigOption("ZZT_TEST_FILENAME", "__TEST");
-        newConfigOption("ZZT_TEST_INJECT_P", "true");
-        newConfigOption("ZZT_TEST_INJECT_P_DELAY", "600");
-        newConfigOption("ZZT_TEST_USE_CHARPAL", "true");
-        newConfigOption("ZZT_TEST_USE_BLINK", "true");
+        newConfigOption("ZZT_TEST_COMMAND", "zeta86.exe")
+        newConfigOption("ZZT_TEST_PARAMS", "-t -e zzt.exe")
+        newConfigOption("ZZT_TEST_FILENAME", "__TEST")
+        newConfigOption("ZZT_TEST_INJECT_P", "true")
+        newConfigOption("ZZT_TEST_INJECT_P_DELAY", "600")
+        newConfigOption("ZZT_TEST_USE_CHARPAL", "true")
+        newConfigOption("ZZT_TEST_USE_BLINK", "true")
 
         //newConfigOption("SZZT_TEST_PATH", "C:/Users/" + System.getProperty("user.name") + "/Dropbox/YHWH/zzt/zzt/superzzt");
         //setConfigOption("SZZT_TEST_PATH", "");
-        newConfigOption("SZZT_TEST_COMMAND", "zeta86.exe");
-        newConfigOption("SZZT_TEST_PARAMS", "-t -e superz.exe");
-        newConfigOption("SZZT_TEST_FILENAME", "__TEST");
-        newConfigOption("SZZT_TEST_INJECT_P", "true");
-        newConfigOption("SZZT_TEST_INJECT_P_DELAY", "600");
-        newConfigOption("SZZT_TEST_INJECT_ENTER", "true");
-        newConfigOption("SZZT_TEST_INJECT_ENTER_DELAY", "50");
-        newConfigOption("SZZT_TEST_USE_CHARPAL", "true");
-        newConfigOption("SZZT_TEST_USE_BLINK", "true");
+        newConfigOption("SZZT_TEST_COMMAND", "zeta86.exe")
+        newConfigOption("SZZT_TEST_PARAMS", "-t -e superz.exe")
+        newConfigOption("SZZT_TEST_FILENAME", "__TEST")
+        newConfigOption("SZZT_TEST_INJECT_P", "true")
+        newConfigOption("SZZT_TEST_INJECT_P_DELAY", "600")
+        newConfigOption("SZZT_TEST_INJECT_ENTER", "true")
+        newConfigOption("SZZT_TEST_INJECT_ENTER_DELAY", "50")
+        newConfigOption("SZZT_TEST_USE_CHARPAL", "true")
+        newConfigOption("SZZT_TEST_USE_BLINK", "true")
 
-        config_fmenus();
+        config_fmenus()
+
         /*
         newConfigOption("F3_MENU", "Terrain");
         newConfigOption("F3_MENU_0", "Empty");
@@ -378,385 +364,411 @@ public class GlobalEditor {
         setConfigOption("F5_MENU_19", "Web");
 
          */
+        newConfigOption("AUTO_INSERT_NEWLINE", "true")
+        newConfigOption("CODEEDITOR_WIDTH", "640")
+        newConfigOption("CODEEDITOR_HEIGHT", "480")
+        newConfigOption("FIND_MATCH_CASE", "false")
+        newConfigOption("FIND_REGEX", "false")
 
-        newConfigOption("AUTO_INSERT_NEWLINE", "true");
-        newConfigOption("CODEEDITOR_WIDTH", "640");
-        newConfigOption("CODEEDITOR_HEIGHT", "480");
-        newConfigOption("FIND_MATCH_CASE", "false");
-        newConfigOption("FIND_REGEX", "false");
-
-        newConfigOption("EDITOR_BG", "333333");
-        newConfigOption("EDITOR_MUSIC_BG", "3A004A");
-        newConfigOption("EDITOR_BIND_BG", "005A00");
-        newConfigOption("EDITOR_SELECTION_COL", "AAAAAA");
-        newConfigOption("EDITOR_SELECTED_TEXT_COL", "000000");
-        newConfigOption("EDITOR_CARET_COL", "FFFFFF");
+        newConfigOption("EDITOR_BG", "333333")
+        newConfigOption("EDITOR_MUSIC_BG", "3A004A")
+        newConfigOption("EDITOR_BIND_BG", "005A00")
+        newConfigOption("EDITOR_SELECTION_COL", "AAAAAA")
+        newConfigOption("EDITOR_SELECTED_TEXT_COL", "000000")
+        newConfigOption("EDITOR_CARET_COL", "FFFFFF")
 
         // Syntax highlighting (even #)
-        newConfigOption("SYNTAX_HIGHLIGHTING", "true");
-        newConfigOption("HL_CENTEREDTEXT", "FFFFFF");
-        newConfigOption("HL_COLON", "00C095");
-        newConfigOption("HL_COMMAND", "AFFF00");
-        newConfigOption("HL_CONDITION", "51CBFF");
-        newConfigOption("HL_COUNTER", "00FFFF");
-        newConfigOption("HL_DIRECTION", "EFAF00");
-        newConfigOption("HL_DOLLAR", "9FFFFF");
-        newConfigOption("HL_ERROR", "FF0000");
-        newConfigOption("HL_EXCLAMATION", "9FFF9F");
-        newConfigOption("HL_FLAG", "D47FC3");
-        newConfigOption("HL_GOTOLABEL", "7CFFC6");
-        newConfigOption("HL_HASH", "FFFF00");
-        newConfigOption("HL_LABEL", "6CCCB6");
-        newConfigOption("HL_MUSICDRUM", "87ABED");
-        newConfigOption("HL_MUSICNOTE", "FF91D7");
-        newConfigOption("HL_MUSICOCTAVE", "8D89D6");
-        newConfigOption("HL_MUSICREST", "669AF5");
-        newConfigOption("HL_MUSICSHARPFLAT", "92A0F4");
-        newConfigOption("HL_MUSICTIMING", "99A1CC");
-        newConfigOption("HL_MUSICTIMINGMOD", "88B2CC");
-        newConfigOption("HL_NOOP", "888888");
-        newConfigOption("HL_NUMBER", "00FF00");
-        newConfigOption("HL_OBJECTLABELSEPARATOR", "DDDDDD");
-        newConfigOption("HL_OBJECTNAME", "FF8FFF");
-        newConfigOption("HL_SLASH", "FFDD55");
-        newConfigOption("HL_TEXT", "FFFFAF");
-        newConfigOption("HL_TEXTWARN", "FF6F00");
-        newConfigOption("HL_TEXTWARNLIGHT", "FFA500");
-        newConfigOption("HL_THING", "FFDD55");
-        newConfigOption("HL_ZAPPED", "009FFF");
-        newConfigOption("HL_ZAPPEDLABEL", "6CBBEB");
-        newConfigOption("HL_BLUE", "AAAAFF");
-        newConfigOption("HL_GREEN", "AAFFAA");
-        newConfigOption("HL_CYAN", "88FFFF");
-        newConfigOption("HL_RED", "FFAAAA");
-        newConfigOption("HL_PURPLE", "FF88FF");
-        newConfigOption("HL_YELLOW", "FFFF88");
-        newConfigOption("HL_WHITE", "FFFFFF");
+        newConfigOption("SYNTAX_HIGHLIGHTING", "true")
+        newConfigOption("HL_CENTEREDTEXT", "FFFFFF")
+        newConfigOption("HL_COLON", "00C095")
+        newConfigOption("HL_COMMAND", "AFFF00")
+        newConfigOption("HL_CONDITION", "51CBFF")
+        newConfigOption("HL_COUNTER", "00FFFF")
+        newConfigOption("HL_DIRECTION", "EFAF00")
+        newConfigOption("HL_DOLLAR", "9FFFFF")
+        newConfigOption("HL_ERROR", "FF0000")
+        newConfigOption("HL_EXCLAMATION", "9FFF9F")
+        newConfigOption("HL_FLAG", "D47FC3")
+        newConfigOption("HL_GOTOLABEL", "7CFFC6")
+        newConfigOption("HL_HASH", "FFFF00")
+        newConfigOption("HL_LABEL", "6CCCB6")
+        newConfigOption("HL_MUSICDRUM", "87ABED")
+        newConfigOption("HL_MUSICNOTE", "FF91D7")
+        newConfigOption("HL_MUSICOCTAVE", "8D89D6")
+        newConfigOption("HL_MUSICREST", "669AF5")
+        newConfigOption("HL_MUSICSHARPFLAT", "92A0F4")
+        newConfigOption("HL_MUSICTIMING", "99A1CC")
+        newConfigOption("HL_MUSICTIMINGMOD", "88B2CC")
+        newConfigOption("HL_NOOP", "888888")
+        newConfigOption("HL_NUMBER", "00FF00")
+        newConfigOption("HL_OBJECTLABELSEPARATOR", "DDDDDD")
+        newConfigOption("HL_OBJECTNAME", "FF8FFF")
+        newConfigOption("HL_SLASH", "FFDD55")
+        newConfigOption("HL_TEXT", "FFFFAF")
+        newConfigOption("HL_TEXTWARN", "FF6F00")
+        newConfigOption("HL_TEXTWARNLIGHT", "FFA500")
+        newConfigOption("HL_THING", "FFDD55")
+        newConfigOption("HL_ZAPPED", "009FFF")
+        newConfigOption("HL_ZAPPEDLABEL", "6CBBEB")
+        newConfigOption("HL_BLUE", "AAAAFF")
+        newConfigOption("HL_GREEN", "AAFFAA")
+        newConfigOption("HL_CYAN", "88FFFF")
+        newConfigOption("HL_RED", "FFAAAA")
+        newConfigOption("HL_PURPLE", "FF88FF")
+        newConfigOption("HL_YELLOW", "FFFF88")
+        newConfigOption("HL_WHITE", "FFFFFF")
 
 
-        newConfigOption("K_Escape", "ESCAPE");
-        newConfigOption("K_Up", "UP");
-        newConfigOption("K_Down", "DOWN");
-        newConfigOption("K_Left", "LEFT");
-        newConfigOption("K_Right", "RIGHT");
-        newConfigOption("K_Alt-Up", "alt UP");
-        newConfigOption("K_Alt-Down", "alt DOWN");
-        newConfigOption("K_Alt-Left", "alt LEFT");
-        newConfigOption("K_Alt-Right", "alt RIGHT");
-        newConfigOption("K_Shift-Up", "shift UP");
-        newConfigOption("K_Shift-Down", "shift DOWN");
-        newConfigOption("K_Shift-Left", "shift LEFT");
-        newConfigOption("K_Shift-Right", "shift RIGHT");
-        newConfigOption("K_Ctrl-Shift-Up", "ctrl shift UP");
-        newConfigOption("K_Ctrl-Shift-Down", "ctrl shift DOWN");
-        newConfigOption("K_Ctrl-Shift-Left", "ctrl shift LEFT");
-        newConfigOption("K_Ctrl-Shift-Right", "ctrl shift RIGHT");
-        newConfigOption("K_Tab", "TAB");
-        newConfigOption("K_Home", "HOME");
-        newConfigOption("K_End", "END");
-        newConfigOption("K_PgUp", "PAGE_UP");
-        newConfigOption("K_PgDn", "PAGE_DOWN");
-        newConfigOption("K_Insert", "INSERT");
-        newConfigOption("K_Space", "SPACE");
-        newConfigOption("K_Delete", "DELETE");
-        newConfigOption("K_Enter", "ENTER");
-        newConfigOption("K_Ctrl-Enter", "ctrl ENTER");
-        newConfigOption("K_Ctrl-=", "ctrl EQUALS");
-        newConfigOption("K_Ctrl--", "ctrl MINUS");
-        newConfigOption("K_A", "A");
-        newConfigOption("K_B", "B");
-        newConfigOption("K_C", "C");
-        newConfigOption("K_D", "D");
-        newConfigOption("K_F", "F");
-        newConfigOption("K_G", "G");
-        newConfigOption("K_I", "I");
-        newConfigOption("K_L", "L");
-        newConfigOption("K_P", "P");
-        newConfigOption("K_S", "S");
-        newConfigOption("K_X", "X");
-        newConfigOption("K_Ctrl-A", "ctrl A");
-        newConfigOption("K_Ctrl-B", "ctrl B");
-        newConfigOption("K_Ctrl-D", "ctrl D");
-        newConfigOption("K_Ctrl-E", "ctrl E");
-        newConfigOption("K_Ctrl-F", "ctrl F");
-        newConfigOption("K_Ctrl-H", "ctrl H");
-        newConfigOption("K_Ctrl-S", "ctrl S");
-        newConfigOption("K_Ctrl-P", "ctrl P");
-        newConfigOption("K_Ctrl-R", "ctrl R");
-        newConfigOption("K_Ctrl-V", "ctrl V");
-        newConfigOption("K_Ctrl-X", "ctrl X");
-        newConfigOption("K_Ctrl-Y", "ctrl Y");
-        newConfigOption("K_Ctrl-Z", "ctrl Z");
-        newConfigOption("K_Ctrl--", "ctrl -");
-        newConfigOption("K_Ctrl-=", "ctrl =");
-        newConfigOption("K_Alt-B", "alt B");
-        newConfigOption("K_Alt-F", "alt F");
-        newConfigOption("K_Alt-I", "alt I");
-        newConfigOption("K_Alt-M", "alt M");
-        newConfigOption("K_Alt-S", "alt S");
-        newConfigOption("K_Alt-T", "alt T");
-        newConfigOption("K_Alt-X", "alt X");
-        newConfigOption("K_Shift-B", "shift B");
-        newConfigOption("K_Ctrl-Alt-M", "ctrl alt M");
-        newConfigOption("K_F1", "F1");
-        newConfigOption("K_F2", "F2");
-        newConfigOption("K_F3", "F3");
-        newConfigOption("K_F4", "F4");
-        newConfigOption("K_F5", "F5");
-        newConfigOption("K_F6", "F6");
-        newConfigOption("K_F7", "F7");
-        newConfigOption("K_F8", "F8");
-        newConfigOption("K_F9", "F9");
-        newConfigOption("K_F10", "F10");
-        newConfigOption("K_F11", "F11");
-        newConfigOption("K_F12", "F12");
-        newConfigOption("K_Shift-F1", "shift F1");
-        newConfigOption("K_Shift-F2", "shift F2");
-        newConfigOption("K_Shift-F3", "shift F3");
-        newConfigOption("K_Shift-F4", "shift F4");
-        newConfigOption("K_Shift-F5", "shift F5");
-        newConfigOption("K_Shift-F6", "shift F6");
-        newConfigOption("K_Alt-F12", "alt F12");
-        newConfigOption("K_0", "0");
-        newConfigOption("K_1", "1");
-        newConfigOption("K_2", "2");
-        newConfigOption("K_3", "3");
-        newConfigOption("K_4", "4");
-        newConfigOption("K_5", "5");
-        newConfigOption("K_6", "6");
-        newConfigOption("K_7", "7");
-        newConfigOption("K_8", "8");
-        newConfigOption("K_9", "9");
-        newConfigOption("K_Ctrl-0", "ctrl 0");
-        newConfigOption("K_Ctrl-1", "ctrl 1");
-        newConfigOption("K_Ctrl-2", "ctrl 2");
-        newConfigOption("K_Ctrl-3", "ctrl 3");
-        newConfigOption("K_Ctrl-4", "ctrl 4");
-        newConfigOption("K_Ctrl-5", "ctrl 5");
-        newConfigOption("K_Ctrl-6", "ctrl 6");
-        newConfigOption("K_Ctrl-7", "ctrl 7");
-        newConfigOption("K_Ctrl-8", "ctrl 8");
-        newConfigOption("K_Ctrl-9", "ctrl 9");
-        newConfigOption("K_COMMA", "COMMA");
-        newConfigOption("K_PERIOD", "PERIOD");
+        newConfigOption("K_Escape", "ESCAPE")
+        newConfigOption("K_Up", "UP")
+        newConfigOption("K_Down", "DOWN")
+        newConfigOption("K_Left", "LEFT")
+        newConfigOption("K_Right", "RIGHT")
+        newConfigOption("K_Alt-Up", "alt UP")
+        newConfigOption("K_Alt-Down", "alt DOWN")
+        newConfigOption("K_Alt-Left", "alt LEFT")
+        newConfigOption("K_Alt-Right", "alt RIGHT")
+        newConfigOption("K_Shift-Up", "shift UP")
+        newConfigOption("K_Shift-Down", "shift DOWN")
+        newConfigOption("K_Shift-Left", "shift LEFT")
+        newConfigOption("K_Shift-Right", "shift RIGHT")
+        newConfigOption("K_Ctrl-Shift-Up", "ctrl shift UP")
+        newConfigOption("K_Ctrl-Shift-Down", "ctrl shift DOWN")
+        newConfigOption("K_Ctrl-Shift-Left", "ctrl shift LEFT")
+        newConfigOption("K_Ctrl-Shift-Right", "ctrl shift RIGHT")
+        newConfigOption("K_Tab", "TAB")
+        newConfigOption("K_Home", "HOME")
+        newConfigOption("K_End", "END")
+        newConfigOption("K_PgUp", "PAGE_UP")
+        newConfigOption("K_PgDn", "PAGE_DOWN")
+        newConfigOption("K_Insert", "INSERT")
+        newConfigOption("K_Space", "SPACE")
+        newConfigOption("K_Delete", "DELETE")
+        newConfigOption("K_Enter", "ENTER")
+        newConfigOption("K_Ctrl-Enter", "ctrl ENTER")
+        newConfigOption("K_Ctrl-=", "ctrl EQUALS")
+        newConfigOption("K_Ctrl--", "ctrl MINUS")
+        newConfigOption("K_A", "A")
+        newConfigOption("K_B", "B")
+        newConfigOption("K_C", "C")
+        newConfigOption("K_D", "D")
+        newConfigOption("K_F", "F")
+        newConfigOption("K_G", "G")
+        newConfigOption("K_I", "I")
+        newConfigOption("K_L", "L")
+        newConfigOption("K_P", "P")
+        newConfigOption("K_S", "S")
+        newConfigOption("K_X", "X")
+        newConfigOption("K_Ctrl-A", "ctrl A")
+        newConfigOption("K_Ctrl-B", "ctrl B")
+        newConfigOption("K_Ctrl-D", "ctrl D")
+        newConfigOption("K_Ctrl-E", "ctrl E")
+        newConfigOption("K_Ctrl-F", "ctrl F")
+        newConfigOption("K_Ctrl-H", "ctrl H")
+        newConfigOption("K_Ctrl-S", "ctrl S")
+        newConfigOption("K_Ctrl-P", "ctrl P")
+        newConfigOption("K_Ctrl-R", "ctrl R")
+        newConfigOption("K_Ctrl-V", "ctrl V")
+        newConfigOption("K_Ctrl-X", "ctrl X")
+        newConfigOption("K_Ctrl-Y", "ctrl Y")
+        newConfigOption("K_Ctrl-Z", "ctrl Z")
+        newConfigOption("K_Ctrl--", "ctrl -")
+        newConfigOption("K_Ctrl-=", "ctrl =")
+        newConfigOption("K_Alt-B", "alt B")
+        newConfigOption("K_Alt-F", "alt F")
+        newConfigOption("K_Alt-I", "alt I")
+        newConfigOption("K_Alt-M", "alt M")
+        newConfigOption("K_Alt-S", "alt S")
+        newConfigOption("K_Alt-T", "alt T")
+        newConfigOption("K_Alt-X", "alt X")
+        newConfigOption("K_Shift-B", "shift B")
+        newConfigOption("K_Ctrl-Alt-M", "ctrl alt M")
+        newConfigOption("K_F1", "F1")
+        newConfigOption("K_F2", "F2")
+        newConfigOption("K_F3", "F3")
+        newConfigOption("K_F4", "F4")
+        newConfigOption("K_F5", "F5")
+        newConfigOption("K_F6", "F6")
+        newConfigOption("K_F7", "F7")
+        newConfigOption("K_F8", "F8")
+        newConfigOption("K_F9", "F9")
+        newConfigOption("K_F10", "F10")
+        newConfigOption("K_F11", "F11")
+        newConfigOption("K_F12", "F12")
+        newConfigOption("K_Shift-F1", "shift F1")
+        newConfigOption("K_Shift-F2", "shift F2")
+        newConfigOption("K_Shift-F3", "shift F3")
+        newConfigOption("K_Shift-F4", "shift F4")
+        newConfigOption("K_Shift-F5", "shift F5")
+        newConfigOption("K_Shift-F6", "shift F6")
+        newConfigOption("K_Alt-F12", "alt F12")
+        newConfigOption("K_0", "0")
+        newConfigOption("K_1", "1")
+        newConfigOption("K_2", "2")
+        newConfigOption("K_3", "3")
+        newConfigOption("K_4", "4")
+        newConfigOption("K_5", "5")
+        newConfigOption("K_6", "6")
+        newConfigOption("K_7", "7")
+        newConfigOption("K_8", "8")
+        newConfigOption("K_9", "9")
+        newConfigOption("K_Ctrl-0", "ctrl 0")
+        newConfigOption("K_Ctrl-1", "ctrl 1")
+        newConfigOption("K_Ctrl-2", "ctrl 2")
+        newConfigOption("K_Ctrl-3", "ctrl 3")
+        newConfigOption("K_Ctrl-4", "ctrl 4")
+        newConfigOption("K_Ctrl-5", "ctrl 5")
+        newConfigOption("K_Ctrl-6", "ctrl 6")
+        newConfigOption("K_Ctrl-7", "ctrl 7")
+        newConfigOption("K_Ctrl-8", "ctrl 8")
+        newConfigOption("K_Ctrl-9", "ctrl 9")
+        newConfigOption("K_COMMA", "COMMA")
+        newConfigOption("K_PERIOD", "PERIOD")
 
-        newConfigOption("ZZT_GRAD_0", "CAAAAAEAAAAAEwEAFwEAFgEAFQEAExkAFxkAFhkAFQkA");
-        newConfigOption("ZZT_GRAD_1", "CAAAAAEAAAAAEwIAFwIAFgIAFQIAEyoAFyoAFioAFQoA");
-        newConfigOption("ZZT_GRAD_2", "CAAAAAEAAAAAEwMAFwMAFgMAFQMAEzsAFzsAFjsAFQsA");
-        newConfigOption("ZZT_GRAD_3", "CAAAAAEAAAAAEwQAFwQAFgQAFQQAE0wAF0wAFkwAFQwA");
-        newConfigOption("ZZT_GRAD_4", "CAAAAAEAAAAAEwUAFwUAFgUAFQUAE10AF10AFl0AFQ0A");
-        newConfigOption("ZZT_GRAD_5", "CAAAAAEAAAAAEwYAFwYAFgYAFQYAE24AF24AFm4AFQ4A");
-        newConfigOption("ZZT_GRAD_6", "DAAAAAEAAAAAEwgAFwgAFggAFQgAFngAF3gAE3gAFQcAE38AF38AFn8AFQ8A");
+        newConfigOption("ZZT_GRAD_0", "CAAAAAEAAAAAEwEAFwEAFgEAFQEAExkAFxkAFhkAFQkA")
+        newConfigOption("ZZT_GRAD_1", "CAAAAAEAAAAAEwIAFwIAFgIAFQIAEyoAFyoAFioAFQoA")
+        newConfigOption("ZZT_GRAD_2", "CAAAAAEAAAAAEwMAFwMAFgMAFQMAEzsAFzsAFjsAFQsA")
+        newConfigOption("ZZT_GRAD_3", "CAAAAAEAAAAAEwQAFwQAFgQAFQQAE0wAF0wAFkwAFQwA")
+        newConfigOption("ZZT_GRAD_4", "CAAAAAEAAAAAEwUAFwUAFgUAFQUAE10AF10AFl0AFQ0A")
+        newConfigOption("ZZT_GRAD_5", "CAAAAAEAAAAAEwYAFwYAFgYAFQYAE24AF24AFm4AFQ4A")
+        newConfigOption("ZZT_GRAD_6", "DAAAAAEAAAAAEwgAFwgAFggAFQgAFngAF3gAE3gAFQcAE38AF38AFn8AFQ8A")
+
         //setConfigOption("ZZT_GRAD_7", "PAAAAAEAAAAAFk4AF04AE04AFkQAFmQAF0YAFkYAFmYAFhYAF2EAFmEAFhEAFiEAFxIAFhIAFiIAFkIAFyQAFiQAFkQAFnQAF3QAFkcAFncAE34AF34AFn4AFQ4AFl4AF14AE14AFlUAFmUAF1YAFlYAFmYAE2sAF2sAFmsAFQsAFjsAFzsAEzsAFjMAEzgAFzgAFjgAFQgAFkgAF0gAE0gAFkQAFhQAF0EAFkEAFQEAExgAFxgAFhgAFQgA");
+        newConfigOption("SZZT_GRAD_0", "CAAAAAEAAAABLwEAFwEAFgEAFQEALxkAFxkAFhkAFRkA")
+        newConfigOption("SZZT_GRAD_1", "CAAAAAEAAAABLwIAFwIAFgIAFQIALyoAFyoAFioAFSoA")
+        newConfigOption("SZZT_GRAD_2", "CAAAAAEAAAABLwMAFwMAFgMAFQMALzsAFzsAFjsAFTsA")
+        newConfigOption("SZZT_GRAD_3", "CAAAAAEAAAABLwQAFwQAFgQAFQQAL0wAF0wAFkwAFUwA")
+        newConfigOption("SZZT_GRAD_4", "CAAAAAEAAAABLwUAFwUAFgUAFQUAL10AF10AFl0AFV0A")
+        newConfigOption("SZZT_GRAD_5", "CAAAAAEAAAABLwYAFwYAFgYAFQYAL24AF24AFm4AFW4A")
+        newConfigOption("SZZT_GRAD_6", "DAAAAAEAAAABLwgAFwgAFggAFQgAFngAF3gAL3gAFXcAL38AF38AFn8AFX8A")
 
-        newConfigOption("SZZT_GRAD_0", "CAAAAAEAAAABLwEAFwEAFgEAFQEALxkAFxkAFhkAFRkA");
-        newConfigOption("SZZT_GRAD_1", "CAAAAAEAAAABLwIAFwIAFgIAFQIALyoAFyoAFioAFSoA");
-        newConfigOption("SZZT_GRAD_2", "CAAAAAEAAAABLwMAFwMAFgMAFQMALzsAFzsAFjsAFTsA");
-        newConfigOption("SZZT_GRAD_3", "CAAAAAEAAAABLwQAFwQAFgQAFQQAL0wAF0wAFkwAFUwA");
-        newConfigOption("SZZT_GRAD_4", "CAAAAAEAAAABLwUAFwUAFgUAFQUAL10AF10AFl0AFV0A");
-        newConfigOption("SZZT_GRAD_5", "CAAAAAEAAAABLwYAFwYAFgYAFQYAL24AF24AFm4AFW4A");
-        newConfigOption("SZZT_GRAD_6", "DAAAAAEAAAABLwgAFwgAFggAFQgAFngAF3gAL3gAFXcAL38AF38AFn8AFX8A");
-
-        newConfigOption("CONVERT_MACROW", "8");
-        newConfigOption("CONVERT_MACROH", "14");
-        newConfigOption("CONVERT_MAXSTATS", "0");
-        newConfigOption("CONVERT_SZZT_TYPES", "X.................XXX...................X..............................");
-        newConfigOption("CONVERT_ZZT_TYPES", "X..................X.XXX......................................");
-        newConfigOption("CONVERT_LIVEPREVIEW", "true");
+        newConfigOption("CONVERT_MACROW", "8")
+        newConfigOption("CONVERT_MACROH", "14")
+        newConfigOption("CONVERT_MAXSTATS", "0")
+        newConfigOption("CONVERT_SZZT_TYPES", "X.................XXX...................X..............................")
+        newConfigOption("CONVERT_ZZT_TYPES", "X..................X.XXX......................................")
+        newConfigOption("CONVERT_LIVEPREVIEW", "true")
     }
 
-    private void config_fmenus() {
-        for (int f = 3; f <= 10; f++) {
-            var preset = Settings.preset_ZEdit[f - 3];
-            var key = String.format("F%d_MENU", f);
+    private fun config_fmenus() {
+        for (f in 3..10) {
+            val preset = Settings.preset_ZEdit[f - 3]
+            val key = String.format("F%d_MENU", f)
             if (!isKey(key)) {
-                newConfigOption(key, preset[0]);
-                for (int i = 1; i < preset.length; i++) {
-                    newConfigOption(String.format("F%d_MENU_%d", f, i - 1), preset[i]);
+                newConfigOption(key, preset[0])
+                for (i in 1 until preset.size) {
+                    newConfigOption(String.format("F%d_MENU_%d", f, i - 1), preset[i])
                 }
             }
         }
     }
 
-    private Path[] getPaths() {
-         String[] dirs = {System.getProperty("user.dir"), System.getProperty("user.home"), Util.getJarPath().toString(), "."};
-         var paths = new ArrayList<Path>();
-         for (String dir : dirs) {
-             if (dir != null) {
-                 var path = Path.of(dir);
-                 if (path.toFile().isDirectory()) {
-                     paths.add(path);
-                 }
-             }
-         }
-         return paths.toArray(new Path[0]);
-    }
-
-    public Writer getWriterInLocalDir(String filename, boolean closeWriter) {
-        var paths = getPaths();
-        for (var path : paths) {
-            var file = Path.of(path.toString(), filename).toFile();
-            try {
-                var writer = new Writer(file);
-                if (closeWriter) {
-                    writer.getWriter().close();
+    private val paths: Array<Path>
+        get() {
+            val dirs = arrayOf(
+                System.getProperty("user.dir"),
+                System.getProperty("user.home"),
+                Util.jarPath.toString(),
+                "."
+            )
+            val paths = ArrayList<Path>()
+            for (dir in dirs) {
+                if (dir != null) {
+                    val path = Path.of(dir)
+                    if (path.toFile().isDirectory) {
+                        paths.add(path)
+                    }
                 }
-                return writer;
-            } catch (IOException ignored) {
+            }
+            return paths.toTypedArray<Path>()
+        }
+
+    fun getWriterInLocalDir(filename: String?, closeWriter: Boolean): Writer? {
+        val paths = paths
+        for (path in paths) {
+            val file = Path.of(path.toString(), filename).toFile()
+            try {
+                val writer = Writer(file)
+                if (closeWriter) {
+                    writer.writer.close()
+                }
+                return writer
+            } catch (ignored: IOException) {
                 // continue
             }
         }
-        return null;
+        return null
     }
 
-    private void newConfigOption(String key, String value) {
-        if (!properties.containsKey(key)) {
-            properties.setProperty(key, value);
+    private fun newConfigOption(key: String, value: String) {
+        if (!properties!!.containsKey(key)) {
+            properties!!.setProperty(key, value)
         }
     }
 
-    private void setConfigOption(String key, String value) {
-        properties.setProperty(key, value);
+    private fun setConfigOption(key: String, value: String) {
+        properties!!.setProperty(key, value)
     }
 
-    private File lookForProperties(Path path) {
+    private fun lookForProperties(path: Path): File? {
         try {
-            var file = Paths.get(path.toString(), PROPERTIES_FILE).toFile();
-            FileReader fr = new FileReader(file);
-            properties.load(fr);
-            fr.close();
-            System.out.println("Loaded properties from " + file);
-            return file;
-        } catch (IOException e) {
-            return null;
+            val file = Paths.get(path.toString(), PROPERTIES_FILE).toFile()
+            val fr = FileReader(file)
+            properties!!.load(fr)
+            fr.close()
+            println("Loaded properties from $file")
+            return file
+        } catch (e: IOException) {
+            return null
         }
     }
 
-    public boolean isKey(String key) {
-        return properties.containsKey(key);
-    }
-    public String getString(String key) {
-        return properties.getProperty(key);
-    }
-    public String getString(String key, String def) {
-        return properties.getProperty(key, def);
-    }
-    public int getInt(String key) {
-        return Integer.parseInt(properties.getProperty(key));
-    }
-    public int getInt(String key, int def) {
-        return Integer.parseInt(properties.getProperty(key, String.valueOf(def)));
-    }
-    public double getDouble(String key) {
-        return Double.parseDouble(properties.getProperty(key));
-    }
-    public double getDouble(String key, double def) {
-        return Double.parseDouble(properties.getProperty(key, String.valueOf(def)));
-    }
-    public boolean getBoolean(String key) {
-        return Boolean.parseBoolean(properties.getProperty(key));
-    }
-    public boolean getBoolean(String key, boolean def) {
-        return Boolean.parseBoolean(properties.getProperty(key, String.valueOf(def)));
-    }
-    public void setBoolean(String key, boolean setting) {
-        setConfigOption(key, String.valueOf(setting));
-    }
-    public void setDouble(String key, double setting) {
-        setConfigOption(key, String.valueOf(setting));
-    }
-    public void setInt(String key, int setting) {
-        setConfigOption(key, String.valueOf(setting));
-    }
-    public void setString(String key, String setting) {
-        setConfigOption(key, setting);
-    }
-    public void removeKey(String key) {
-        properties.remove(key);
+    fun isKey(key: String?): Boolean {
+        return properties!!.containsKey(key)
     }
 
-    public void setDefaultDirectory(File path) {
-        defaultDirectory = path;
-    }
-    public File getDefaultDirectory() {
-        return defaultDirectory;
+    fun getString(key: String?): String? {
+        System.out.println("prop:$properties\nkey:$key")
+        return properties!!.getProperty(key)
     }
 
-    public void setBufferPos(int bufferNum, BufferManager bufferManager) {
-        currentBufferNum = bufferNum;
-        currentBufferManager = bufferManager;
+    // TODO(jakeouellette): Disallow nullability.
+    fun getString(key: String?, def: String?): String {
+        return properties!!.getProperty(key, def)
+    }
+
+    fun getInt(key: String?): Int {
+        return properties!!.getProperty(key).toInt()
+    }
+
+    fun getInt(key: String?, def: Int): Int {
+        return properties!!.getProperty(key, def.toString()).toInt()
+    }
+
+    fun getIntRadix(key: String?, def:String, radix: Int): Int {
+        return properties!!.getProperty(key, def)!!.toInt(radix)
+    }
+
+    fun getDouble(key: String?): Double {
+        return properties!!.getProperty(key).toDouble()
+    }
+
+    fun getDouble(key: String?, def: Double): Double {
+        return properties!!.getProperty(key, def.toString()).toDouble()
+    }
+
+    fun getBoolean(key: String?): Boolean {
+        return properties!!.getProperty(key).toBoolean()
+    }
+
+    fun getBoolean(key: String?, def: Boolean): Boolean {
+        return properties!!.getProperty(key, def.toString()).toBoolean()
+    }
+
+    fun setBoolean(key: String, setting: Boolean) {
+        setConfigOption(key, setting.toString())
+    }
+
+    fun setDouble(key: String, setting: Double) {
+        setConfigOption(key, setting.toString())
+    }
+
+    fun setInt(key: String, setting: Int) {
+        setConfigOption(key, setting.toString())
+    }
+
+    fun setString(key: String, setting: String) {
+        setConfigOption(key, setting)
+    }
+
+    fun removeKey(key: String?) {
+        properties!!.remove(key)
+    }
+
+    fun setBufferPos(bufferNum: Int, bufferManager: BufferManager?) {
+        currentBufferNum = bufferNum
+        currentBufferManager = bufferManager
         if (currentBufferManager != null) {
-            currentBufferManager.updateSelected(bufferNum);
+            currentBufferManager!!.updateSelected(bufferNum)
         }
     }
 
-    public int getCurrentBufferNum() {
-        return currentBufferNum;
-    }
-
-    public void addToRecent(File path) {
-        if (path == null) return;
-        int recentMax = getInt("RECENT_MAX", 10);
-        int startFrom = 0;
-        for (int i = 0; i < recentMax; i++) {
-            var key = String.format("RECENT_%d", i);
-            var val = getString(key);
-            if (val != null) {
-                if (val.equals(path.toString())) {
-                    startFrom = i;
-                    break;
+    fun addToRecent(path: File?) {
+        if (path == null) return
+        val recentMax = getInt("RECENT_MAX", 10)
+        var startFrom = 0
+        for (i in 0 until recentMax) {
+            val key = String.format("RECENT_%d", i)
+            val `val` = getString(key)
+            if (`val` != null) {
+                if (`val` == path.toString()) {
+                    startFrom = i
+                    break
                 }
             } else {
-                setString(key, path.toString());
-                return;
+                setString(key, path.toString())
+                return
             }
         }
+        var overWrite = recentMax - 1
         // No room, so move everything up
         // idx 0: sets RECENT_0 to RECENT_1
         // idx 1: sets RECENT_1 to RECENT_2
         // ...
         // idx 8: sets RECENT_8 to RECENT_9
-        int i;
-        int overWrite = recentMax - 1;
-        for (i = startFrom; i < recentMax - 1; i++) {
-            var fromKey = String.format("RECENT_%d", i + 1);
-            var toKey = String.format("RECENT_%d", i);
-            var fromFile = getString(fromKey);
+        var i = startFrom
+        while (i < recentMax - 1) {
+            val fromKey = String.format("RECENT_%d", i + 1)
+            val toKey = String.format("RECENT_%d", i)
+            val fromFile = getString(fromKey)
             if (fromFile == null) {
-                overWrite = i;
-                break;
+                overWrite = i
+                break
             }
-            setString(toKey, fromFile);
+            setString(toKey, fromFile)
+            i++
         }
-        var key = String.format("RECENT_%d", overWrite);
-        setString(key, path.toString());
+        val key = String.format("RECENT_%d", overWrite)
+        setString(key, path.toString())
     }
 
-    public void removeRecentFile(String recentFileName) {
-        int recentMax = getInt("RECENT_MAX", 10);
-        for (int i = 0; i < recentMax; i++) {
-            var key = String.format("RECENT_%d", i);
-            var val = getString(key);
-            if (val != null) {
-                if (val.equals(recentFileName)) {
-                    for (int j = i; j < recentMax; j++) {
-                        var jkey = String.format("RECENT_%d", j);
+    fun removeRecentFile(recentFileName: String) {
+        val recentMax = getInt("RECENT_MAX", 10)
+        for (i in 0 until recentMax) {
+            val key = String.format("RECENT_%d", i)
+            val `val` = getString(key)
+            if (`val` != null) {
+                if (`val` == recentFileName) {
+                    for (j in i until recentMax) {
+                        val jkey = String.format("RECENT_%d", j)
                         if (isKey(jkey)) {
-                            removeKey(jkey);
-                            int k = j + 1;
+                            removeKey(jkey)
+                            val k = j + 1
                             if (k < recentMax) {
-                                var nextVal = getString(String.format("RECENT_%d", k));
+                                val nextVal = getString(String.format("RECENT_%d", k))
                                 if (nextVal != null) {
-                                    setString(jkey, nextVal);
+                                    setString(jkey, nextVal)
                                 }
                             }
                         } else {
-                            return;
+                            return
                         }
                     }
-                    return;
+                    return
                 }
             }
         }
     }
+
+    var timestamp: Long = 0
+        private set
+    private var globalInstance: GlobalEditor? = null
+
+    private const val PROPERTIES_FILE = "zedit2.cfg"
+
+    @JvmStatic
+    fun updateTimestamp() {
+        timestamp = System.nanoTime()
+    }
+
 }

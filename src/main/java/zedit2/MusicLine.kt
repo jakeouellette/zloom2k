@@ -1,16 +1,3 @@
-package zedit2;
+package zedit2
 
-public class MusicLine {
-    String seq;
-    int start;
-    int end;
-    int linestart;
-
-    public MusicLine(String seq, int start, int end, int linestart)
-    {
-        this.seq = seq;
-        this.start = start;
-        this.end = end;
-        this.linestart = linestart;
-    }
-}
+class MusicLine(var seq: String, var start: Int, var end: Int, var linestart: Int)

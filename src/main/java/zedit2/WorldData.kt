@@ -1,169 +1,156 @@
-package zedit2;
+package zedit2
 
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
+import zedit2.Util.getInt16
+import zedit2.Util.getUInt16
+import zedit2.Util.setInt16
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.util.*
 
-public abstract class WorldData {
-    protected byte[] data;
-    private boolean dirty = false;
-    public static WorldData loadWorld(File file) throws IOException {
-        byte[] data = Files.readAllBytes(file.toPath());
-        int fmt = Util.getInt16(data, 0);
-        if (fmt == -1) return new ZZTWorldData(data);
-        if (fmt == -2) return new SZZTWorldData(data);
-        throw new RuntimeException("Invalid or corrupted ZZT file.");
-    }
-    public WorldData(byte[] data) {
-        this.data = data;
-    }
-    public void write(File file) throws IOException {
-        Files.write(file.toPath(), data);
-    }
-    public int getSize() {
-        return data.length;
+abstract class WorldData(@JvmField protected var data: ByteArray) {
+    var isDirty: Boolean = false
+
+    @Throws(IOException::class)
+    fun write(file: File) {
+        Files.write(file.toPath(), data)
     }
 
-    public abstract boolean isSuperZZT();
-    public abstract byte[] getName();
-    public abstract void setName(byte[] str);
-    public abstract Board getBoard(int boardIdx) throws WorldCorruptedException;
-    public abstract int getNumFlags();
-    public abstract byte[] getFlag(int flag);
-    public abstract void setFlag(int flag, byte[] str);
-    protected abstract int boardListOffset();
+    val size: Int
+        get() = data.size
 
-    public int getNumBoards() {
-        return Util.getInt16(data, 2);
-    }
-    public void setNumBoards(int val) {
-        Util.setInt16(data, 2, val);
-        setDirty(true);
-    }
-    public int getAmmo() {
-        return Util.getInt16(data, 4);
-    }
-    public void setAmmo(int val) {
-        Util.setInt16(data, 4, val);
-        setDirty(true);
-    }
-    public int getGems() {
-        return Util.getInt16(data, 6);
-    }
-    public void setGems(int val) {
-        Util.setInt16(data, 6, val);
-        setDirty(true);
-    }
-    public int getHealth() {
-        return Util.getInt16(data, 15);
-    }
-    public void setHealth(int val) {
-        Util.setInt16(data, 15, val);
-        setDirty(true);
-    }
-    public int getCurrentBoard() {
-        return Util.getInt16(data, 17);
-    }
-    public void setCurrentBoard(int val) {
-        Util.setInt16(data, 17, val);
-        setDirty(true);
-    }
-    public boolean getKey(int keyIdx) {
-        if (keyIdx < 0 || keyIdx > 6) throw new IndexOutOfBoundsException("Invalid key value");
-        return data[keyIdx + 8] != 0;
-    }
-    public void setKey(int keyIdx, boolean haveKey) {
-        if (keyIdx < 0 || keyIdx > 6) throw new IndexOutOfBoundsException("Invalid key value");
-        data[keyIdx + 8] = haveKey ? (byte)1 : (byte)0;
-        setDirty(true);
-    }
-    public abstract int getTorches();
-    public abstract void setTorches(int val);
-    public abstract int getTorchTimer();
-    public abstract void setTorchTimer(int val);
-    public abstract int getEnergiser();
-    public abstract void setEnergiser(int val);
-    public abstract int getScore();
-    public abstract void setScore(int val);
-    public abstract int getTimeSeconds();
-    public abstract void setTimeSeconds(int val);
-    public abstract int getTimeTicks();
-    public abstract void setTimeTicks(int val);
-    public abstract boolean getLocked();
-    public abstract void setLocked(boolean isLocked);
-    public abstract int getZ();
-    public abstract void setZ(int val);
+    abstract val isSuperZZT: Boolean
+    abstract var name: ByteArray
+    @Throws(WorldCorruptedException::class)
+    abstract fun getBoard(boardIdx: Int): Board
+    abstract val numFlags: Int
+    abstract fun getFlag(flag: Int): ByteArray
+    abstract fun setFlag(flag: Int, str: ByteArray)
+    abstract fun boardListOffset(): Int
 
-    protected int findBoardOffset(int boardIdx) {
-        if (boardIdx < 0 || boardIdx > (getNumBoards() + 1)) throw new IndexOutOfBoundsException("Invalid board index of " + boardIdx + ". Must be 0 <= boardIdx <= " + (getNumBoards() + 1));
-        int currentOffset = boardListOffset();
-        for (int i = 0; i < boardIdx; i++) {
-            int boardSize = Util.getUInt16(data, currentOffset);
-            currentOffset += boardSize + 2;
+    var numBoards: Int
+        get() = getInt16(data, 2)
+        set(value) {
+            setInt16(data, 2, value)
+            isDirty = true
         }
-        return currentOffset;
+    var ammo: Int
+        get() = getInt16(data, 4)
+        set(value) {
+            setInt16(data, 4, value)
+            isDirty = true
+        }
+    var gems: Int
+        get() = getInt16(data, 6)
+        set(value) {
+            setInt16(data, 6, value)
+            isDirty = true
+        }
+    var health: Int
+        get() = getInt16(data, 15)
+        set(value) {
+            setInt16(data, 15, value)
+            isDirty = true
+        }
+    var currentBoard: Int
+        get() = getInt16(data, 17)
+        set(value) {
+            setInt16(data, 17, value)
+            isDirty = true
+        }
+
+    fun getKey(keyIdx: Int): Boolean {
+        if (keyIdx < 0 || keyIdx > 6) throw IndexOutOfBoundsException("Invalid key value")
+        return data[keyIdx + 8].toInt() != 0
     }
 
-    public void setBoard(CompatWarning warning, int boardIdx, Board board) {
-        int currentOffset = findBoardOffset(boardIdx);
+    fun setKey(keyIdx: Int, haveKey: Boolean) {
+        if (keyIdx < 0 || keyIdx > 6) throw IndexOutOfBoundsException("Invalid key value")
+        data[keyIdx + 8] = if (haveKey) 1.toByte() else 0.toByte()
+        isDirty = true
+    }
 
-        int currentBoardSize;
-        if (data.length == currentOffset) {
-            currentBoardSize = 0;
+    abstract var torches: Int
+    abstract var torchTimer: Int
+    abstract var energiser: Int
+    abstract var score: Int
+    abstract var timeSeconds: Int
+    abstract var timeTicks: Int
+    abstract var locked: Boolean
+    abstract var z: Int
+
+    protected fun findBoardOffset(boardIdx: Int): Int {
+        if (boardIdx < 0 || boardIdx > (numBoards + 1)) throw IndexOutOfBoundsException("Invalid board index of " + boardIdx + ". Must be 0 <= boardIdx <= " + (numBoards + 1))
+        var currentOffset = boardListOffset()
+        for (i in 0 until boardIdx) {
+            val boardSize = getUInt16(data, currentOffset)
+            currentOffset += boardSize + 2
+        }
+        return currentOffset
+    }
+
+    fun setBoard(warning: CompatWarning, boardIdx: Int, board: Board) {
+        val currentOffset = findBoardOffset(boardIdx)
+        val currentBoardSize = if (data.size == currentOffset) {
+            0
         } else {
-            currentBoardSize = Util.getUInt16(data, currentOffset) + 2;
+            getUInt16(data, currentOffset) + 2
         }
-        int newBoardSize = board.getCurrentSize();
+        val newBoardSize = board.currentSize
         if (newBoardSize > 65535) {
-            warning.warn(2, "is over 65535 bytes and cannot be saved in the ZZT format.");
-            return;
+            warning.warn(2, "is over 65535 bytes and cannot be saved in the ZZT format.")
+            return
         } else if (newBoardSize > 32767) {
-            warning.warn(1, "is over 32767 bytes and will require a limitation-removing port to load properly.");
+            warning.warn(1, "is over 32767 bytes and will require a limitation-removing port to load properly.")
         } else if (newBoardSize > 20000) {
-            warning.warn(1, "is over 20000 bytes and may cause memory problems in ZZT.");
+            warning.warn(1, "is over 20000 bytes and may cause memory problems in ZZT.")
         }
 
-        int currentBoardAfter = currentBoardSize + currentOffset;
-        int newBoardAfter = newBoardSize + currentOffset;
+        val currentBoardAfter = currentBoardSize + currentOffset
+        val newBoardAfter = newBoardSize + currentOffset
         // We want to copy everything from currentBoardAfter on to newBoardAfter
-        byte[] newData = new byte[data.length - currentBoardSize + newBoardSize];
+        val newData = ByteArray(data.size - currentBoardSize + newBoardSize)
 
         // Copy everything up to the board over
-        System.arraycopy(data, 0, newData, 0, currentOffset);
+        System.arraycopy(data, 0, newData, 0, currentOffset)
         // Write the new board
-        board.write(warning, newData, currentOffset);
+        board.write(warning, newData, currentOffset)
         // Copy everything from after the board over
-        int lengthAfterBoard = data.length - currentBoardAfter;
-        System.arraycopy(data, currentBoardAfter, newData, newBoardAfter, lengthAfterBoard);
+        val lengthAfterBoard = data.size - currentBoardAfter
+        System.arraycopy(data, currentBoardAfter, newData, newBoardAfter, lengthAfterBoard)
 
-        data = newData;
+        data = newData
 
-        if (boardIdx > getNumBoards()) {
-            setNumBoards(boardIdx);
+        if (boardIdx > numBoards) {
+            numBoards = boardIdx
         }
     }
 
-    public void terminateWorld(int boardIdx) {
-        int currentOffset = findBoardOffset(boardIdx);
-        data = Arrays.copyOfRange(data, 0, currentOffset);
-        setNumBoards(boardIdx - 1);
+    fun terminateWorld(boardIdx: Int) {
+        val currentOffset = findBoardOffset(boardIdx)
+        data = Arrays.copyOfRange(data, 0, currentOffset)
+        numBoards = boardIdx - 1
     }
 
-    public WorldData clone() {
-        WorldData newWorld;
-        if (isSuperZZT()) {
-            newWorld = new SZZTWorldData(data.clone());
+    fun clone(): WorldData {
+        val newWorld = if (isSuperZZT) {
+            SZZTWorldData(data.clone())
         } else {
-            newWorld = new ZZTWorldData(data.clone());
+            ZZTWorldData(data.clone())
         }
-        newWorld.setDirty(isDirty());
-        return newWorld;
+        newWorld.isDirty = isDirty
+        return newWorld
     }
 
-    public void setDirty(boolean state) {
-        dirty = state;
-    }
-    public boolean isDirty() {
-        return dirty;
+    companion object {
+        @JvmStatic
+        @Throws(IOException::class)
+        fun loadWorld(file: File): WorldData {
+            val data = Files.readAllBytes(file.toPath())
+            val fmt = getInt16(data, 0)
+            if (fmt == -1) return ZZTWorldData(data)
+            if (fmt == -2) return SZZTWorldData(data)
+            throw RuntimeException("Invalid or corrupted ZZT file.")
+        }
     }
 }

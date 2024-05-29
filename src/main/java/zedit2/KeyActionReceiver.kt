@@ -1,7 +1,7 @@
-package zedit2;
+package zedit2
 
-import java.awt.event.ActionEvent;
+import java.awt.event.ActionEvent
 
-public interface KeyActionReceiver {
-    public void keyAction(String actionName, ActionEvent e);
+interface KeyActionReceiver {
+    fun keyAction(actionName: String?, e: ActionEvent?)
 }

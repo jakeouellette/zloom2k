@@ -1,56 +1,60 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import javax.swing.event.ListDataEvent;
-import javax.swing.event.ListDataListener;
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
+import zedit2.BufferModel.Companion.getClipImage
+import java.awt.Color
+import java.awt.Component
+import java.awt.Image
+import java.awt.image.BufferedImage
+import javax.swing.ImageIcon
+import javax.swing.JLabel
+import javax.swing.JList
+import javax.swing.ListCellRenderer
 
-public class FancyFillRenderer implements ListCellRenderer<String> {
-    private final WorldEditor editor;
-    private static int WIDTH = 96;
-    private static int HEIGHT = 14;
-    private Color bg;
+class FancyFillRenderer(private val editor: WorldEditor) : ListCellRenderer<String?> {
+    private val bg: Color = editor.frame.background
 
-    public FancyFillRenderer(WorldEditor editor) {
-        this.editor = editor;
-        bg = this.editor.getFrame().getBackground();
-    }
-
-    @Override
-    public Component getListCellRendererComponent(JList<? extends String> list, String value, int index, boolean isSelected, boolean cellHasFocus) {
-        Image img = BufferModel.getClipImage(editor.getCanvas(), value);
-        if (img == null) {
-            return new JLabel("(not selected)");
-        }
-        int w = img.getWidth(null);
-        int h = img.getHeight(null);
+    override fun getListCellRendererComponent(
+        list: JList<out String?>,
+        value: String?,
+        index: Int,
+        isSelected: Boolean,
+        cellHasFocus: Boolean
+    ): Component {
+        var img: Image = getClipImage(editor.canvas, value) ?: return JLabel("(not selected)")
+        val w = img.getWidth(null)
+        val h = img.getHeight(null)
         if (w > WIDTH) {
-            double scale = 1.0 * w / WIDTH;
+            val scale = 1.0 * w / WIDTH
             //int scaleInt = (int) Math.ceil(scale);
-            int nh = (int) (Math.round(h * scale));
-            var dupImg = new BufferedImage(w, nh, BufferedImage.TYPE_INT_RGB);
-            var g = dupImg.getGraphics();
-            int yoff = (nh % HEIGHT) / 2;
-            for (int y = 0; y < nh; y += HEIGHT) {
-                g.drawImage(img, 0, y - yoff, null);
+            val nh = Math.round(h * scale).toInt()
+            val dupImg = BufferedImage(w, nh, BufferedImage.TYPE_INT_RGB)
+            val g = dupImg.graphics
+            val yoff = (nh % HEIGHT) / 2
+            var y = 0
+            while (y < nh) {
+                g.drawImage(img, 0, y - yoff, null)
+                y += HEIGHT
             }
-            var scaledDup = dupImg.getScaledInstance(WIDTH, -1, Image.SCALE_SMOOTH);
-            img = scaledDup;
+            val scaledDup = dupImg.getScaledInstance(WIDTH, -1, Image.SCALE_SMOOTH)
+            img = scaledDup
 
             //img = img.getScaledInstance(WIDTH, -1, Image.SCALE_SMOOTH).
         } else {
-            var dupImg = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
-            var g = dupImg.getGraphics();
-            g.setColor(bg);
-            g.fillRect(0, 0, WIDTH, HEIGHT);
-            g.drawImage(img, (WIDTH - w) / 2, 0, null);
-            img = dupImg;
+            val dupImg = BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB)
+            val g = dupImg.graphics
+            g.color = bg
+            g.fillRect(0, 0, WIDTH, HEIGHT)
+            g.drawImage(img, (WIDTH - w) / 2, 0, null)
+            img = dupImg
         }
-        JLabel label = new JLabel(new ImageIcon(img));
-        label.setOpaque(true);
-        label.setBackground(bg);
-        return label;
+        val label = JLabel(ImageIcon(img))
+        label.isOpaque = true
+        label.background = bg
+        return label
+    }
+
+    companion object {
+        private const val WIDTH = 96
+        private const val HEIGHT = 14
     }
 }

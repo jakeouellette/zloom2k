@@ -1,6 +1,6 @@
-package zedit2;
+package zedit2
 
-public interface ConverterCallback {
-    void converted(int checkVal, int x, int y, int id, int col, int chr, int vcol);
-    void finished(int checkVal);
+interface ConverterCallback {
+    fun converted(checkVal: Int, x: Int, y: Int, id: Int, col: Int, chr: Int, vcol: Int)
+    fun finished(checkVal: Int)
 }

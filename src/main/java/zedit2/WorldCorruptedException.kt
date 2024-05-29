@@ -1,7 +1,3 @@
-package zedit2;
+package zedit2
 
-public class WorldCorruptedException extends Exception {
-    WorldCorruptedException(String message) {
-        super(message);
-    }
-}
+class WorldCorruptedException internal constructor(message: String?) : Exception(message)

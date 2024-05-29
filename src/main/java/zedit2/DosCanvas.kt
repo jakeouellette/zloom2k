@@ -1,247 +1,269 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
-import java.awt.image.BufferedImage;
-import java.awt.image.VolatileImage;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.WeakHashMap;
+import java.awt.*
+import java.awt.event.*
+import java.awt.image.BufferedImage
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.util.*
+import javax.swing.JPanel
+import javax.swing.SwingUtilities
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
-public class DosCanvas extends JPanel implements MouseListener, MouseMotionListener, MouseWheelListener {
-    public static final int CHAR_W = 8;
-    public static final int CHAR_H = 14;
-    public static final int CHAR_COUNT = 256;
-    public static final int PALETTE_SIZE = 16;
-    private static final int TRANSPARENT = 0x00000000;
+class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JPanel(), MouseListener,
+    MouseMotionListener, MouseWheelListener {
+    lateinit var charset: ByteArray
+        private set
 
-    private byte[] charset;
-    private byte[] paletteData;
-    private int[] palette;
-    private int charBufferHash;
-    private static WeakHashMap<Integer, BufferedImage> charBufferCache = new WeakHashMap<>();
-    private BufferedImage charBuffer;
-    private int width = 0, height = 0;
-    private BufferedImage[] boardBuffers = new BufferedImage[2];
+    var paletteData: ByteArray? = null
 
-    private byte[] chars;
-    private byte[] cols;
-    private double zoomx;
-    private double zoomy;
-    private boolean blink = true;
-    private boolean blinkState = false;
-    private int mouseState = 0;
+    private lateinit var palette: IntArray
+    private var charBuffer: BufferedImage? = null
+    private var width = 0
+    private var height = 0
+    private val boardBuffers = arrayOfNulls<BufferedImage>(2)
 
-    private int cursorX = 0, cursorY = 0;
-    private int[] indicateX = null, indicateY = null;
-    private int mouseCursorX = -1, mouseCursorY = -1;
-    private int blockStartX = -1, blockStartY = -1;
-    private int placingBlockW, placingBlockH;
-    private boolean drawing, textEntry;
+    private var chars: ByteArray? = null
+    private var cols: ByteArray? = null
+    private var zoomy: Double
+    private var blink = true
+    private var blinkState = false
+    private var mouseState = 0
 
-    private int boardW, boardH;
-    private Atlas atlas;
+    private var cursorX = 0
+    private var cursorY = 0
+    private var indicateX: IntArray? = null
+    private var indicateY: IntArray? = null
+    private var mouseCursorX = -1
+    private var mouseCursorY = -1
+    private var blockStartX = -1
+    private var blockStartY = -1
+    private var placingBlockW = 0
+    private var placingBlockH = 0
+    private var drawing = false
+    private var textEntry = false
 
-    private WorldEditor editor;
-    private GlobalEditor globalEditor;
-    private boolean drawAtlasLines;
+    private var boardW = 0
+    private var boardH = 0
+    private var atlas: Atlas? = null
 
-    private MouseEvent lastMouseEvent;
-    private byte[] show;
+    private val globalEditor: GlobalEditor = editor.globalEditor
+    private var drawAtlasLines = false
 
-    public DosCanvas(WorldEditor editor, double initialZoom) throws IOException {
-        super();
-        this.editor = editor;
-        this.globalEditor = editor.getGlobalEditor();
-        this.zoomx = initialZoom;
-        this.zoomy = initialZoom;
+    private var lastMouseEvent: MouseEvent? = null
+    private var show: ByteArray? = null
 
-        initialiseBuffers();
+    init {
+        this.zoomy = zoomx
 
-        addMouseListener(this);
-        addMouseMotionListener(this);
-        addMouseWheelListener(this);
+        initialiseBuffers()
+
+        addMouseListener(this)
+        addMouseMotionListener(this)
+        addMouseWheelListener(this)
     }
 
-    public void setBlinkMode(boolean state) {
+    fun setBlinkMode(state: Boolean) {
         if (blink != state) {
-            blink = state;
-            refreshBuffer();
-            resetData();
+            blink = state
+            refreshBuffer()
+            resetData()
         }
     }
 
-    private void initialiseBuffers() throws IOException {
-        loadCharset(null);
-        loadPalette(null);
-        refreshBuffer();
+    @Throws(IOException::class)
+    private fun initialiseBuffers() {
+        loadCharset(null)
+        loadPalette(null)
+        refreshBuffer()
     }
 
-    private void refreshBuffer() {
-        int[] hashes = new int[]{Arrays.hashCode(palette), Arrays.hashCode(charset)};
-        charBufferHash = Arrays.hashCode(hashes);
+    private fun refreshBuffer() {
+        val hashes = intArrayOf(palette.contentHashCode(), charset.contentHashCode())
+        val charBufferHash = hashes.contentHashCode()
 
         if (charBufferCache.containsKey(charBufferHash)) {
-            charBuffer = charBufferCache.get(charBufferHash);
+            charBuffer = charBufferCache[charBufferHash]
         } else {
-            generateCharBuffer();
-            charBufferCache.put(charBufferHash, charBuffer);
+            generateCharBuffer()
+            charBufferCache[charBufferHash] = charBuffer
         }
     }
 
-    private void generateCharBuffer() {
+    private fun generateCharBuffer() {
+        val w = CHAR_W * CHAR_COUNT
+        val h = CHAR_H * PALETTE_SIZE
+        charBuffer = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+        val raster = charBuffer!!.raster
+        val ar = IntArray(w * h)
 
-        int w = CHAR_W * CHAR_COUNT;
-        int h = CHAR_H * PALETTE_SIZE;
-        charBuffer = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        var raster = charBuffer.getRaster();
-        var ar = new int[w * h];
-
-        for (int col = 0; col < PALETTE_SIZE; col++) {
-            for (int chr = 0; chr < CHAR_COUNT; chr++) {
-                for (int y = 0; y < CHAR_H; y++) {
-                    for (int x = 0; x < CHAR_W; x++) {
-                        int px = chr * CHAR_W + x;
-                        int py = col * CHAR_H + y;
-                        int p = py * w + px;
+        for (col in 0 until PALETTE_SIZE) {
+            for (chr in 0 until CHAR_COUNT) {
+                for (y in 0 until CHAR_H) {
+                    for (x in 0 until CHAR_W) {
+                        val px = chr * CHAR_W + x
+                        val py = col * CHAR_H + y
+                        val p = py * w + px
 
                         // Is this pixel set in this char?
-                        byte charRow = charset[chr * CHAR_H + y];
-                        byte charMask = (byte)(128 >> x);
-                        if ((charRow & charMask) != 0) {
-                            ar[p] = palette[col];
+                        val charRow = charset[chr * CHAR_H + y]
+                        val charMask = (128 shr x).toByte()
+                        if ((charRow.toInt() and charMask.toInt()) != 0) {
+                            ar[p] = palette[col]
                         } else {
-                            ar[p] = TRANSPARENT;
+                            ar[p] = TRANSPARENT
                         }
                     }
                 }
             }
         }
 
-        raster.setDataElements(0, 0, w, h, ar);
+        raster.setDataElements(0, 0, w, h, ar)
     }
 
-    private void loadPalette(File path) throws IOException {
+    @Throws(IOException::class)
+    private fun loadPalette(path: File?) {
+        var pdata : ByteArray;
         if (path != null) {
-            paletteData = Files.readAllBytes(path.toPath());
-            if (paletteData.length != 16 * 3) {
-                throw new RuntimeException("Invalid palette size");
+            pdata = Files.readAllBytes(path.toPath())
+            if (pdata.size != 16 * 3) {
+                throw RuntimeException("Invalid palette size")
             }
         } else {
-            paletteData = Data.DEFAULT_PALETTE;
+            pdata = Data.DEFAULT_PALETTE
         }
-        palette = new int[PALETTE_SIZE];
-        for (int i = 0; i < PALETTE_SIZE; i++) {
-            int r = paletteData[i * 3 + 0] * 255 / 63;
-            int g = paletteData[i * 3 + 1] * 255 / 63;
-            int b = paletteData[i * 3 + 2] * 255 / 63;
-            int color = 0xFF000000;
-            color |= r << 16;
-            color |= g << 8;
-            color |= b;
-            palette[i] = color;
+
+        palette = IntArray(PALETTE_SIZE)
+        for (i in 0 until PALETTE_SIZE) {
+            val r = pdata[i * 3 + 0] * 255 / 63
+            val g = pdata[i * 3 + 1] * 255 / 63
+            val b = pdata[i * 3 + 2] * 255 / 63
+            var color = -0x1000000
+            color = color or (r shl 16)
+            color = color or (g shl 8)
+            color = color or b
+            palette[i] = color
         }
+        paletteData = pdata
     }
 
-    private void loadCharset(File path) throws IOException {
+    @Throws(IOException::class)
+    private fun loadCharset(path: File?) {
         if (path != null) {
-            byte[] charsetBytes = Files.readAllBytes(path.toPath());
-            if (charsetBytes.length == CHAR_COUNT * CHAR_H) {
-                charset = charsetBytes;
-            } else if (charsetBytes.length == 5027) {
-                charset = Arrays.copyOfRange(charsetBytes, 1442, 5026);
+            val charsetBytes = Files.readAllBytes(path.toPath())
+            if (charsetBytes.size == CHAR_COUNT * CHAR_H) {
+                charset = charsetBytes
+            } else if (charsetBytes.size == 5027) {
+                charset = Arrays.copyOfRange(charsetBytes, 1442, 5026)
             }
         } else {
-            charset = Data.DEFAULT_CHARSET;
+            charset = Data.DEFAULT_CHARSET
         }
-        if (charset.length != CHAR_COUNT * CHAR_H) {
-            throw new RuntimeException("Invalid charset size");
+        if (charset.size != CHAR_COUNT * CHAR_H) {
+            throw RuntimeException("Invalid charset size")
         }
     }
 
-    public Dimension getPreferredSize() {
-        int w = width;
-        int h = height;
+    override fun getPreferredSize(): Dimension {
+        var w = width
+        var h = height
         if (w == 0 || h == 0) {
-            w = 60;
-            h = 25;
+            w = 60
+            h = 25
         }
 
-        return new Dimension((int)(Math.round(w * CHAR_W * zoomx)),
-                (int)(Math.round(h * CHAR_H * zoomy)));
+        return Dimension(
+            Math.round(w * CHAR_W * zoomx).toInt(),
+            Math.round(h * CHAR_H * zoomy).toInt()
+        )
     }
 
-    public void setDimensions(int w, int h)
-    {
+    fun setDimensions(w: Int, h: Int) {
         if (width != w || height != h) {
-            width = w;
-            height = h;
-            fullRefresh();
+            width = w
+            height = h
+            fullRefresh()
         }
     }
 
-    private void fullRefresh() {
-        this.cols = new byte[width * height];
-        this.chars = new byte[width * height];
-        this.show = new byte[width * height];
+    private fun fullRefresh() {
+        this.cols = ByteArray(width * height)
+        this.chars = ByteArray(width * height)
+        this.show = ByteArray(width * height)
 
-        GraphicsEnvironment env = GraphicsEnvironment.getLocalGraphicsEnvironment();
-        GraphicsDevice device = env.getDefaultScreenDevice();
-        GraphicsConfiguration config = device.getDefaultConfiguration();
+        val env = GraphicsEnvironment.getLocalGraphicsEnvironment()
+        val device = env.defaultScreenDevice
+        val config = device.defaultConfiguration
 
-        for (int i = 0; i < 2; i++) {
-            boardBuffers[i] = config.createCompatibleImage(width * CHAR_W, height * CHAR_H);
+        for (i in 0..1) {
+            boardBuffers[i] = config.createCompatibleImage(width * CHAR_W, height * CHAR_H)
             //boardBuffers[i] = new BufferedImage(w * CHAR_W, h * CHAR_H, BufferedImage.TYPE_INT_RGB);
         }
     }
 
-    public void setZoom(double zoomx, double zoomy) {
-        this.zoomx = zoomx;
-        this.zoomy = zoomy;
+    fun setZoom(zoomx: Double, zoomy: Double) {
+        this.zoomx = zoomx
+        this.zoomy = zoomy
     }
-    public void setData(int w, int h, byte[] cols, byte[] chars, int offsetX, int offsetY, int showing, byte[] show) {
-        boolean redrawAll = false;
-        setData(w, h, cols, chars, offsetX, offsetY, redrawAll, show);
-    }
-    public void setData(int w, int h, byte[] cols, byte[] chars, int offsetX, int offsetY, boolean redrawAll, byte[] show)
-    {
-        if (cols.length != w * h) throw new RuntimeException("Dimensions do not match colour array size");
-        if (chars.length != w * h) throw new RuntimeException("Dimensions do not match char array size");
 
-        Graphics[] boardBufferGraphics = new Graphics[2];
-        for (int i = 0; i < 2; i++) {
-            boardBufferGraphics[i] = boardBuffers[i].getGraphics();
+    fun setData(
+        w: Int,
+        h: Int,
+        cols: ByteArray,
+        chars: ByteArray,
+        offsetX: Int,
+        offsetY: Int,
+        showing: Int,
+        show: ByteArray?
+    ) {
+        val redrawAll = false
+        setData(w, h, cols, chars, offsetX, offsetY, redrawAll, show)
+    }
+
+    fun setData(
+        w: Int,
+        h: Int,
+        cols: ByteArray,
+        chars: ByteArray,
+        offsetX: Int,
+        offsetY: Int,
+        redrawAll: Boolean,
+        show: ByteArray?
+    ) {
+        if (cols.size != w * h) throw RuntimeException("Dimensions do not match colour array size")
+        if (chars.size != w * h) throw RuntimeException("Dimensions do not match char array size")
+
+        val boardBufferGraphics = arrayOfNulls<Graphics>(2)
+        for (i in 0..1) {
+            boardBufferGraphics[i] = boardBuffers[i]!!.graphics
         }
-        for (int dy = 0; dy < h; dy++) {
-            for (int dx = 0; dx < w; dx++) {
-                int dpos = dy * w + dx;
-                int x = dx + offsetX;
-                int y = dy + offsetY;
-                int pos = y * width + x;
-
-                byte tshow;
-                if (show != null) {
-                    tshow = show[dpos];
+        for (dy in 0 until h) {
+            for (dx in 0 until w) {
+                val dpos = dy * w + dx
+                val x = dx + offsetX
+                val y = dy + offsetY
+                val pos = y * width + x
+                var tshow = if (show != null) {
+                    show[dpos]
                 } else {
-                    tshow = 0;
+                    0
                 }
-                if (redrawAll || this.cols[pos] != cols[dpos] || this.chars[pos] != chars[dpos] || this.show[pos] != tshow) {
-                    this.chars[pos] = chars[dpos];
-                    this.cols[pos] = cols[dpos];
-                    this.show[pos] = tshow;
-                    int chr = chars[dpos] & 0xFF;
-                    int col = cols[dpos] & 0xFF;
+                if ((redrawAll || this.cols!![pos] != cols[dpos]) || this.chars!![pos] != chars[dpos] || this.show!![pos] != tshow) {
+                    // TODO(jakeouellette): Clean up this state machine.
+                    this.chars!![pos] = chars[dpos]
+                    this.cols!![pos] = cols[dpos]
+                    this.show!![pos] = tshow
+                    val chr = chars[dpos].toInt() and 0xFF
+                    val col = cols[dpos].toInt() and 0xFF
 
-                    drawTile(boardBufferGraphics[0], chr, col, x, y, 1, 1, false);
-                    if (tshow != 0) {
-                        drawShow(boardBufferGraphics[1], chr, col, x, y, 1, 1, tshow);
+                    drawTile(boardBufferGraphics[0], chr, col, x, y, 1, 1, false)
+                    if (tshow.toInt() != 0) {
+                        drawShow(boardBufferGraphics[1], chr, col, x, y, 1, 1, tshow)
                     } else {
-                        drawTile(boardBufferGraphics[1], chr, col, x, y, 1, 1, true);
+                        drawTile(boardBufferGraphics[1], chr, col, x, y, 1, 1, true)
                     }
                 }
             }
@@ -251,116 +273,162 @@ public class DosCanvas extends JPanel implements MouseListener, MouseMotionListe
         //System.arraycopy(chars, 0, this.chars, 0, chars.length);
     }
 
-    public BufferedImage getBoardBuffer(boolean doubleWidth) {
-        if (!doubleWidth)
-            return boardBuffers[0];
-        int w = boardBuffers[0].getWidth() * 2;
-        int h = boardBuffers[0].getHeight();
-        var tmpBuffer = boardBuffers[0].getScaledInstance(w, h, Image.SCALE_REPLICATE);
-        var newBuffer = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        newBuffer.getGraphics().drawImage(tmpBuffer, 0, 0, null);
-        return newBuffer;
+    fun getBoardBuffer(doubleWidth: Boolean): BufferedImage? {
+        if (!doubleWidth) return boardBuffers[0]
+        val w = boardBuffers[0]!!.width * 2
+        val h = boardBuffers[0]!!.height
+        val tmpBuffer = boardBuffers[0]!!.getScaledInstance(w, h, Image.SCALE_REPLICATE)
+        val newBuffer = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        newBuffer.graphics.drawImage(tmpBuffer, 0, 0, null)
+        return newBuffer
     }
 
-    private void drawShow(Graphics g, int chr, int col, int x, int y, int zoomx, int zoomy, byte show) {
-        int chrs[] = {' ', '#', '!', 178, 15, col, '#'};
-        int rcol = col;
-        if (rcol == 0x00) rcol = 0x80;
-        else if (rcol % 16 == rcol / 16) rcol = rcol & 0xF0;
-        int cols[] = {rcol, rcol, rcol, rcol, rcol, 7, rcol};
-        if (chr == chrs[show]) {
-            chrs[show] = ' ';
+    private fun drawShow(g: Graphics?, chr: Int, col: Int, x: Int, y: Int, zoomx: Int, zoomy: Int, show: Byte) {
+        val chrs = intArrayOf(' '.code, '#'.code, '!'.code, 178, 15, col, '#'.code)
+        var rcol = col
+        if (rcol == 0x00) rcol = 0x80
+        else if (rcol % 16 == rcol / 16) rcol = rcol and 0xF0
+        val cols = intArrayOf(rcol, rcol, rcol, rcol, rcol, 7, rcol)
+        if (chr == chrs[show.toInt()]) {
+            chrs[show.toInt()] = ' '.code
         }
-        drawTile(g, chrs[show], cols[show], x, y, zoomx, zoomy, false,false);
+        drawTile(g, chrs[show.toInt()], cols[show.toInt()], x, y, zoomx, zoomy, false, false)
     }
 
-    private void drawTile(Graphics g, int chr, int col, int x, int y, int zoomx, int zoomy, boolean blinkingTime) {
-        drawTile(g, chr, col, x, y, zoomx, zoomy, blink, blinkingTime);
+    private fun drawTile(
+        g: Graphics?,
+        chr: Int,
+        col: Int,
+        x: Int,
+        y: Int,
+        zoomx: Int,
+        zoomy: Int,
+        blinkingTime: Boolean
+    ) {
+        drawTile(g, chr, col, x, y, zoomx, zoomy, blink, blinkingTime)
     }
-    private void drawTile(Graphics g, int chr, int col, int x, int y, int zoomx, int zoomy, boolean blink, boolean blinkingTime) {
+
+    private fun drawTile(
+        g: Graphics?,
+        chr: Int,
+        col: Int,
+        x: Int,
+        y: Int,
+        zoomx: Int,
+        zoomy: Int,
+        blink: Boolean,
+        blinkingTime: Boolean
+    ) {
+        var col = col
         if (blink && col >= 128) {
             // If blinking is on, for cXY and X >= 8, colours alternate between c(X-8)Y and c(X-8)(X-8)
-            int bg = ((col & 0xF0) >> 4) - 8;
-            int fg = col & 0x0F;
-            if (!blinkingTime) {
-                col = (bg << 4) | fg;
+            val bg = ((col and 0xF0) shr 4) - 8
+            val fg = col and 0x0F
+            col = if (!blinkingTime) {
+                bg shl 4 or fg
             } else {
-                col = (bg << 4) | bg;
+                bg shl 4 or bg
             }
         }
-        int sx1 = chr * CHAR_W;
-        int sy1 = (col & 0x0F) * CHAR_H;
-        int sx2 = sx1 + CHAR_W;
-        int sy2 = sy1 + CHAR_H;
-        int dx1 = x * CHAR_W * zoomx;
-        int dy1 = y * CHAR_H * zoomy;
-        int dx2 = dx1 + CHAR_W * zoomx;
-        int dy2 = dy1 + CHAR_H * zoomy;
-        var bgColor = new Color(palette[(col & 0xF0) >> 4], true);
+        val sx1 = chr * CHAR_W
+        val sy1 = (col and 0x0F) * CHAR_H
+        val sx2 = sx1 + CHAR_W
+        val sy2 = sy1 + CHAR_H
+        val dx1 = x * CHAR_W * zoomx
+        val dy1 = y * CHAR_H * zoomy
+        val dx2 = dx1 + CHAR_W * zoomx
+        val dy2 = dy1 + CHAR_H * zoomy
+        val bgColor = Color(palette[col and 0xF0 shr 4], true)
 
-        g.drawImage(charBuffer, dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2, bgColor, null);
+        g!!.drawImage(charBuffer, dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2, bgColor, null)
     }
 
     /**
      * Format of pattern is:
      * @ - character
      * $ - character, but no blink
-     *   - blank
+     * - blank
      * _ - col (bg)
      * # - col (fg)
      * >255 - 0xAABB (A = chr, B = col)
-
+     *
      */
-    public BufferedImage extractCharImage(int chr, int col, int zoomx, int zoomy, boolean blinkingTime, String pattern) {
-        return extractCharImageWH(chr, col, zoomx, zoomy, blinkingTime, pattern, pattern.length(), 1);
+    fun extractCharImage(
+        chr: Int,
+        col: Int,
+        zoomx: Int,
+        zoomy: Int,
+        blinkingTime: Boolean,
+        pattern: String
+    ): BufferedImage {
+        return extractCharImageWH(chr, col, zoomx, zoomy, blinkingTime, pattern, pattern.length, 1)
     }
-    public BufferedImage extractCharImageWH(int chr, int col, int zoomx, int zoomy, boolean blinkingTime, String pattern, int w, int h) {
-        var img = new BufferedImage(CHAR_W * zoomx * w, CHAR_H * zoomy * h, BufferedImage.TYPE_INT_ARGB);
-        var blinkSaved = blink;
-        for (int i = 0; i < pattern.length(); i++) {
-            var c = pattern.charAt(i);
-            switch (c) {
-                case '@':
-                    drawTile(img.getGraphics(), chr, col, i % w, i / w, zoomx, zoomy, blinkingTime);
-                    break;
-                case '$':
-                    blink = false;
-                    drawTile(img.getGraphics(), chr, col, i % w, i / w, zoomx, zoomy, blinkingTime);
-                    blink = blinkSaved;
-                    break;
-                case '_':
-                    blink = false;
-                    drawTile(img.getGraphics(), 32, col, i % w, i / w, zoomx, zoomy, blinkingTime);
-                    blink = blinkSaved;
-                    break;
-                case '#':
-                    blink = false;
-                    drawTile(img.getGraphics(), 254, col, i % w, i / w, zoomx, zoomy, blinkingTime);
-                    blink = blinkSaved;
-                    break;
-                case ' ':
-                    break;
-                default:
-                    int cVal = c;
-                    blink = false;
-                    drawTile(img.getGraphics(), (cVal & 0xFF00) >> 8, cVal & 0xFF, i % w, i / w, zoomx, zoomy, blinkingTime);
-                    blink = blinkSaved;
-                    break;
+
+    fun extractCharImageWH(
+        chr: Int,
+        col: Int,
+        zoomx: Int,
+        zoomy: Int,
+        blinkingTime: Boolean,
+        pattern: String,
+        w: Int,
+        h: Int
+    ): BufferedImage {
+        val img = BufferedImage(CHAR_W * zoomx * w, CHAR_H * zoomy * h, BufferedImage.TYPE_INT_ARGB)
+        val blinkSaved = blink
+        for (i in 0 until pattern.length) {
+            val c = pattern[i]
+            when (c) {
+                '@' -> drawTile(img.graphics, chr, col, i % w, i / w, zoomx, zoomy, blinkingTime)
+                '$' -> {
+                    blink = false
+                    drawTile(img.graphics, chr, col, i % w, i / w, zoomx, zoomy, blinkingTime)
+                    blink = blinkSaved
+                }
+
+                '_' -> {
+                    blink = false
+                    drawTile(img.graphics, 32, col, i % w, i / w, zoomx, zoomy, blinkingTime)
+                    blink = blinkSaved
+                }
+
+                '#' -> {
+                    blink = false
+                    drawTile(img.graphics, 254, col, i % w, i / w, zoomx, zoomy, blinkingTime)
+                    blink = blinkSaved
+                }
+
+                ' ' -> {}
+                else -> {
+                    val cVal = c.code
+                    blink = false
+                    drawTile(
+                        img.graphics,
+                        (cVal and 0xFF00) shr 8,
+                        cVal and 0xFF,
+                        i % w,
+                        i / w,
+                        zoomx,
+                        zoomy,
+                        blinkingTime
+                    )
+                    blink = blinkSaved
+                }
             }
         }
-        return img;
+        return img
     }
 
-    private int tileX(int x) {
-        return (int)(Math.round(x * CHAR_W * zoomx));
-    }
-    private int tileY(int y) {
-        return (int)(Math.round(y * CHAR_H * zoomy));
+    private fun tileX(x: Int): Int {
+        return Math.round(x * CHAR_W * zoomx).toInt()
     }
 
-    @Override
-    public void paintComponent(Graphics g) {
-        super.paintComponent(g);
+    private fun tileY(y: Int): Int {
+        return Math.round(y * CHAR_H * zoomy).toInt()
+    }
+
+    public override fun paintComponent(g: Graphics) {
+        super.paintComponent(g)
         /*
         var mc = getMouseCoords(getMousePosition());
         if (mc != null) {
@@ -372,90 +440,98 @@ public class DosCanvas extends JPanel implements MouseListener, MouseMotionListe
             }
         }
         */
-        g.setColor(new Color(0x7F7F7F));
-        g.fillRect(0, 0, getWidth(), getHeight());
+        g.color = Color(0x7F7F7F)
+        g.fillRect(0, 0, getWidth(), getHeight())
 
-        if (g instanceof Graphics2D) {
-            Object interpMode;
+        if (g is Graphics2D) {
+            val interpMode: Any
 
             // Select an appropriate rendering mode
-            var xerror = Math.abs(Math.round(zoomx) - zoomx);
-            var yerror = Math.abs(Math.round(zoomy) - zoomy);
-            var error = Math.max(xerror, yerror);
-            if (error < 0.001) {
-                interpMode = RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR;
+            val xerror = abs(Math.round(zoomx) - zoomx)
+            val yerror = abs(Math.round(zoomy) - zoomy)
+            val error = max(xerror, yerror)
+            interpMode = if (error < 0.001) {
+                RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR
             } else {
                 if (xerror < 0.001 || yerror < 0.001) {
-                    interpMode = RenderingHints.VALUE_INTERPOLATION_BILINEAR;
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR
                 } else {
-                    interpMode = RenderingHints.VALUE_INTERPOLATION_BICUBIC;
+                    RenderingHints.VALUE_INTERPOLATION_BICUBIC
                 }
             }
 
-            var g2 = (Graphics2D) g;
-            RenderingHints rh = new RenderingHints(
-                    RenderingHints.KEY_INTERPOLATION,
-                    interpMode);
-            g2.setRenderingHints(rh);
+            val rh = RenderingHints(
+                RenderingHints.KEY_INTERPOLATION,
+                interpMode
+            )
+            g.setRenderingHints(rh)
         }
 
-        int blinkImage = blinkState ? 1 : 0;
-        drawImg(g, boardBuffers[blinkImage]);
+        val blinkImage = if (blinkState) 1 else 0
+        drawImg(g, boardBuffers[blinkImage])
 
         if (atlas != null && drawAtlasLines) {
-            var lcBad = new Color(1.0f, 0.4f, 0.2f);
-            var lcGood = new Color(0.2f, 1.0f, 0.4f, 0.5f);
-            var lcNormal = new Color(1.0f, 1.0f, 1.0f);
-            var lcVoid = new Color(1.0f, 1.0f, 1.0f, 0.2f);
-            var gridW = atlas.getW();
-            var gridH = atlas.getH();
-            var grid = atlas.getGrid();
-            var boards = editor.getBoards();
-            int boardPixelW = tileX(boardW);
-            int boardPixelH = tileY(boardH);
-            final int[][] dirs = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
-            final int[][] walls_thick = {{0, 0, boardPixelW, 2},
-                    {0, boardPixelH - 2, boardPixelW, 2},
-                    {0, 0, 2, boardPixelH},
-                    {boardPixelW - 2, 0, 2, boardPixelH}};
-            final int[][] walls_thin = {{0, 0, boardPixelW, 1},
-                    {0, boardPixelH - 1, boardPixelW, 1},
-                    {0, 0, 1, boardPixelH},
-                    {boardPixelW - 1, 0, 1, boardPixelH}};
+            val lcBad = Color(1.0f, 0.4f, 0.2f)
+            val lcGood = Color(0.2f, 1.0f, 0.4f, 0.5f)
+            val lcNormal = Color(1.0f, 1.0f, 1.0f)
+            val lcVoid = Color(1.0f, 1.0f, 1.0f, 0.2f)
+            val gridW = atlas!!.w
+            val gridH = atlas!!.h
+            val grid = atlas!!.grid
+            val boards = editor.boards
+            val boardPixelW = tileX(boardW)
+            val boardPixelH = tileY(boardH)
+            val dirs = arrayOf(intArrayOf(0, -1), intArrayOf(0, 1), intArrayOf(-1, 0), intArrayOf(1, 0))
+            val walls_thick = arrayOf(
+                intArrayOf(0, 0, boardPixelW, 2),
+                intArrayOf(0, boardPixelH - 2, boardPixelW, 2),
+                intArrayOf(0, 0, 2, boardPixelH),
+                intArrayOf(boardPixelW - 2, 0, 2, boardPixelH)
+            )
+            val walls_thin = arrayOf(
+                intArrayOf(0, 0, boardPixelW, 1),
+                intArrayOf(0, boardPixelH - 1, boardPixelW, 1),
+                intArrayOf(0, 0, 1, boardPixelH),
+                intArrayOf(boardPixelW - 1, 0, 1, boardPixelH)
+            )
 
-            for (int y = 0; y < gridH; y++) {
-                int py = tileY(y * boardH);
-                for (int x = 0; x < gridW; x++) {
-                    int px = tileX(x * boardW);
-                    var boardIdx = grid[y][x];
+            for (y in 0 until gridH) {
+                val py = tileY(y * boardH)
+                for (x in 0 until gridW) {
+                    val px = tileX(x * boardW)
+                    val boardIdx = grid[y][x]
                     if (boardIdx != -1) {
-                        var board = boards.get(boardIdx);
+                        val board = boards[boardIdx]
 
-                        for (int exit = 0; exit < 4; exit++) {
-                            int exitd = board.getExit(exit);
-                            int nx = x + dirs[exit][0];
-                            int ny = y + dirs[exit][1];
-                            var walls = walls_thick[exit];
+                        for (exit in 0..3) {
+                            val exitd = board.getExit(exit)
+                            val nx = x + dirs[exit][0]
+                            val ny = y + dirs[exit][1]
+                            var walls = walls_thick[exit]
                             if (exitd == 0) {
-                                g.setColor(lcNormal);
+                                g.color = lcNormal
                             } else {
-                                g.setColor(lcBad);
+                                g.color = lcBad
                             }
                             if (nx >= 0 && ny >= 0 && nx < gridW && ny < gridH) {
                                 if (exitd == grid[ny][nx]) {
-                                    g.setColor(lcGood);
-                                    walls = walls_thin[exit];
+                                    g.color = lcGood
+                                    walls = walls_thin[exit]
                                 }
                             }
-                            g.fillRect(walls[0] + px, walls[1] + py,
-                                    walls[2], walls[3]);
+                            g.fillRect(
+                                walls[0] + px, walls[1] + py,
+                                walls[2], walls[3]
+                            )
                         }
                     } else {
-                        g.setColor(lcVoid);
-                        for (int exit = 0; exit < 4; exit++) {
-                            var walls = walls_thin[exit];
-                            g.fillRect(walls[0] + px, walls[1] + py,
-                                    walls[2], walls[3]);
+                        g.color = lcVoid
+                        for (exit in 0..3) {
+                            val walls = walls_thin[exit]
+                            g.fillRect(
+                                walls[0] + px, walls[1] + py,
+                                walls[2], walls[3]
+                            )
                         }
                     }
 
@@ -464,286 +540,272 @@ public class DosCanvas extends JPanel implements MouseListener, MouseMotionListe
                 }
             }
         }
+
+
         //volatileBuffers[i] = config.createCompatibleVolatileImage(w * CHAR_W, h * CHAR_H);
 
         //var boardBuffer = boardBuffers[blinkState ? 1 : 0];
-
-
         if (drawing) {
-            g.setColor(Color.GREEN);
+            g.color = Color.GREEN
         } else if (textEntry) {
-            g.setColor(Color.YELLOW);
+            g.color = Color.YELLOW
         } else {
-            g.setColor(Color.LIGHT_GRAY);
+            g.color = Color.LIGHT_GRAY
         }
 
-        g.draw3DRect(tileX(cursorX) - 1, tileY(cursorY) - 1, tileX(1) + 1, tileY(1) + 1, blinkState);
+        g.draw3DRect(tileX(cursorX) - 1, tileY(cursorY) - 1, tileX(1) + 1, tileY(1) + 1, blinkState)
 
-        if (mouseCursorX != -1 && editor.getFrame().isFocused()) {
-            g.setColor(new Color(0x7FFFFFFF, true));
-            g.drawRect(tileX(mouseCursorX) - 1, tileY(mouseCursorY) - 1,
-                   tileX(1) + 1, tileY(1) + 1);
+        if (mouseCursorX != -1 && editor.frame.isFocused) {
+            g.color = Color(0x7FFFFFFF, true)
+            g.drawRect(
+                tileX(mouseCursorX) - 1, tileY(mouseCursorY) - 1,
+                tileX(1) + 1, tileY(1) + 1
+            )
         }
 
         if (indicateX != null) {
-            g.setColor(new Color(0x3399FF));
-            for (int i = 0; i < indicateX.length; i++) {
-                int x = indicateX[i];
-                int y = indicateY[i];
-                if (x == -1) continue;
-                g.drawRect(tileX(x), tileY(y), tileX(1) - 1, tileY(1) - 1);
+            g.color = Color(0x3399FF)
+            for (i in indicateX!!.indices) {
+                val x = indicateX!![i]
+                val y = indicateY!![i]
+                if (x == -1) continue
+                g.drawRect(tileX(x), tileY(y), tileX(1) - 1, tileY(1) - 1)
             }
         }
 
         if (blockStartX != -1) {
-            g.setColor(new Color(0x7F3399FF, true));
-            int x = Math.min(cursorX, blockStartX);
-            int y = Math.min(cursorY, blockStartY);
-            int w = (Math.max(cursorX, blockStartX) - x + 1);
-            int h = (Math.max(cursorY, blockStartY) - y + 1);
-            g.fillRect(tileX(x), tileY(y), tileX(w), tileY(h));
+            g.color = Color(0x7F3399FF, true)
+            val x = min(cursorX.toDouble(), blockStartX.toDouble()).toInt()
+            val y = min(cursorY.toDouble(), blockStartY.toDouble()).toInt()
+            val w = ((max(cursorX.toDouble(), blockStartX.toDouble()) - x + 1).toInt())
+            val h = ((max(cursorY.toDouble(), blockStartY.toDouble()) - y + 1).toInt())
+            g.fillRect(tileX(x), tileY(y), tileX(w), tileY(h))
         }
 
         if (globalEditor.isBlockBuffer()) {
-            g.setColor(new Color(0x5FFF8133, true));
-            int x2 = Math.min(width - 1, cursorX + globalEditor.getBlockBufferW() - 1);
-            int y2 = Math.min(height - 1, cursorY + globalEditor.getBlockBufferH() - 1);
-            int w = x2 - cursorX + 1;
-            int h = y2 - cursorY + 1;
-            g.fillRect(tileX(cursorX), tileY(cursorY), tileX(w), tileY(h));
+            g.color = Color(0x5FFF8133, true)
+            val x2 = min((width - 1).toDouble(), (cursorX + globalEditor.blockBufferW - 1).toDouble())
+                .toInt()
+            val y2 = min((height - 1).toDouble(), (cursorY + globalEditor.blockBufferH - 1).toDouble())
+                .toInt()
+            val w = x2 - cursorX + 1
+            val h = y2 - cursorY + 1
+            g.fillRect(tileX(cursorX), tileY(cursorY), tileX(w), tileY(h))
         }
 
         if (placingBlockW != -1) {
-            g.setColor(new Color(0x5F33ff99, true));
-            int x2 = Math.min(width - 1, cursorX + placingBlockW - 1);
-            int y2 = Math.min(height - 1, cursorY + placingBlockH - 1);
-            int w = x2 - cursorX + 1;
-            int h = y2 - cursorY + 1;
-            g.fillRect(tileX(cursorX), tileY(cursorY), tileX(w), tileY(h));
+            g.color = Color(0x5F33ff99, true)
+            val x2 = min((width - 1).toDouble(), (cursorX + placingBlockW - 1).toDouble()).toInt()
+            val y2 = min((height - 1).toDouble(), (cursorY + placingBlockH - 1).toDouble()).toInt()
+            val w = x2 - cursorX + 1
+            val h = y2 - cursorY + 1
+            g.fillRect(tileX(cursorX), tileY(cursorY), tileX(w), tileY(h))
         }
         //g.drawImage(charBuffer, 0, 0, new Color(palette[7], true), null);
         //g.drawImage(charBuffer, 0, 0, 16, 14, 8, 14, 16, 28, bgColor, null);
     }
 
-    private void drawImg(Graphics g, Image image) {
-        g.drawImage(image, 0, 0, tileX(width), tileY(height), 0, 0, width * CHAR_W, height * CHAR_H, null);
+    private fun drawImg(g: Graphics, image: Image?) {
+        g.drawImage(image, 0, 0, tileX(width), tileY(height), 0, 0, width * CHAR_W, height * CHAR_H, null)
     }
 
-    @Override
-    public void mouseClicked(MouseEvent e) {
-        mouseMoveCommon(e);
+    override fun mouseClicked(e: MouseEvent) {
+        mouseMoveCommon(e)
     }
 
-    private Point getMouseCoords(Point p) {
-        if (p == null) { return null; }
-        int x = (int)(p.x / zoomx / CHAR_W);
-        int y = (int)(p.y / zoomy / CHAR_H);
-        return new Point(x, y);
+    private fun getMouseCoords(p: Point?): Point? {
+        if (p == null) {
+            return null
+        }
+        val x = (p.x / zoomx / CHAR_W).toInt()
+        val y = (p.y / zoomy / CHAR_H).toInt()
+        return Point(x, y)
     }
 
-    @Override
-    public void mousePressed(MouseEvent e) {
-        mouseMoveCommon(e, getButton(e));
+    override fun mousePressed(e: MouseEvent) {
+        mouseMoveCommon(e, getButton(e))
     }
 
-    @Override
-    public void mouseReleased(MouseEvent e) {
-        mouseMoveCommon(e, 0);
+    override fun mouseReleased(e: MouseEvent) {
+        mouseMoveCommon(e, 0)
     }
 
-    private int getButton(MouseEvent e) {
-        if (SwingUtilities.isLeftMouseButton(e))
-            return 1;
-        else if (SwingUtilities.isRightMouseButton(e))
-            return 2;
-        else if (SwingUtilities.isMiddleMouseButton(e))
-            return 3;
-        else
-            return 0;
+    private fun getButton(e: MouseEvent): Int {
+        return if (SwingUtilities.isLeftMouseButton(e)) 1
+        else if (SwingUtilities.isRightMouseButton(e)) 2
+        else if (SwingUtilities.isMiddleMouseButton(e)) 3
+        else 0
     }
 
-    @Override
-    public void mouseEntered(MouseEvent e) {
-        mouseMoveCommon(e);
+    override fun mouseEntered(e: MouseEvent) {
+        mouseMoveCommon(e)
     }
 
-    @Override
-    public void mouseExited(MouseEvent e) {
+    override fun mouseExited(e: MouseEvent) {
         if (mouseCursorX != -1) {
-            mouseCursorX = -1;
-            mouseCursorY = -1;
-            repaint();
+            mouseCursorX = -1
+            mouseCursorY = -1
+            repaint()
         }
     }
 
-    @Override
-    public void mouseDragged(MouseEvent e) {
-        mouseMoveCommon(e);
+    override fun mouseDragged(e: MouseEvent) {
+        mouseMoveCommon(e)
     }
 
-    @Override
-    public void mouseMoved(MouseEvent e) {
-        mouseMoveCommon(e);
+    override fun mouseMoved(e: MouseEvent) {
+        mouseMoveCommon(e)
     }
 
-    private void mouseMoveCommon(MouseEvent e) {
-        mouseMoveCommon(e, mouseState);
-    }
-    private void mouseMoveCommon(MouseEvent e, int heldDown) {
-        lastMouseEvent = e;
-        mouseState = heldDown;
-        editor.mouseMotion(e, heldDown);
-        int newMouseCursorX, newMouseCursorY;
-        var mc = getMouseCoords(e.getPoint());
-        int x = mc.x;
-        int y = mc.y;
+    private fun mouseMoveCommon(e: MouseEvent, heldDown: Int = mouseState) {
+        lastMouseEvent = e
+        mouseState = heldDown
+        editor.mouseMotion(e, heldDown)
+        val newMouseCursorX: Int
+        val newMouseCursorY: Int
+        val mc = getMouseCoords(e.point)
+        val x = mc!!.x
+        val y = mc.y
         if (x < 0 || y < 0 || x >= getWidth() || y >= getHeight()) {
-            newMouseCursorX = -1;
-            newMouseCursorY = -1;
+            newMouseCursorX = -1
+            newMouseCursorY = -1
         } else {
-            newMouseCursorX = x;
-            newMouseCursorY = y;
+            newMouseCursorX = x
+            newMouseCursorY = y
         }
         if (newMouseCursorX != mouseCursorX || newMouseCursorY != mouseCursorY) {
-            mouseCursorX = newMouseCursorX;
-            mouseCursorY = newMouseCursorY;
-            repaint();
+            mouseCursorX = newMouseCursorX
+            mouseCursorY = newMouseCursorY
+            repaint()
         }
     }
 
-    public void setBlink(boolean b) {
-        blinkState = b;
-        repaint();
+    fun setBlink(b: Boolean) {
+        blinkState = b
+        repaint()
     }
 
-    public void setCursor(int x, int y) {
-        cursorX = x;
-        cursorY = y;
-        repaint();
+    fun setCursor(x: Int, y: Int) {
+        cursorX = x
+        cursorY = y
+        repaint()
     }
 
-    public void setIndicate(int[] x, int[] y) {
-        indicateX = x;
-        indicateY = y;
-        repaint();
+    fun setIndicate(x: IntArray?, y: IntArray?) {
+        indicateX = x
+        indicateY = y
+        repaint()
     }
 
-    public String htmlColour(int colIdx) {
-        int r = (palette[colIdx] & 0x00FF0000) >> 16;
-        int g = (palette[colIdx] & 0x0000FF00) >> 8;
-        int b = (palette[colIdx] & 0x000000FF) >> 0;
-        return String.format("#%02X%02X%02X", r, g, b);
+    fun htmlColour(colIdx: Int): String {
+        val r = (palette[colIdx] and 0x00FF0000) shr 16
+        val g = (palette[colIdx] and 0x0000FF00) shr 8
+        val b = (palette[colIdx] and 0x000000FF) shr 0
+        return String.format("#%02X%02X%02X", r, g, b)
     }
 
-    public double getZoomX() {
-        return zoomx;
-    }
-    public double getZoomY() {
-        return zoomy;
-    }
-
-    public void setSelectionBlock(int blockStartX, int blockStartY) {
-        this.blockStartX = blockStartX;
-        this.blockStartY = blockStartY;
-        repaint();
+    fun setSelectionBlock(blockStartX: Int, blockStartY: Int) {
+        this.blockStartX = blockStartX
+        this.blockStartY = blockStartY
+        repaint()
     }
 
-    public void setPlacingBlock(int w, int h) {
-        this.placingBlockW = w;
-        this.placingBlockH = h;
-        repaint();
+    fun setPlacingBlock(w: Int, h: Int) {
+        this.placingBlockW = w
+        this.placingBlockH = h
+        repaint()
     }
 
-    public void setTextEntry(boolean state) {
-        textEntry = state;
-        repaint();
+    fun setTextEntry(state: Boolean) {
+        textEntry = state
+        repaint()
     }
 
-    public void setDrawing(boolean state) {
-        drawing = state;
-        repaint();
+    fun setDrawing(state: Boolean) {
+        drawing = state
+        repaint()
     }
 
-    public int getCharW(int x) {
-        return getCharW(x, zoomx);
+    fun getCharW(x: Int): Int {
+        return getCharW(x, zoomx)
     }
-    public int getCharH(int y) {
-        return getCharH(y, zoomy);
+
+    fun getCharH(y: Int): Int {
+        return getCharH(y, zoomy)
     }
-    public int getCharW(int x, double zoomx) {
-        return (int)Math.round(CHAR_W * x * zoomx);
+
+    fun getCharW(x: Int, zoomx: Double): Int {
+        return Math.round(CHAR_W * x * zoomx).toInt()
     }
-    public int toCharX(int x) {
-        return (int)(1.0 * x / CHAR_W / zoomx);
+
+    fun toCharX(x: Int): Int {
+        return (1.0 * x / CHAR_W / zoomx).toInt()
     }
-    public int getCharH(int y, double zoomy) {
-        return (int)Math.round(CHAR_H * y * zoomy);
+
+    fun getCharH(y: Int, zoomy: Double): Int {
+        return Math.round(CHAR_H * y * zoomy).toInt()
     }
-    public int toCharY(int y) {
-        return (int)(1.0 * y / CHAR_H / zoomy);
+
+    fun toCharY(y: Int): Int {
+        return (1.0 * y / CHAR_H / zoomy).toInt()
     }
 
     // TODO: HOT FUNCTION (4%)
-    public void drawVoid(int x, int y, int w, int h) {
-        for (int i = 0; i < 2; i++) {
-            var graphics = boardBuffers[i].getGraphics();
-            graphics.setColor(new Color(0x7F7F7F));
-            graphics.fillRect(x * CHAR_W, y * CHAR_H, w * CHAR_W, h * CHAR_H);
+    fun drawVoid(x: Int, y: Int, w: Int, h: Int) {
+        for (i in 0..1) {
+            val graphics = boardBuffers[i]!!.graphics
+            graphics.color = Color(0x7F7F7F)
+            graphics.fillRect(x * CHAR_W, y * CHAR_H, w * CHAR_W, h * CHAR_H)
         }
     }
 
-    public void setPalette(File file) throws IOException {
-        loadPalette(file);
-        refreshBuffer();
-        resetData();
-        repaint();
+    @Throws(IOException::class)
+    fun setPalette(file: File?) {
+        loadPalette(file)
+        refreshBuffer()
+        resetData()
+        repaint()
     }
 
-    public void setCharset(File file) throws IOException {
-        loadCharset(file);
-        refreshBuffer();
-        resetData();
-        repaint();
+    @Throws(IOException::class)
+    fun setCharset(file: File?) {
+        loadCharset(file)
+        refreshBuffer()
+        resetData()
+        repaint()
     }
 
-    public byte[] getCharset() {
-        return charset;
-    }
-    public byte[] getPalette() {
-        return paletteData;
-    }
-
-    public void setCP(File charset, File palette) throws IOException {
-        loadCharset(charset);
-        loadPalette(palette);
-        refreshBuffer();
-        resetData();
-        repaint();
+    @Throws(IOException::class)
+    fun setCP(charset: File?, palette: File?) {
+        loadCharset(charset)
+        loadPalette(palette)
+        refreshBuffer()
+        resetData()
+        repaint()
     }
 
-    private void resetData() {
+    private fun resetData() {
         if (cols != null && chars != null) {
-            setData(width, height, cols, chars, 0, 0, true, show);
+            setData(width, height, cols!!, chars!!, 0, 0, true, show)
         }
     }
 
-    public void setAtlas(Atlas atlas, int boardW, int boardH, boolean drawAtlasLines) {
-        this.atlas = atlas;
-        this.boardW = boardW;
-        this.boardH = boardH;
-        this.drawAtlasLines = drawAtlasLines;
+    fun setAtlas(atlas: Atlas?, boardW: Int, boardH: Int, drawAtlasLines: Boolean) {
+        this.atlas = atlas
+        this.boardW = boardW
+        this.boardH = boardH
+        this.drawAtlasLines = drawAtlasLines
     }
 
-    @Override
-    public void mouseWheelMoved(MouseWheelEvent e) {
-        if (e.getWheelRotation() < 0) {
-            editor.wheelUp(e);
+    override fun mouseWheelMoved(e: MouseWheelEvent) {
+        if (e.wheelRotation < 0) {
+            editor.wheelUp(e)
         } else {
-            editor.wheelDown(e);
+            editor.wheelDown(e)
         }
     }
 
-    public void recheckMouse() {
+    fun recheckMouse() {
         if (lastMouseEvent != null) {
             // TODO
             // TODO
@@ -751,5 +813,15 @@ public class DosCanvas extends JPanel implements MouseListener, MouseMotionListe
             // TODO
             // TODO
         }
+    }
+
+    companion object {
+        const val CHAR_W: Int = 8
+        const val CHAR_H: Int = 14
+        const val CHAR_COUNT: Int = 256
+        const val PALETTE_SIZE: Int = 16
+        private const val TRANSPARENT = 0x00000000
+
+        private val charBufferCache = WeakHashMap<Int, BufferedImage?>()
     }
 }

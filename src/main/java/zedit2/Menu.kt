@@ -1,43 +1,33 @@
-package zedit2;
+package zedit2
 
-import javax.swing.*;
-import javax.swing.event.ChangeListener;
-import java.awt.event.ActionListener;
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.awt.event.ActionListener
+import javax.swing.JMenu
+import javax.swing.event.ChangeListener
 
-public class Menu implements Iterable<MenuEntry> {
-    private ArrayList<MenuEntry> list = new ArrayList<>();
-    private String title;
-    public Menu(String title)
-    {
-        this.title = title;
+class Menu(@JvmField val title: String) : Iterable<MenuEntry?> {
+    private val list = ArrayList<MenuEntry>()
+
+    fun add(entry: MenuEntry) {
+        list.add(entry)
     }
 
-    public void add(MenuEntry entry) {
-        list.add(entry);
-    }
-    public void add(String name, String key, ActionListener act) {
-        list.add(new MenuEntry(name, key, act));
-    }
-    public void add(String name, ChangeListener act, boolean init) {
-        list.add(new MenuEntry(name, act, init));
-    }
-    public void add() {
-        list.add(new MenuEntry());
-    }
-    public void add(JMenu submenu, String key) {
-        list.add(new MenuEntry(submenu, key));
+    fun add(name: String?, key: String?, act: ActionListener?) {
+        list.add(MenuEntry(name, key, act))
     }
 
-    public String getTitle() {
-        return title;
+    fun add(name: String?, act: ChangeListener?, init: Boolean) {
+        list.add(MenuEntry(name, act, init))
     }
 
-    @Override
-    public Iterator<MenuEntry> iterator() {
-        return list.iterator();
+    fun add() {
+        list.add(MenuEntry())
     }
 
+    fun add(submenu: JMenu, key: String?) {
+        list.add(MenuEntry(submenu, key))
+    }
 
+    override fun iterator(): MutableIterator<MenuEntry> {
+        return list.iterator()
+    }
 }

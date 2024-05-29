@@ -1,74 +1,41 @@
-package zedit2;
+package zedit2
 
-import java.util.ArrayList;
-import java.util.List;
+class Tile(@JvmField var id: Int, @JvmField var col: Int) {
+    var stats: MutableList<Stat>
 
-public class Tile {
-    private int id, col;
-    private ArrayList<Stat> stats;
-
-    public Tile(int id, int col, List<Stat> stats) {
-        this(id, col);
-        setStats(stats);
-    }
-
-    public Tile(int id, int col, Stat stat) {
-        this(id, col);
-        stats.add(stat.clone());
-    }
-
-    public Tile(int id, int col) {
-        this.id = id;
-        this.col = col;
-        stats = new ArrayList<>();
-    }
-
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
-    public int getCol() {
-        return col;
-    }
-
-    public void setCol(int col) {
-        this.col = col;
-    }
-
-    public List<Stat> getStats() {
-        return stats;
-    }
-
-    public void setStats(List<Stat> stats) {
-        this.stats.clear();
-        if (stats == null) return;
-        for (Stat stat : stats) {
-            this.stats.add(stat.clone());
+    constructor(id: Int, col: Int, stats: List<Stat>) : this(id, col) {
+        val newStats = mutableListOf<Stat>()
+        for (stat in stats) {
+            newStats.add(stat.clone())
         }
+        this.stats = newStats
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (!(obj instanceof Tile)) return false;
-        Tile other = (Tile)obj;
-        if (other.id != id || other.col != col) return false;
-        return other.stats.equals(stats);
+    constructor(id: Int, col: Int, stat: Stat) : this(id, col) {
+        stats = arrayListOf(stat.clone())
     }
 
-    public void addStat(Stat newStat) {
-        if (stats == null) stats = new ArrayList<>();
-        stats.add(newStat);
-    }
-    public void delStat(int idx) {
-        stats.remove(idx);
+    init {
+        stats = ArrayList()
     }
 
-    public Tile clone() {
-        Tile tile = new Tile(id, col, stats);
-        return tile;
+    override fun equals(obj: Any?): Boolean {
+        if (obj !is Tile) return false
+        val other = obj
+        if (other.id != id || other.col != col) return false
+        return other.stats == stats
+    }
+
+    fun addStat(newStat: Stat) {
+        stats.add(newStat)
+    }
+
+    fun delStat(idx: Int) {
+        stats.removeAt(idx)
+    }
+
+    // TODO(jakeouellette): Adjust this clone method
+    fun clone(): Tile {
+        return Tile(id, col, stats)
     }
 }

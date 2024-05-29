@@ -1,5 +1,5 @@
-package zedit2;
+package zedit2
 
-public interface AudioCallback {
-    public void upTo(int line, int pos, int len);
+interface AudioCallback {
+    fun upTo(line: Int, pos: Int, len: Int)
 }

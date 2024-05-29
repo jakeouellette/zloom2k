@@ -1,137 +1,110 @@
-package zedit2;
+package zedit2
 
-public class ZZTWorldData extends WorldData {
-    private static final int WORLD_HEADER_SIZE = 512;
-    public ZZTWorldData(byte[] data) {
-        super(data);
-    }
+import zedit2.Util.getInt16
+import zedit2.Util.readPascalString
+import zedit2.Util.setInt16
+import zedit2.Util.writePascalString
 
-    @Override
-    public boolean isSuperZZT() {
-        return false;
-    }
+class ZZTWorldData(data: ByteArray?) : WorldData(data!!) {
+    override val isSuperZZT: Boolean
+        get() = false
 
-    @Override
-    public byte[] getName()
-    {
-        return Util.readPascalString(data[29], data, 30, 50);
-    }
+    override var name: ByteArray
+        get() = readPascalString(data[29], data, 30, 50)
+        set(str) {
+            writePascalString(str!!, data, 29, 30, 50)
+            isDirty = true
+        }
 
-    @Override
-    public void setName(byte[] str)
-    {
-        Util.writePascalString(str, data, 29, 30, 50);
-        setDirty(true);
-    }
+    override var torches: Int
+        get() = getInt16(data, 19)
+        set(value) {
+            setInt16(data, 19, value)
+            isDirty = true
+        }
+    override var torchTimer: Int
+        get() = getInt16(data, 21)
+        set(value) {
+            setInt16(data, 21, value)
+            isDirty = true
+        }
+    override var energiser: Int
+        get() = getInt16(data, 23)
+        set(value) {
+            setInt16(data, 23, value)
+            isDirty = true
+        }
+    override var score: Int
+        get() = getInt16(data, 27)
+        set(value) {
+            setInt16(data, 27, value)
+            isDirty = true
+        }
+    override var timeSeconds: Int
+        get() = getInt16(data, 260)
+        set(value) {
+            setInt16(data, 260, value)
+            isDirty = true
+        }
+    override var timeTicks: Int
+        get() = getInt16(data, 262)
+        set(value) {
+            setInt16(data, 262, value)
+            isDirty = true
+        }
+    override var locked: Boolean
+        get() = data[264].toInt() != 0
+        set(isLocked) {
+            data[264] = if (isLocked) 1.toByte() else 0.toByte()
+            isDirty = true
+        }
+    override var z: Int
+        get() {
+            throw UnsupportedOperationException("Cannot be used on ZZT worlds")
+        }
+        set(value) {
+            throw UnsupportedOperationException("Cannot be used on ZZT worlds")
+        }
+    override val numFlags: Int
+        get() = 10
 
-    @Override
-    public int getTorches() {
-        return Util.getInt16(data, 19);
-    }
-    @Override
-    public void setTorches(int val) {
-        Util.setInt16(data, 19, val);
-        setDirty(true);
-    }
-    @Override
-    public int getTorchTimer() {
-        return Util.getInt16(data, 21);
-    }
-    @Override
-    public void setTorchTimer(int val) {
-        Util.setInt16(data, 21, val);
-        setDirty(true);
-    }
-    @Override
-    public int getEnergiser() {
-        return Util.getInt16(data, 23);
-    }
-    @Override
-    public void setEnergiser(int val) {
-        Util.setInt16(data, 23, val);
-        setDirty(true);
-    }
-    @Override
-    public int getScore() {
-        return Util.getInt16(data, 27);
-    }
-    @Override
-    public void setScore(int val) {
-        Util.setInt16(data, 27, val);
-        setDirty(true);
-    }
-    @Override
-    public int getTimeSeconds() {
-        return Util.getInt16(data, 260);
-    }
-    @Override
-    public void setTimeSeconds(int val) {
-        Util.setInt16(data, 260, val);
-        setDirty(true);
-    }
-    @Override
-    public int getTimeTicks() {
-        return Util.getInt16(data, 262);
-    }
-    @Override
-    public void setTimeTicks(int val) {
-        Util.setInt16(data, 262, val);
-        setDirty(true);
-    }
-    @Override
-    public boolean getLocked() {
-        return data[264] != 0;
-    }
-    @Override
-    public void setLocked(boolean isLocked) {
-        data[264] = isLocked ? (byte)1 : (byte)0;
-        setDirty(true);
-    }
-    @Override
-    public int getZ() {
-        throw new UnsupportedOperationException("Cannot be used on ZZT worlds");
-    }
-    @Override
-    public void setZ(int val) {
-        throw new UnsupportedOperationException("Cannot be used on ZZT worlds");
-    }
-    @Override
-    public int getNumFlags() { return 10; }
-    @Override
-    public byte[] getFlag(int flag)
-    {
-        if (flag < 0 || flag >= getNumFlags()) throw new IndexOutOfBoundsException("Invalid flag index");
-        int flagOffset = 50 + (21 * flag);
-        return Util.readPascalString(data[flagOffset], data, flagOffset + 1, flagOffset + 21);
-    }
-    @Override
-    public void setFlag(int flag, byte[] str)
-    {
-        if (flag < 0 || flag >= getNumFlags()) throw new IndexOutOfBoundsException("Invalid flag index");
-        int flagOffset = 50 + (21 * flag);
-        Util.writePascalString(str, data, flagOffset, flagOffset + 1, flagOffset + 21);
-        setDirty(true);
-    }
-    @Override
-    protected int boardListOffset() { return WORLD_HEADER_SIZE; }
-
-    @Override
-    public Board getBoard(int boardIdx) throws WorldCorruptedException {
-        return new ZZTBoard(data, findBoardOffset(boardIdx));
+    override fun getFlag(flag: Int): ByteArray {
+        if (flag < 0 || flag >= numFlags) throw IndexOutOfBoundsException("Invalid flag index")
+        val flagOffset = 50 + (21 * flag)
+        return readPascalString(data[flagOffset], data, flagOffset + 1, flagOffset + 21)
     }
 
-    public static ZZTWorldData createWorld() {
-        var bytes = new byte[WORLD_HEADER_SIZE];
-        Util.setInt16(bytes, 0, -1);
+    override fun setFlag(flag: Int, str: ByteArray) {
+        if (flag < 0 || flag >= numFlags) throw IndexOutOfBoundsException("Invalid flag index")
+        val flagOffset = 50 + (21 * flag)
+        writePascalString(str, data, flagOffset, flagOffset + 1, flagOffset + 21)
+        isDirty = true
+    }
 
-        var world = new ZZTWorldData(bytes);
-        world.setNumBoards(-1);
-        world.setHealth(100);
-        CompatWarning w = new CompatWarning(false);
-        world.setBoard(w, 0, new ZZTBoard("Title screen"));
-        world.setBoard(w, 1, new ZZTBoard("First board"));
-        world.setCurrentBoard(1);
-        world.setDirty(false);
-        return world;
+    override fun boardListOffset(): Int {
+        return WORLD_HEADER_SIZE
+    }
+
+    @Throws(WorldCorruptedException::class)
+    override fun getBoard(boardIdx: Int): Board {
+        return ZZTBoard(data, findBoardOffset(boardIdx))
+    }
+
+    companion object {
+        private const val WORLD_HEADER_SIZE = 512
+        fun createWorld(): ZZTWorldData {
+            val bytes = ByteArray(WORLD_HEADER_SIZE)
+            setInt16(bytes, 0, -1)
+
+            val world = ZZTWorldData(bytes)
+            world.numBoards = -1
+            world.health = 100
+            val w = CompatWarning(false)
+            world.setBoard(w, 0, ZZTBoard("Title screen"))
+            world.setBoard(w, 1, ZZTBoard("First board"))
+            world.currentBoard = 1
+            world.isDirty = false
+            return world
+        }
     }
 }
