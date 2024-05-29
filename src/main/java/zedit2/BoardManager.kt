@@ -4,6 +4,7 @@ import java.awt.BorderLayout
 import java.awt.Dialog
 import java.awt.GridLayout
 import java.awt.event.ActionEvent
+import java.awt.event.ActionListener
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.io.File
@@ -22,16 +23,16 @@ public class BoardManager @JvmOverloads constructor(
     private var dialog: JDialog? = null
     private var worldData: WorldData
     private lateinit var table: JTable
-    private var tableModel: AbstractTableModel? = null
+    private lateinit var tableModel: AbstractTableModel
     private val szzt: Boolean
     private lateinit var boardSelectArray: Array<String?>
-    private var upButton: JButton? = null
-    private var downButton: JButton? = null
-    private var delButton: JButton? = null
+    private lateinit var upButton: JButton
+    private lateinit var downButton: JButton
+    private lateinit var delButton: JButton
 
     init {
         // TODO(jakeouellette): Handle more gracefully this null check
-        worldData = editor.worldData!!
+        worldData = editor.worldData
         szzt = worldData.isSuperZZT
 
         updateBoardSelectArray()
@@ -52,28 +53,10 @@ public class BoardManager @JvmOverloads constructor(
                 JOptionPane.ERROR_MESSAGE
             )
         }
-        dialog!!.dispose()
+        dialog?.dispose()
     }
 
     private fun generateTable() {
-        val dialog = object : JDialog() {
-            init {
-                if (modal) this.modalityType = ModalityType.APPLICATION_MODAL
-                Util.addEscClose(this, this.rootPane)
-                this.defaultCloseOperation = DISPOSE_ON_CLOSE
-                this.title = "Board list"
-
-                this.setIconImage(editor.canvas.extractCharImage(240, 0x1F, 2, 2, false, "$"))
-                this.addWindowListener(object : WindowAdapter() {
-                    override fun windowClosed(e: WindowEvent) {
-                        editor.canvas.setIndicate(null, null)
-                    }
-                })
-            }
-        }
-        this.dialog = dialog
-
-
         val colDark = if (szzt) -1 else 10
         val colCameraX = if (szzt) 10 else -1
         val colCameraY = if (szzt) 11 else -1
@@ -113,13 +96,13 @@ public class BoardManager @JvmOverloads constructor(
 
             override fun getColumnClass(columnIndex: Int): Class<*>? {
                 when (columnIndex) {
-                    COL_NUM, COL_SHOTS, COL_TIMELIMIT, COL_PLAYERX, COL_PLAYERY, COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> return Int::class.java
-                    COL_NAME -> return String::class.java
+                    COL_NUM, COL_SHOTS, COL_TIMELIMIT, COL_PLAYERX, COL_PLAYERY, COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> return java.lang.Integer::class.java
+                    COL_NAME -> return java.lang.String::class.java
                     else -> {
-                        if (columnIndex == colDark) return Boolean::class.java
-                        if (columnIndex == colCameraX) return Int::class.java
-                        if (columnIndex == colCameraY) return Int::class.java
-                        if (columnIndex == colRestart) return Boolean::class.java
+                        if (columnIndex == colDark) return java.lang.Boolean::class.java
+                        if (columnIndex == colCameraX) return java.lang.Integer::class.java
+                        if (columnIndex == colCameraY) return java.lang.Integer::class.java
+                        if (columnIndex == colRestart) return java.lang.Boolean::class.java
                         return null
                     }
                 }
@@ -133,17 +116,17 @@ public class BoardManager @JvmOverloads constructor(
                 val board = boards[rowIndex]
                 when (columnIndex) {
                     COL_NUM -> return rowIndex
-                    COL_NAME -> return CP437.toUnicode(board!!.getName())
-                    COL_SHOTS -> return board!!.getShots()
-                    COL_TIMELIMIT -> return board!!.getTimeLimit()
-                    COL_PLAYERX -> return board!!.getPlayerX()
-                    COL_PLAYERY -> return board!!.getPlayerY()
-                    COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> return board!!.getExit(columnToExit(columnIndex))
+                    COL_NAME -> return CP437.toUnicode(board.getName())
+                    COL_SHOTS -> return board.getShots()
+                    COL_TIMELIMIT -> return board.getTimeLimit()
+                    COL_PLAYERX -> return board.getPlayerX()
+                    COL_PLAYERY -> return board.getPlayerY()
+                    COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> return board.getExit(columnToExit(columnIndex))
                     else -> {
-                        if (columnIndex == colDark) return board!!.isDark
-                        if (columnIndex == colCameraX) return board!!.cameraX
-                        if (columnIndex == colCameraY) return board!!.cameraY
-                        if (columnIndex == colRestart) return board!!.isRestartOnZap()
+                        if (columnIndex == colDark) return board.isDark
+                        if (columnIndex == colCameraX) return board.cameraX
+                        if (columnIndex == colCameraY) return board.cameraY
+                        if (columnIndex == colRestart) return board.isRestartOnZap()
                         // TODO(jakeouellette): this might not be okay. (Was previously returning a null)
                         throw RuntimeException("Unexpected column, did not map to any value.")
                     }
@@ -154,48 +137,53 @@ public class BoardManager @JvmOverloads constructor(
                 val board = boards[rowIndex]
                 when (columnIndex) {
                     COL_NAME -> {
-                        board!!.setName(CP437.toBytes(value as String))
+                        board.setName(CP437.toBytes(value as String))
                         return
                     }
 
                     COL_SHOTS -> {
-                        board!!.setShots((value as Int))
+                        board.setShots((value as Int))
                         return
                     }
 
                     COL_TIMELIMIT -> {
-                        board!!.setTimeLimit((value as Int))
+                        board.setTimeLimit((value as Int))
                         return
                     }
 
                     COL_PLAYERX -> {
-                        board!!.setPlayerX((value as Int))
+                        board.setPlayerX((value as Int))
                         return
                     }
 
                     COL_PLAYERY -> {
-                        board!!.setPlayerY((value as Int))
+                        board.setPlayerY((value as Int))
                         return
                     }
 
                     COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> {
                         val boardIdx = getBoardIdx(value)
                         if (boardIdx in 0..255) {
-                            board!!.setExit(columnToExit(columnIndex), boardIdx)
+                            board.setExit(columnToExit(columnIndex), boardIdx)
                         }
                         return
                     }
 
                     else -> {
-                        if (columnIndex == colDark) board!!.isDark = (value as Boolean)
-                        if (columnIndex == colCameraX) board!!.cameraX = (value as Int)
-                        if (columnIndex == colCameraY) board!!.cameraY = (value as Int)
-                        if (columnIndex == colRestart) board!!.setRestartOnZap((value as Boolean))
+                        if (columnIndex == colDark) board.isDark = (value as Boolean)
+                        if (columnIndex == colCameraX) board.cameraX = (value as Int)
+                        if (columnIndex == colCameraY) board.cameraY = (value as Int)
+                        if (columnIndex == colRestart) board.setRestartOnZap((value as Boolean))
                     }
                 }
             }
         }
         table = object : JTable(tableModel) {
+            init {
+                this.setAutoCreateRowSorter(true)
+                this.setAutoResizeMode(AUTO_RESIZE_OFF)
+                this.getSelectionModel().addListSelectionListener { e: ListSelectionEvent? -> updateButtons() }
+            }
             override fun getCellRenderer(rowIndex: Int, columnIndex: Int): TableCellRenderer {
                 val renderer =
                     TableCellRenderer { table: JTable, value: Any, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int ->
@@ -239,37 +227,62 @@ public class BoardManager @JvmOverloads constructor(
                 }
             }
         }
-        table.setAutoCreateRowSorter(true)
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF)
-        table.getSelectionModel().addListSelectionListener { e: ListSelectionEvent? -> updateButtons() }
 
         val scroll = JScrollPane(table)
-        val buttonPanel = JPanel(GridLayout(0, 1))
-        upButton = JButton("↑")
-        downButton = JButton("↓")
-        delButton = JButton("×")
-        val exportButton = JButton("Export")
-        updateButtons()
-        upButton!!.addActionListener { e: ActionEvent? -> moveSelected(-1) }
-        downButton!!.addActionListener { e: ActionEvent? -> moveSelected(1) }
-        delButton!!.addActionListener { e: ActionEvent? -> delSelected() }
-        exportButton.addActionListener { e: ActionEvent? -> exportSelected() }
-        val note = " (note: This will change board exits and passages.)"
-        upButton!!.toolTipText = "Move selected boards up$note"
-        downButton!!.toolTipText = "Move selected boards down$note"
-        delButton!!.toolTipText = "Delete selected boards$note"
-        exportButton.toolTipText = "Export selected boards"
 
-        buttonPanel.add(upButton)
-        buttonPanel.add(downButton)
-        buttonPanel.add(delButton)
-        buttonPanel.add(exportButton)
-        dialog!!.contentPane.layout = BorderLayout()
-        dialog!!.add(scroll, BorderLayout.CENTER)
-        dialog!!.add(buttonPanel, BorderLayout.EAST)
-        dialog!!.pack()
-        dialog!!.setLocationRelativeTo(editor.frameForRelativePositioning)
-        dialog!!.isVisible = true
+        val note = " (note: This will change board exits and passages.)"
+
+        upButton = panelButton(name = "↑", toolTipText = "Move selected boards up$note") {
+            moveSelected(-1)
+        }
+        downButton = panelButton(name = "↓",toolTipText = "Move selected boards down$note") {
+            moveSelected(1)
+        }
+        delButton = panelButton(name = "×", toolTipText = "Delete selected boards$note") {
+            delSelected()
+        }
+        val exportButton = panelButton(name = "Export", toolTipText = "Export selected boards") {
+            exportSelected()
+        }
+        updateButtons()
+
+        val buttonPanel = object : JPanel(GridLayout(0, 1)) {
+            init {
+                this.add(upButton)
+                this.add(downButton)
+                this.add(delButton)
+                this.add(exportButton)
+            }
+        }
+        val dialog = object : JDialog() {
+            init {
+                if (modal) this.modalityType = ModalityType.APPLICATION_MODAL
+                Util.addEscClose(this, this.rootPane)
+                this.defaultCloseOperation = DISPOSE_ON_CLOSE
+                this.title = "Board list"
+
+                this.setIconImage(editor.canvas.extractCharImage(240, 0x1F, 2, 2, false, "$"))
+                this.addWindowListener(object : WindowAdapter() {
+                    override fun windowClosed(e: WindowEvent) {
+                        editor.canvas.setIndicate(null, null)
+                    }
+                })
+                this.contentPane.layout = BorderLayout()
+                this.add(scroll, BorderLayout.CENTER)
+                this.add(buttonPanel, BorderLayout.EAST)
+                this.pack()
+                this.setLocationRelativeTo(editor.frameForRelativePositioning)
+                this.isVisible = true
+            }
+        }
+        this.dialog = dialog
+    }
+
+    private fun panelButton(name:String, toolTipText : String, action : ActionListener) = object : JButton(name) {
+        init {
+            this.addActionListener(action)
+            this.toolTipText = toolTipText
+        }
     }
 
     private fun exportSelected() {
@@ -298,24 +311,24 @@ public class BoardManager @JvmOverloads constructor(
     }
 
     private fun updateButtons() {
-        upButton!!.isEnabled = true
-        downButton!!.isEnabled = true
-        delButton!!.isEnabled = true
+        upButton.isEnabled = true
+        downButton.isEnabled = true
+        delButton.isEnabled = true
         val rows = table.selectedRows
 
         // Can't do anything if no rows are selected, or if all the rows are selected
         if (rows.isEmpty() || rows.size == boards.size) {
-            upButton!!.isEnabled = false
-            downButton!!.isEnabled = false
-            delButton!!.isEnabled = false
+            upButton.isEnabled = false
+            downButton.isEnabled = false
+            delButton.isEnabled = false
             return
         }
 
         // Can't move up if the top row is selected or down if the bottom row is selected
         for (viewRow in rows) {
             val modelRow = table.convertRowIndexToModel(viewRow)
-            if (modelRow == 0) upButton!!.isEnabled = false
-            if (modelRow == boards.size - 1) downButton!!.isEnabled = false
+            if (modelRow == 0) upButton.isEnabled = false
+            if (modelRow == boards.size - 1) downButton.isEnabled = false
         }
     }
 
@@ -383,7 +396,7 @@ public class BoardManager @JvmOverloads constructor(
         for (boardIdx in newBoardList.indices) {
             val board = newBoardList[boardIdx]
             val oldBoardIdx = remapping[boardIdx]
-            w.setPrefix(String.format("Board #%d \"%s\"", oldBoardIdx, CP437.toUnicode(board!!.getName())))
+            w.setPrefix(String.format("Board #%d \"%s\"", oldBoardIdx, CP437.toUnicode(board.getName())))
 
             // Check exits. If we remap an exit to 0 or a nonexistent board we must give a warning
             for (exit in 0..3) {
@@ -500,7 +513,7 @@ public class BoardManager @JvmOverloads constructor(
         editor.changeBoard(newCurrentBoardIdx)
 
         //}
-        tableModel!!.fireTableDataChanged()
+        tableModel.fireTableDataChanged()
         table.clearSelection()
 
         for (remappedModelRow in selectedRows) {

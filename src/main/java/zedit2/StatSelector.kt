@@ -65,8 +65,8 @@ case COL_UCO:
             override fun getColumnClass(columnIndex: Int): Class<*>? {
                 return when (columnIndex) {
                     COL_IMAGE, COL_COLOUR, COL_UCO -> Icon::class.java
-                    COL_STATID, COL_X, COL_Y, COL_CYCLE, COL_STEPX, COL_STEPY, COL_P1, COL_P2, COL_P3, COL_FOLLOWER, COL_LEADER, COL_IP, COL_CODELEN, COL_ORDER -> Int::class.java
-                    COL_TYPE, COL_NAME, COL_UID -> String::class.java
+                    COL_STATID, COL_X, COL_Y, COL_CYCLE, COL_STEPX, COL_STEPY, COL_P1, COL_P2, COL_P3, COL_FOLLOWER, COL_LEADER, COL_IP, COL_CODELEN, COL_ORDER -> java.lang.Integer::class.java
+                    COL_TYPE, COL_NAME, COL_UID -> java.lang.String::class.java
                     else -> null
                 }
             }
