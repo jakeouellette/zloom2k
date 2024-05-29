@@ -8,7 +8,7 @@ import java.time.LocalDateTime
 import javax.swing.JPanel
 import javax.swing.Timer
 
-class EditingModePane : JPanel() {
+open class EditingModePane : JPanel() {
     private var text = ""
     private var col: Color = Color.BLACK
     private var override_text: String? = null

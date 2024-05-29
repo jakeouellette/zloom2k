@@ -97,13 +97,13 @@ class WorldEditor @JvmOverloads constructor(
 
     lateinit var canvas: DosCanvas
         private set
-    private var bufferPane: JPanel? = null
-    private var bufferPaneContents: JPanel? = null
-    private var infoBox: JTextArea? = null
+    private lateinit var bufferPane: JPanel
+    private lateinit var bufferPaneContents: JPanel
+    private lateinit var infoBox: JTextArea
     lateinit var frame: JFrame
     private lateinit var canvasScrollPane: JScrollPane
-    private var menuBar: JMenuBar? = null
-    private var editingModePane: EditingModePane? = null
+    private lateinit var menuBar: JMenuBar
+    private lateinit var editingModePane: EditingModePane
 
     private var currentlyShowing = SHOW_NOTHING
 
@@ -185,7 +185,7 @@ class WorldEditor @JvmOverloads constructor(
         boards.clear()
         atlases.clear()
         try {
-            canvas!!.setCP(null, null)
+            canvas.setCP(null, null)
         } catch (ignored: IOException) {
         }
 
@@ -194,10 +194,10 @@ class WorldEditor @JvmOverloads constructor(
         }
 
         val cb = worldData.currentBoard
-        boardW = boards[0]!!.width
-        boardH = boards[0]!!.height
-        cursorX = boards[cb]!!.getStat(0)!!.x - 1
-        cursorY = boards[cb]!!.getStat(0)!!.y - 1
+        boardW = boards[0].width
+        boardH = boards[0].height
+        cursorX = boards[cb].getStat(0)!!.x - 1
+        cursorY = boards[cb].getStat(0)!!.y - 1
         centreView = true
 
         updateMenu()
@@ -212,14 +212,14 @@ class WorldEditor @JvmOverloads constructor(
         gridH = 1
         cursorX %= boardW
         cursorY %= boardH
-        canvas!!.setCursor(cursorX, cursorY)
+        canvas.setCursor(cursorX, cursorY)
         width = boardW * gridW
         height = boardH * gridH
         grid = Array(1) { IntArray(1) }
         grid[0][0] = newBoardIdx
         invalidateCache()
         afterModification()
-        canvas!!.revalidate()
+        canvas.revalidate()
     }
 
     private fun setCurrentBoard(newBoardIdx: Int) {
@@ -240,7 +240,7 @@ class WorldEditor @JvmOverloads constructor(
             val y = gridPos[1]
             cursorX = (cursorX % boardW) + x * boardW
             cursorY = (cursorY % boardH) + y * boardH
-            canvas!!.setCursor(cursorX, cursorY)
+            canvas.setCursor(cursorX, cursorY)
             setCurrentBoard(newBoardIdx)
             if (atlas != currentAtlas) {
                 gridW = atlas.w
@@ -252,16 +252,16 @@ class WorldEditor @JvmOverloads constructor(
                 currentAtlas = atlas
                 invalidateCache()
                 afterModification()
-                canvas!!.revalidate()
+                canvas.revalidate()
             }
 
             val rect = Rectangle(
-                canvas!!.getCharW(x * boardW),
-                canvas!!.getCharH(y * boardH),
-                canvas!!.getCharW(boardW),
-                canvas!!.getCharH(boardH)
+                canvas.getCharW(x * boardW),
+                canvas.getCharH(y * boardH),
+                canvas.getCharW(boardW),
+                canvas.getCharH(boardH)
             )
-            canvas!!.scrollRectToVisible(rect)
+            canvas.scrollRectToVisible(rect)
         } else {
             // No atlas, switch to individual board
             changeToIndividualBoard(newBoardIdx)
@@ -275,7 +275,7 @@ class WorldEditor @JvmOverloads constructor(
             for (boardIdx in row) {
                 if (boardIdx != -1) {
                     val boardUndoList = ArrayList<Board>()
-                    boardUndoList.add(boards[boardIdx]!!.clone())
+                    boardUndoList.add(boards[boardIdx].clone())
                     undoList[boardIdx] = boardUndoList
                     undoPositions[boardIdx] = 0
                 }
@@ -349,7 +349,7 @@ class WorldEditor @JvmOverloads constructor(
                         undoPos = undoPositions[boardIdx]!!
 
                         val undoBoard = undoBoards[undoPos]
-                        if (boards[boardIdx]!!.timestampEquals(undoBoard)) {
+                        if (boards[boardIdx].timestampEquals(undoBoard)) {
                             addTo = false
                         }
                         //System.out.println("Current board timestamp: " + boards.get(boardIdx).getDirtyTimestamp());
@@ -364,7 +364,7 @@ class WorldEditor @JvmOverloads constructor(
                             undoBoards.removeAt(undoPos + 1)
                         }
                         // Now add this board to the undo list
-                        undoBoards.add(boards[boardIdx]!!.clone())
+                        undoBoards.add(boards[boardIdx].clone())
                         // Too many?
                         val undoBufferSize = globalEditor.getInt("UNDO_BUFFER_SIZE", 100)
                         if (undoBoards.size > undoBufferSize) {
@@ -423,7 +423,7 @@ class WorldEditor @JvmOverloads constructor(
 
     private fun drawBoard() {
         if (width != redraw_width || height != redraw_height) {
-            canvas!!.setDimensions(width, height)
+            canvas.setDimensions(width, height)
             redraw_width = width
             redraw_height = height
             redraw_x1 = 0
@@ -432,8 +432,8 @@ class WorldEditor @JvmOverloads constructor(
             redraw_y2 = height - 1
             redraw = true
         }
-        canvas!!.setZoom(if (worldData!!.isSuperZZT) zoom * 2 else zoom, zoom)
-        canvas!!.setAtlas(currentAtlas, boardW, boardH, globalEditor.getBoolean("ATLAS_GRID", true))
+        canvas.setZoom(if (worldData.isSuperZZT) zoom * 2 else zoom, zoom)
+        canvas.setAtlas(currentAtlas, boardW, boardH, globalEditor.getBoolean("ATLAS_GRID", true))
         if (redraw) {
             for (y in 0 until gridH) {
                 for (x in 0 until gridW) {
@@ -446,8 +446,8 @@ class WorldEditor @JvmOverloads constructor(
                         val y2 = min((y * boardH + (boardH - 1)).toDouble(), redraw_y2.toDouble())
                             .toInt()
                         if (x2 >= x1 && y2 >= y1) {
-                            boards[boardIdx]!!.drawToCanvas(
-                                canvas!!, x * boardW, y * boardH,
+                            boards[boardIdx].drawToCanvas(
+                                canvas, x * boardW, y * boardH,
                                 x1 - x * boardW, y1 - y * boardH, x2 - x * boardW, y2 - y * boardH,
                                 currentlyShowing
                             )
@@ -455,112 +455,130 @@ class WorldEditor @JvmOverloads constructor(
                     } else {
                         val voidCoord = pair(x, y)
                         if (!voidsDrawn.contains(voidCoord)) {
-                            canvas!!.drawVoid(x * boardW, y * boardH, boardW, boardH)
+                            canvas.drawVoid(x * boardW, y * boardH, boardW, boardH)
                             voidsDrawn.add(voidCoord)
                         }
                     }
                 }
             }
         }
-        canvas!!.repaint()
+        canvas.repaint()
         redraw = false
     }
 
     @Throws(IOException::class)
     private fun createGUI() {
-        frame = JFrame()
-        disableAlt()
+        frame = object : JFrame() {
+            init {
+                disableAlt()
 
-        /**/ //frame.setUndecorated(true);
-        frame!!.addKeyListener(this)
-        frame!!.addWindowFocusListener(this)
+                /**/ //frame.setUndecorated(true);
+                this.addKeyListener(this@WorldEditor)
+                this.addWindowFocusListener(this@WorldEditor)
 
-        //var ico = ImageIO.read(new File("zediticon.png"));
-        val ico = ImageIO.read(ByteArrayInputStream(Data.ZEDITICON_PNG))
-        frame!!.iconImage = ico
-        frame!!.defaultCloseOperation = JFrame.DO_NOTHING_ON_CLOSE
-        frame!!.addWindowListener(object : WindowAdapter() {
-            override fun windowClosed(e: WindowEvent) {
-                globalEditor.editorClosed()
-            }
+                //var ico = ImageIO.read(new File("zediticon.png"));
+                val ico = ImageIO.read(ByteArrayInputStream(Data.ZEDITICON_PNG))
+                this.iconImage = ico
+                this.defaultCloseOperation = JFrame.DO_NOTHING_ON_CLOSE
+                this.addWindowListener(object : WindowAdapter() {
+                    override fun windowClosed(e: WindowEvent) {
+                        globalEditor.editorClosed()
+                    }
 
-            override fun windowClosing(e: WindowEvent) {
-                tryClose()
-            }
-        })
+                    override fun windowClosing(e: WindowEvent) {
+                        tryClose()
+                    }
+                })
 
-        menuBar = JMenuBar()
-        createMenu()
-        frame!!.jMenuBar = menuBar
-        run {
-            // Remove F10
-            val im = menuBar!!.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
-            for (k in im.allKeys()) {
-                if (k.keyCode == KeyEvent.VK_F10) {
-                    im.remove(k)
+                val menuBar = JMenuBar()
+                this@WorldEditor.menuBar = menuBar
+                this.jMenuBar = menuBar
+                createMenu()
+
+                run {
+                    // Remove F10
+                    val im = menuBar.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                    for (k in im.allKeys()) {
+                        if (k.keyCode == KeyEvent.VK_F10) {
+                            im.remove(k)
+                        }
+                    }
                 }
+                canvas = DosCanvas(this@WorldEditor, zoom)
+                canvas.setBlinkMode(globalEditor.getBoolean("BLINKING", true))
+                this.addKeybinds(this.layeredPane)
+
+                //drawBoard();
+                canvasScrollPane = object : JScrollPane(canvas) {
+                    init {
+                        horizontalScrollBarPolicy = HORIZONTAL_SCROLLBAR_ALWAYS
+                        verticalScrollBarPolicy = VERTICAL_SCROLLBAR_ALWAYS
+                    }
+                }
+
+                infoBox = object : JTextArea(3, 20) {
+                    init {
+                        border = BorderFactory.createBevelBorder(BevelBorder.LOWERED)
+                        font = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+                        //infoBox.setFont(CP437.INSTANCE.getFont());
+                        isEditable = false
+                        isFocusable = false
+                    }
+                }
+
+                bufferPane = JPanel(BorderLayout())
+
+                editingModePane = object : EditingModePane() {
+                    init {
+                        this.isOpaque = false
+                    }
+                }
+                //infoBox.setPreferredSize(new Dimension(80, 40));
+                val controlScrollPane = object : JScrollPane(bufferPane) {
+                    init {
+                        horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+
+                    }
+                }
+
+                val controlPane = object : JPanel(BorderLayout()) {
+                    init {
+                        add(infoBox, BorderLayout.NORTH)
+                        add(controlScrollPane, BorderLayout.CENTER)
+                        add(editingModePane, BorderLayout.SOUTH)
+                    }
+                }
+
+                val splitPane = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controlPane, canvasScrollPane)
+
+                val timer = Timer(true)
+                timer.schedule(object : TimerTask() {
+                    private var blinkState = false
+                    override fun run() {
+                        SwingUtilities.invokeLater {
+                            if (!popupOpen) requestFocusInWindow()
+                            blinkState = !blinkState
+                            canvas.setBlink(blinkState)
+                            for (icon in blinkingImageIcons) {
+                                icon.blink(blinkState)
+                            }
+                            bufferPane!!.repaint()
+                        }
+                    }
+                }, BLINK_DELAY.toLong(), BLINK_DELAY.toLong())
+
+                contentPane.add(splitPane)
+                pack()
+                setLocationRelativeTo(null)
+                /**/ //frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+                isVisible = true
             }
         }
-        canvas = DosCanvas(this, zoom)
-        canvas!!.setBlinkMode(globalEditor.getBoolean("BLINKING", true))
-        addKeybinds(frame!!.layeredPane)
 
-        //drawBoard();
-        canvasScrollPane = JScrollPane(canvas)
-        canvasScrollPane!!.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS
-        canvasScrollPane!!.verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_ALWAYS
-
-        val controlPane = JPanel(BorderLayout())
-
-        infoBox = JTextArea(3, 20)
-        infoBox!!.border = BorderFactory.createBevelBorder(BevelBorder.LOWERED)
-        infoBox!!.font = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-        //infoBox.setFont(CP437.INSTANCE.getFont());
-        infoBox!!.isEditable = false
-        infoBox!!.isFocusable = false
-
-        bufferPane = JPanel(BorderLayout())
-
-        editingModePane = EditingModePane()
-        editingModePane!!.isOpaque = false
-
-        //infoBox.setPreferredSize(new Dimension(80, 40));
-        val controlScrollPane = JScrollPane(bufferPane)
-        controlScrollPane.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-
-        controlPane.add(infoBox, BorderLayout.NORTH)
-        controlPane.add(controlScrollPane, BorderLayout.CENTER)
-        controlPane.add(editingModePane, BorderLayout.SOUTH)
-
-
-        val splitPane = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controlPane, canvasScrollPane)
-
-
-        val timer = Timer(true)
-        timer.schedule(object : TimerTask() {
-            private var blinkState = false
-            override fun run() {
-                SwingUtilities.invokeLater {
-                    if (!popupOpen) frame!!.requestFocusInWindow()
-                    blinkState = !blinkState
-                    canvas!!.setBlink(blinkState)
-                    for (icon in blinkingImageIcons) {
-                        icon.blink(blinkState)
-                    }
-                    bufferPane!!.repaint()
-                }
-            }
-        }, BLINK_DELAY.toLong(), BLINK_DELAY.toLong())
-
-        frame!!.contentPane.add(splitPane)
-        frame!!.pack()
-        frame!!.setLocationRelativeTo(null)
-        /**/ //frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
-        frame!!.isVisible = true
     }
 
     private fun closeEditor() {
-        frame!!.dispose()
+        frame.dispose()
     }
 
     private fun tryClose() {
@@ -571,9 +589,9 @@ class WorldEditor @JvmOverloads constructor(
 
     private val isDirty: Boolean
         get() {
-            if (worldData!!.isDirty) return true
+            if (worldData.isDirty) return true
             for (board in boards) {
-                if (board!!.isDirty) {
+                if (board.isDirty) {
                     return true
                 }
             }
@@ -601,10 +619,10 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun saveTo(path: File): Boolean {
-        val worldCopy = worldData!!.clone()
+        val worldCopy = worldData.clone()
         if (saveGame(path, worldCopy)) {
             for (board in boards) {
-                board!!.clearDirty()
+                board.clearDirty()
             }
             worldCopy.isDirty = false
             worldData = worldCopy
@@ -614,7 +632,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun saveGame(path: File, worldCopy: WorldData): Boolean {
-        val warning = CompatWarning(worldData!!.isSuperZZT)
+        val warning = CompatWarning(worldData.isSuperZZT)
 
         // Update world name, if necessary
         val oldWorldName = String(worldCopy.name)
@@ -624,15 +642,15 @@ class WorldEditor @JvmOverloads constructor(
             worldCopy.name = newWorldName.toByteArray()
         }
 
-        if (boards.size > 254 && !worldData!!.isSuperZZT) {
+        if (boards.size > 254 && !worldData.isSuperZZT) {
             warning.warn(1, "World has >254 boards, which may cause problems in Weave 3.")
-        } else if (boards.size > 33 && worldData!!.isSuperZZT) {
+        } else if (boards.size > 33 && worldData.isSuperZZT) {
             warning.warn(1, "World has >33 boards, which may cause problems in vanilla Super ZZT.")
         }
 
         for (boardIdx in boards.indices) {
             val board = boards[boardIdx]
-            warning.setPrefix(String.format("Board %d (%s) ", boardIdx, toUnicode(board!!.getName())))
+            warning.setPrefix(String.format("Board %d (%s) ", boardIdx, toUnicode(board.getName())))
             if (board.isDirty) {
                 worldCopy.setBoard(warning, boardIdx, board)
             }
@@ -752,12 +770,12 @@ class WorldEditor @JvmOverloads constructor(
             try {
                 updateDefaultDir(file)
                 val worldData = loadWorld(file)
-                if (worldData.isSuperZZT != this.worldData!!.isSuperZZT) {
+                if (worldData.isSuperZZT != this.worldData.isSuperZZT) {
                     throw RuntimeException("Error: ZZT / Super ZZT mismatch")
                 }
                 for (i in 0..worldData.numBoards) {
                     val board = worldData.getBoard(i)
-                    board!!.setDirty()
+                    board.setDirty()
                     boards.add(board)
                 }
             } catch (e: IOException) {
@@ -776,7 +794,7 @@ class WorldEditor @JvmOverloads constructor(
         if (result == JFileChooser.APPROVE_OPTION) {
             val file = fileChooser.selectedFile
             try {
-                canvas!!.setCharset(file)
+                canvas.setCharset(file)
                 updateDefaultDir(file)
             } catch (e: IOException) {
                 JOptionPane.showMessageDialog(frame, e, "Error loading char set", JOptionPane.ERROR_MESSAGE)
@@ -792,7 +810,7 @@ class WorldEditor @JvmOverloads constructor(
         if (result == JFileChooser.APPROVE_OPTION) {
             val file = fileChooser.selectedFile
             try {
-                canvas!!.setPalette(file)
+                canvas.setPalette(file)
                 updateDefaultDir(file)
             } catch (e: IOException) {
                 JOptionPane.showMessageDialog(frame, e, "Error loading palette", JOptionPane.ERROR_MESSAGE)
@@ -804,8 +822,8 @@ class WorldEditor @JvmOverloads constructor(
 
     private fun menuDefaultCharsetPalette() {
         try {
-            canvas!!.setCharset(null)
-            canvas!!.setPalette(null)
+            canvas.setCharset(null)
+            canvas.setPalette(null)
         } catch (ignored: IOException) {
         }
     }
@@ -910,7 +928,7 @@ class WorldEditor @JvmOverloads constructor(
                 }
                 if (file != null) {
                     try {
-                        boards[idx]!!.loadFrom(file)
+                        boards[idx].loadFrom(file)
                         if (idx == boardIdx) {
                             changeBoard(boardIdx)
                         }
@@ -945,7 +963,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     fun createMenu() {
-        menuBar!!.removeAll()
+        menuBar.removeAll()
         // | File     | World    |          |          |          |          |          |
         // | New ZZT  | World Set|          |          |          |          |          |
         // | New Super| Board Set|          |          |          |          |          |
@@ -971,7 +989,7 @@ class WorldEditor @JvmOverloads constructor(
             m.add("Save", "Ctrl-S") { e: ActionEvent? -> menuSave() }
             m.add("Save as", "S") { e: ActionEvent? -> menuSaveAs() }
             m.add()
-            m.add("ZLoom2 settings...", null) { e: ActionEvent? -> Settings(this) }
+            m.add("ZLoom2 settings...", null) { e: ActionEvent? -> Settings(this@WorldEditor) }
             m.add()
             m.add("Close world", "Escape") { e: ActionEvent? ->
                 if (promptOnClose()) closeEditor()
@@ -979,7 +997,7 @@ class WorldEditor @JvmOverloads constructor(
             menus.add(m)
 
             m = Menu("World")
-            m.add("World settings...", "G") { e: ActionEvent? -> world(frame, boards, worldData!!, canvas!!) }
+            m.add("World settings...", "G") { e: ActionEvent? -> world(frame, boards, worldData, canvas) }
             m.add()
             m.add("Import world", null) { e: ActionEvent? -> menuImportWorld() }
             m.add()
@@ -998,7 +1016,7 @@ class WorldEditor @JvmOverloads constructor(
             menus.add(m)
 
             m = Menu("Board")
-            m.add("Board settings...", "I") { e: ActionEvent? -> board(frame, currentBoard, worldData!!) }
+            m.add("Board settings...", "I") { e: ActionEvent? -> board(frame, currentBoard, worldData) }
             m.add("Board exits", "X") { e: ActionEvent? -> operationBoardExits() }
             m.add()
             m.add("Switch board", "B") { e: ActionEvent? -> operationChangeBoard() }
@@ -1096,14 +1114,14 @@ class WorldEditor @JvmOverloads constructor(
          */
         for (m in menus) {
             val menu = JMenu(m.title)
-            menu.addMenuListener(this)
+            menu.addMenuListener(this@WorldEditor)
             for (mEntry in m) {
                 mEntry.addToJMenu(globalEditor, menu)
             }
 
-            menuBar!!.add(menu)
+            menuBar.add(menu)
         }
-        menuBar!!.revalidate()
+        menuBar.revalidate()
         /*
                 var mi = menuList[i];
                 if (mi.equals("|")) {
@@ -1138,7 +1156,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun afterBlinkToggle() {
-        canvas!!.setBlinkMode(globalEditor.getBoolean("BLINKING", true))
+        canvas.setBlinkMode(globalEditor.getBoolean("BLINKING", true))
         invalidateCache()
     }
 
@@ -1195,7 +1213,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun getFMenuItems(f: Int): Array<JMenuItem> {
-        val szzt = worldData!!.isSuperZZT
+        val szzt = worldData.isSuperZZT
         val menuItems = ArrayList<JMenuItem>()
         var i = 0
         while (true) {
@@ -1248,7 +1266,7 @@ class WorldEditor @JvmOverloads constructor(
                 menuItem.addActionListener { e: ActionEvent? -> setBufferToElement(element, editOnPlace) }
 
                 val col = ZType.getColour(szzt, tile)
-                val img = canvas!!.extractCharImageWH(chr, col, if (szzt) 2 else 1, 1, false, "____\$____", 3, 3)
+                val img = canvas.extractCharImageWH(chr, col, if (szzt) 2 else 1, 1, false, "____\$____", 3, 3)
                 val side = 20
                 val img2 = BufferedImage(side, side, BufferedImage.TYPE_INT_ARGB)
                 val g = img2.graphics
@@ -1274,18 +1292,18 @@ class WorldEditor @JvmOverloads constructor(
         if (exclPos != -1) {
             elementName = element.substring(0, exclPos)
         }
-        val elementId = ZType.getId(worldData!!.isSuperZZT, elementName)
+        val elementId = ZType.getId(worldData.isSuperZZT, elementName)
         if (elementId == -1) {
             throw RuntimeException(
                 String.format(
                     "\"%s\" is not a valid %s element",
                     elementName,
-                    if (worldData!!.isSuperZZT) "SuperZZT" else "ZZT"
+                    if (worldData.isSuperZZT) "SuperZZT" else "ZZT"
                 )
             )
         }
         val tile = Tile(elementId, 0)
-        if (!ZType.isText(worldData!!.isSuperZZT, tile.id)) {
+        if (!ZType.isText(worldData.isSuperZZT, tile.id)) {
             paintTile(tile, col)
         }
         if (!vanilla) {
@@ -1304,7 +1322,7 @@ class WorldEditor @JvmOverloads constructor(
                 .toTypedArray()
             val stats = ArrayList<Stat>()
             for (statString in statList) {
-                val stat = Stat(worldData!!.isSuperZZT)
+                val stat = Stat(worldData.isSuperZZT)
                 // Split into params
                 val paramList = statString.split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
                 for (paramString in paramList) {
@@ -1350,9 +1368,9 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private var bufferTile: Tile?
-        get() = globalEditor.getBufferTile(worldData!!.isSuperZZT)
+        get() = globalEditor.getBufferTile(worldData.isSuperZZT)
         private set(tile) {
-            globalEditor.setBufferTile(tile, worldData!!.isSuperZZT)
+            globalEditor.setBufferTile(tile, worldData.isSuperZZT)
         }
 
     private fun setBufferToElement(element: String, editOnPlace: Boolean) {
@@ -1393,13 +1411,13 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun isText(bufferTile: Tile): Boolean {
-        return ZType.isText(worldData!!.isSuperZZT, bufferTile.id)
+        return ZType.isText(worldData.isSuperZZT, bufferTile.id)
     }
 
     private fun getTileColour(bufferTile: Tile): Int {
         var col = bufferTile.col
         val id = bufferTile.id
-        val szzt = worldData!!.isSuperZZT
+        val szzt = worldData.isSuperZZT
         val tcol = ZType.getTextColour(szzt, id)
         if (tcol != -1) {
             col = tcol
@@ -1413,107 +1431,108 @@ class WorldEditor @JvmOverloads constructor(
         return globalEditor.getString(String.format("F%d_MENU", f), "")
     }
 
-    private fun addKeybinds(component: JComponent) {
-        frame!!.focusTraversalKeysEnabled = false
+    private fun JFrame.addKeybinds(component: JComponent) {
+        this.focusTraversalKeysEnabled = false
         component.actionMap.clear()
         component.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear()
 
         val ge = globalEditor
-        addKeybind(ge, this, component, "Escape")
-        addKeybind(ge, this, component, "Up")
-        addKeybind(ge, this, component, "Down")
-        addKeybind(ge, this, component, "Left")
-        addKeybind(ge, this, component, "Right")
-        addKeybind(ge, this, component, "Alt-Up")
-        addKeybind(ge, this, component, "Alt-Down")
-        addKeybind(ge, this, component, "Alt-Left")
-        addKeybind(ge, this, component, "Alt-Right")
-        addKeybind(ge, this, component, "Shift-Up")
-        addKeybind(ge, this, component, "Shift-Down")
-        addKeybind(ge, this, component, "Shift-Left")
-        addKeybind(ge, this, component, "Shift-Right")
-        addKeybind(ge, this, component, "Ctrl-Shift-Up")
-        addKeybind(ge, this, component, "Ctrl-Shift-Down")
-        addKeybind(ge, this, component, "Ctrl-Shift-Left")
-        addKeybind(ge, this, component, "Ctrl-Shift-Right")
-        addKeybind(ge, this, component, "Tab")
-        addKeybind(ge, this, component, "Home")
-        addKeybind(ge, this, component, "End")
-        addKeybind(ge, this, component, "Insert")
-        addKeybind(ge, this, component, "Space")
-        addKeybind(ge, this, component, "Delete")
-        addKeybind(ge, this, component, "Enter")
-        addKeybind(ge, this, component, "Ctrl-Enter")
-        addKeybind(ge, this, component, "Ctrl-=")
-        addKeybind(ge, this, component, "Ctrl--")
-        addKeybind(ge, this, component, "A")
-        addKeybind(ge, this, component, "B")
-        addKeybind(ge, this, component, "C")
-        addKeybind(ge, this, component, "D")
-        addKeybind(ge, this, component, "F")
-        addKeybind(ge, this, component, "G")
-        addKeybind(ge, this, component, "I")
-        addKeybind(ge, this, component, "L")
-        addKeybind(ge, this, component, "P")
-        addKeybind(ge, this, component, "S")
-        addKeybind(ge, this, component, "X")
-        addKeybind(ge, this, component, "Ctrl-A")
-        addKeybind(ge, this, component, "Ctrl-B")
-        addKeybind(ge, this, component, "Ctrl-E")
-        addKeybind(ge, this, component, "Ctrl-P")
-        addKeybind(ge, this, component, "Ctrl-R")
-        addKeybind(ge, this, component, "Ctrl-S")
-        addKeybind(ge, this, component, "Ctrl-V")
-        addKeybind(ge, this, component, "Ctrl-X")
-        addKeybind(ge, this, component, "Ctrl-Y")
-        addKeybind(ge, this, component, "Ctrl-Z")
-        addKeybind(ge, this, component, "Alt-B")
-        addKeybind(ge, this, component, "Alt-F")
-        addKeybind(ge, this, component, "Alt-I")
-        addKeybind(ge, this, component, "Alt-M")
-        addKeybind(ge, this, component, "Alt-S")
-        addKeybind(ge, this, component, "Alt-T")
-        addKeybind(ge, this, component, "Alt-X")
-        addKeybind(ge, this, component, "Shift-B")
-        addKeybind(ge, this, component, "Ctrl-Alt-M")
-        addKeybind(ge, this, component, "F1")
-        addKeybind(ge, this, component, "F2")
-        addKeybind(ge, this, component, "F3")
-        addKeybind(ge, this, component, "F4")
-        addKeybind(ge, this, component, "F5")
-        addKeybind(ge, this, component, "F6")
-        addKeybind(ge, this, component, "F7")
-        addKeybind(ge, this, component, "F8")
-        addKeybind(ge, this, component, "F9")
-        addKeybind(ge, this, component, "F10")
-        addKeybind(ge, this, component, "F12")
-        addKeybind(ge, this, component, "Shift-F1")
-        addKeybind(ge, this, component, "Shift-F2")
-        addKeybind(ge, this, component, "Shift-F3")
-        addKeybind(ge, this, component, "Shift-F4")
-        addKeybind(ge, this, component, "Shift-F5")
-        addKeybind(ge, this, component, "Shift-F6")
-        addKeybind(ge, this, component, "Alt-F12")
-        addKeybind(ge, this, component, "0")
-        addKeybind(ge, this, component, "1")
-        addKeybind(ge, this, component, "2")
-        addKeybind(ge, this, component, "3")
-        addKeybind(ge, this, component, "4")
-        addKeybind(ge, this, component, "5")
-        addKeybind(ge, this, component, "6")
-        addKeybind(ge, this, component, "7")
-        addKeybind(ge, this, component, "8")
-        addKeybind(ge, this, component, "9")
-        addKeybind(ge, this, component, "Ctrl-0")
-        addKeybind(ge, this, component, "Ctrl-1")
-        addKeybind(ge, this, component, "Ctrl-2")
-        addKeybind(ge, this, component, "Ctrl-3")
-        addKeybind(ge, this, component, "Ctrl-4")
-        addKeybind(ge, this, component, "Ctrl-5")
-        addKeybind(ge, this, component, "Ctrl-6")
-        addKeybind(ge, this, component, "Ctrl-7")
-        addKeybind(ge, this, component, "Ctrl-8")
-        addKeybind(ge, this, component, "Ctrl-9")
+        val kb = this@WorldEditor
+        addKeybind(ge, kb, component, "Escape")
+        addKeybind(ge, kb, component, "Up")
+        addKeybind(ge, kb, component, "Down")
+        addKeybind(ge, kb, component, "Left")
+        addKeybind(ge, kb, component, "Right")
+        addKeybind(ge, kb, component, "Alt-Up")
+        addKeybind(ge, kb, component, "Alt-Down")
+        addKeybind(ge, kb, component, "Alt-Left")
+        addKeybind(ge, kb, component, "Alt-Right")
+        addKeybind(ge, kb, component, "Shift-Up")
+        addKeybind(ge, kb, component, "Shift-Down")
+        addKeybind(ge, kb, component, "Shift-Left")
+        addKeybind(ge, kb, component, "Shift-Right")
+        addKeybind(ge, kb, component, "Ctrl-Shift-Up")
+        addKeybind(ge, kb, component, "Ctrl-Shift-Down")
+        addKeybind(ge, kb, component, "Ctrl-Shift-Left")
+        addKeybind(ge, kb, component, "Ctrl-Shift-Right")
+        addKeybind(ge, kb, component, "Tab")
+        addKeybind(ge, kb, component, "Home")
+        addKeybind(ge, kb, component, "End")
+        addKeybind(ge, kb, component, "Insert")
+        addKeybind(ge, kb, component, "Space")
+        addKeybind(ge, kb, component, "Delete")
+        addKeybind(ge, kb, component, "Enter")
+        addKeybind(ge, kb, component, "Ctrl-Enter")
+        addKeybind(ge, kb, component, "Ctrl-=")
+        addKeybind(ge, kb, component, "Ctrl--")
+        addKeybind(ge, kb, component, "A")
+        addKeybind(ge, kb, component, "B")
+        addKeybind(ge, kb, component, "C")
+        addKeybind(ge, kb, component, "D")
+        addKeybind(ge, kb, component, "F")
+        addKeybind(ge, kb, component, "G")
+        addKeybind(ge, kb, component, "I")
+        addKeybind(ge, kb, component, "L")
+        addKeybind(ge, kb, component, "P")
+        addKeybind(ge, kb, component, "S")
+        addKeybind(ge, kb, component, "X")
+        addKeybind(ge, kb, component, "Ctrl-A")
+        addKeybind(ge, kb, component, "Ctrl-B")
+        addKeybind(ge, kb, component, "Ctrl-E")
+        addKeybind(ge, kb, component, "Ctrl-P")
+        addKeybind(ge, kb, component, "Ctrl-R")
+        addKeybind(ge, kb, component, "Ctrl-S")
+        addKeybind(ge, kb, component, "Ctrl-V")
+        addKeybind(ge, kb, component, "Ctrl-X")
+        addKeybind(ge, kb, component, "Ctrl-Y")
+        addKeybind(ge, kb, component, "Ctrl-Z")
+        addKeybind(ge, kb, component, "Alt-B")
+        addKeybind(ge, kb, component, "Alt-F")
+        addKeybind(ge, kb, component, "Alt-I")
+        addKeybind(ge, kb, component, "Alt-M")
+        addKeybind(ge, kb, component, "Alt-S")
+        addKeybind(ge, kb, component, "Alt-T")
+        addKeybind(ge, kb, component, "Alt-X")
+        addKeybind(ge, kb, component, "Shift-B")
+        addKeybind(ge, kb, component, "Ctrl-Alt-M")
+        addKeybind(ge, kb, component, "F1")
+        addKeybind(ge, kb, component, "F2")
+        addKeybind(ge, kb, component, "F3")
+        addKeybind(ge, kb, component, "F4")
+        addKeybind(ge, kb, component, "F5")
+        addKeybind(ge, kb, component, "F6")
+        addKeybind(ge, kb, component, "F7")
+        addKeybind(ge, kb, component, "F8")
+        addKeybind(ge, kb, component, "F9")
+        addKeybind(ge, kb, component, "F10")
+        addKeybind(ge, kb, component, "F12")
+        addKeybind(ge, kb, component, "Shift-F1")
+        addKeybind(ge, kb, component, "Shift-F2")
+        addKeybind(ge, kb, component, "Shift-F3")
+        addKeybind(ge, kb, component, "Shift-F4")
+        addKeybind(ge, kb, component, "Shift-F5")
+        addKeybind(ge, kb, component, "Shift-F6")
+        addKeybind(ge, kb, component, "Alt-F12")
+        addKeybind(ge, kb, component, "0")
+        addKeybind(ge, kb, component, "1")
+        addKeybind(ge, kb, component, "2")
+        addKeybind(ge, kb, component, "3")
+        addKeybind(ge, kb, component, "4")
+        addKeybind(ge, kb, component, "5")
+        addKeybind(ge, kb, component, "6")
+        addKeybind(ge, kb, component, "7")
+        addKeybind(ge, kb, component, "8")
+        addKeybind(ge, kb, component, "9")
+        addKeybind(ge, kb, component, "Ctrl-0")
+        addKeybind(ge, kb, component, "Ctrl-1")
+        addKeybind(ge, kb, component, "Ctrl-2")
+        addKeybind(ge, kb, component, "Ctrl-3")
+        addKeybind(ge, kb, component, "Ctrl-4")
+        addKeybind(ge, kb, component, "Ctrl-5")
+        addKeybind(ge, kb, component, "Ctrl-6")
+        addKeybind(ge, kb, component, "Ctrl-7")
+        addKeybind(ge, kb, component, "Ctrl-8")
+        addKeybind(ge, kb, component, "Ctrl-9")
     }
 
     override fun keyAction(actionName: String?, e: ActionEvent?) {
@@ -1576,8 +1595,8 @@ class WorldEditor @JvmOverloads constructor(
                 "C" -> operationColour()
                 "D" -> operationDeleteBoard()
                 "F" -> operationFloodfill(cursorX, cursorY, false)
-                "G" -> world(frame, boards, worldData!!, canvas!!)
-                "I" -> board(frame, currentBoard, worldData!!)
+                "G" -> world(frame, boards, worldData, canvas)
+                "I" -> board(frame, currentBoard, worldData)
                 "L" -> menuOpenWorld()
                 "P" -> operationModifyBuffer(false)
                 "S" -> menuSaveAs()
@@ -1633,14 +1652,14 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun takeScreenshot() {
-        val boardBuffer = canvas!!.getBoardBuffer(worldData!!.isSuperZZT)
+        val boardBuffer = canvas.getBoardBuffer(worldData.isSuperZZT)
         val now = LocalDateTime.now()
         val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val timeFormatter = DateTimeFormatter.ofPattern("HH-mm-ss")
         val screenshotNameTemplate = globalEditor.getString("SCREENSHOT_NAME", "Screenshot {date} {time}.png")
         var screenshotFilename = screenshotNameTemplate.replace("{date}", dateFormatter.format(now))
         screenshotFilename = screenshotFilename.replace("{time}", timeFormatter.format(now))
-        screenshotFilename = screenshotFilename.replace("{worldname}", toUnicode(worldData!!.name))
+        screenshotFilename = screenshotFilename.replace("{worldname}", toUnicode(worldData.name))
         val currentBoardName = if (currentBoard == null) "(no board)" else toUnicode(currentBoard!!.getName())
         screenshotFilename = screenshotFilename.replace("{boardname}", currentBoardName)
         screenshotFilename = screenshotFilename.replace("{boardnum}", boardIdx.toString())
@@ -1674,7 +1693,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun takeScreenshotToClipboard() {
-        val boardBuffer = canvas!!.getBoardBuffer(worldData!!.isSuperZZT)
+        val boardBuffer = canvas.getBoardBuffer(worldData.isSuperZZT)
         val clipboard = Toolkit.getDefaultToolkit().systemClipboard
         val transferable: Transferable = object : Transferable {
             override fun getTransferDataFlavors(): Array<DataFlavor> {
@@ -1733,14 +1752,14 @@ class WorldEditor @JvmOverloads constructor(
     private fun operationOpenBufferManager() {
         if (currentBufferManager != null) {
             currentBufferManager!!.toFront()
-            frame!!.requestFocus()
+            frame.requestFocus()
         } else {
             currentBufferManager = BufferManager(this)
         }
     }
 
     fun prefix(): String {
-        return if (worldData!!.isSuperZZT) "SZZT_" else "ZZT_"
+        return if (worldData.isSuperZZT) "SZZT_" else "ZZT_"
     }
 
     fun operationSaveToBuffer(bufferNum: Int) {
@@ -1837,28 +1856,28 @@ class WorldEditor @JvmOverloads constructor(
 
         invalidateCache()
         afterModification()
-        canvas!!.revalidate()
-        if (frame!!.extendedState == Frame.NORMAL) {
-            frame!!.pack()
+        canvas.revalidate()
+        if (frame.extendedState == Frame.NORMAL) {
+            frame.pack()
         }
         centreOn(centreOnX, centreOnY)
-        canvas!!.recheckMouse()
+        canvas.recheckMouse()
     }
 
     private fun centreOn(x: Int, y: Int) {
-        var xPos = canvas!!.getCharW(x)
-        var yPos = canvas!!.getCharH(y)
-        var xSize = canvas!!.getCharW(1)
-        var ySize = canvas!!.getCharH(1)
-        val xAdd = canvas!!.visibleRect.width / 2
-        val yAdd = canvas!!.visibleRect.height / 2
+        var xPos = canvas.getCharW(x)
+        var yPos = canvas.getCharH(y)
+        var xSize = canvas.getCharW(1)
+        var ySize = canvas.getCharH(1)
+        val xAdd = canvas.visibleRect.width / 2
+        val yAdd = canvas.visibleRect.height / 2
 
         xSize += xAdd * 2
         ySize += yAdd * 2
         xPos -= xAdd
         yPos -= yAdd
 
-        canvas!!.scrollRectToVisible(Rectangle(xPos, yPos, xSize, ySize))
+        canvas.scrollRectToVisible(Rectangle(xPos, yPos, xSize, ySize))
     }
 
     private fun operationFloodfill(x: Int, y: Int, fancy: Boolean) {
@@ -1893,7 +1912,7 @@ class WorldEditor @JvmOverloads constructor(
         val boardListing = HashSet<Int>()
         for (fy in 0 until height) for (fx in 0 until width) if (filled[fy][fx].toInt() == 1) boardListing.add(grid[fy / boardH][fx / boardW])
         val savedBoards = HashMap<Int, Board>()
-        for (boardIdx in boardListing) savedBoards[boardIdx] = boards[boardIdx]!!.clone()
+        for (boardIdx in boardListing) savedBoards[boardIdx] = boards[boardIdx].clone()
         fancyFillDialog = true
         val listener = ActionListener { e ->
             val fill = e.source as FancyFill
@@ -1912,7 +1931,7 @@ class WorldEditor @JvmOverloads constructor(
             } else if (e.actionCommand == "undo") {
                 fancyFillDialog = false
                 for (boardIdx in boardListing) {
-                    savedBoards[boardIdx]!!.cloneInto(boards[boardIdx]!!)
+                    savedBoards[boardIdx]!!.cloneInto(boards[boardIdx])
                 }
                 addRedraw(1, 1, width - 2, height - 2)
                 afterModification()
@@ -1974,23 +1993,23 @@ class WorldEditor @JvmOverloads constructor(
 
     private fun setTextEntry(state: Boolean) {
         textEntry = state
-        canvas!!.setTextEntry(state)
+        canvas.setTextEntry(state)
     }
 
     private fun setDrawing(state: Boolean) {
         drawing = state
-        canvas!!.setDrawing(state)
+        canvas.setDrawing(state)
     }
 
     private fun setBlockStart(x: Int, y: Int) {
         blockStartX = x
         blockStartY = y
-        canvas!!.setSelectionBlock(blockStartX, blockStartY)
+        canvas.setSelectionBlock(blockStartX, blockStartY)
     }
 
     private fun setBlockBuffer(w: Int, h: Int, ar: Array<Tile>?, r: Boolean) {
-        globalEditor.setBlockBuffer(w, h, ar, r, worldData!!.isSuperZZT)
-        canvas!!.repaint()
+        globalEditor.setBlockBuffer(w, h, ar, r, worldData.isSuperZZT)
+        canvas.repaint()
     }
 
     private fun operationEscape() {
@@ -2073,8 +2092,8 @@ class WorldEditor @JvmOverloads constructor(
             popupMenu.add(menuItem)
         }
         popupMenu.show(
-            frame, (frame!!.width - popupMenu.preferredSize.width) / 2,
-            (frame!!.height - popupMenu.preferredSize.height) / 2
+            frame, (frame.width - popupMenu.preferredSize.width) / 2,
+            (frame.height - popupMenu.preferredSize.height) / 2
         )
 
         // From https://stackoverflow.com/a/7754567
@@ -2145,7 +2164,7 @@ class WorldEditor @JvmOverloads constructor(
     private fun setMoveBlock(w: Int, h: Int) {
         moveBlockW = w
         moveBlockH = h
-        canvas!!.setPlacingBlock(w, h)
+        canvas.setPlacingBlock(w, h)
     }
 
     private fun blockMove() {
@@ -2330,7 +2349,7 @@ class WorldEditor @JvmOverloads constructor(
     private fun blockPaste() {
         val w = globalEditor.blockBufferW
         val h = globalEditor.blockBufferH
-        val blockBuffer = globalEditor.getBlockBuffer(worldData!!.isSuperZZT)
+        val blockBuffer = globalEditor.getBlockBuffer(worldData.isSuperZZT)
         addRedraw(cursorX, cursorY, cursorX + w - 1, cursorY + h - 1)
 
         // Find the player
@@ -2391,8 +2410,8 @@ class WorldEditor @JvmOverloads constructor(
         popup.addPopupMenuListener(this)
         if (items > 0) {
             popup.show(
-                frame, (frame!!.width - popup.preferredSize.width) / 2,
-                (frame!!.height - popup.preferredSize.height) / 2
+                frame, (frame.width - popup.preferredSize.width) / 2,
+                (frame.height - popup.preferredSize.height) / 2
             )
         }
     }
@@ -2412,7 +2431,7 @@ class WorldEditor @JvmOverloads constructor(
     fun testCharsetPalette(dir: File, basename: String?, unlinkList: ArrayList<File?>, argList: ArrayList<String?>) {
         // todo(jakeouellette): replaced getPalette with get palette data, may
         // have introduced a bug, check it.
-        val palette = canvas!!.paletteData
+        val palette = canvas.paletteData
         if (palette != Data.DEFAULT_PALETTE) {
             val palFile = Paths.get(dir.path, "$basename.PAL").toFile()
             Files.write(palFile.toPath(), palette)
@@ -2420,7 +2439,7 @@ class WorldEditor @JvmOverloads constructor(
             argList.add("-l")
             argList.add("palette:pal:$basename.PAL")
         }
-        val charset = canvas!!.charset
+        val charset = canvas.charset
         if (charset != Data.DEFAULT_CHARSET) {
             val chrFile = Paths.get(dir.path, "$basename.CHR").toFile()
             Files.write(chrFile.toPath(), charset)
@@ -2434,21 +2453,21 @@ class WorldEditor @JvmOverloads constructor(
         val changeBoardTo = if (globalEditor.getBoolean("TEST_SWITCH_BOARD", false)) {
             boardIdx
         } else {
-            worldData!!.currentBoard
+            worldData.currentBoard
         }
         if (changeBoardTo == -1) return
 
         try {
             val unlinkList = ArrayList<File?>()
 
-            val zzt = if (worldData!!.isSuperZZT) "SZZT" else "ZZT"
-            val ext = if (worldData!!.isSuperZZT) ".SZT" else ".ZZT"
-            val hiext = if (worldData!!.isSuperZZT) ".HGS" else ".HI"
+            val zzt = if (worldData.isSuperZZT) "SZZT" else "ZZT"
+            val ext = if (worldData.isSuperZZT) ".SZT" else ".ZZT"
+            val hiext = if (worldData.isSuperZZT) ".HGS" else ".HI"
             val testPath = evalConfigDir(globalEditor.getString(zzt + "_TEST_PATH", ""))
             if (testPath.isBlank()) {
                 val errmsg = String.format(
                     "You need to configure a %s test directory in the settings before you can test worlds.",
-                    if (worldData!!.isSuperZZT) "Super ZZT" else "ZZT"
+                    if (worldData.isSuperZZT) "Super ZZT" else "ZZT"
                 )
                 JOptionPane.showMessageDialog(frame, errmsg, "Error testing world", JOptionPane.ERROR_MESSAGE)
                 return
@@ -2504,7 +2523,7 @@ class WorldEditor @JvmOverloads constructor(
             val delay_P = globalEditor.getInt(zzt + "_TEST_INJECT_P_DELAY", 0)
             var inject_Enter = false
             var delay_Enter = 0
-            if (worldData!!.isSuperZZT) {
+            if (worldData.isSuperZZT) {
                 inject_Enter = globalEditor.getBoolean(zzt + "_TEST_INJECT_ENTER", false)
                 delay_Enter = globalEditor.getInt(zzt + "_TEST_INJECT_ENTER_DELAY", 0)
             }
@@ -2527,7 +2546,7 @@ class WorldEditor @JvmOverloads constructor(
         */
         val testThread = Thread {
             try {
-                val worldCopy = worldData!!.clone()
+                val worldCopy = worldData.clone()
                 worldCopy.currentBoard = testBoard
                 val pb = ProcessBuilder(argList)
 
@@ -2599,9 +2618,9 @@ class WorldEditor @JvmOverloads constructor(
             }
             val newBoardIdx = operationAddBoard()
             if (newBoardIdx != -1) {
-                boards[oldBoardIdx]!!.setExit(exit, newBoardIdx)
-                boards[newBoardIdx]!!.setExit(exitRecip[exit], oldBoardIdx)
-                canvas!!.setCursor(cursorX, cursorY)
+                boards[oldBoardIdx].setExit(exit, newBoardIdx)
+                boards[newBoardIdx].setExit(exitRecip[exit], oldBoardIdx)
+                canvas.setCursor(cursorX, cursorY)
             } else {
                 cursorX = savedCursorX
                 cursorY = savedCursorY
@@ -2638,7 +2657,7 @@ class WorldEditor @JvmOverloads constructor(
                             if (boardAtIdx != -1) {
                                 val revExit = dirReverse[exit]
                                 val boardAt = boards[boardAtIdx]
-                                if (boardAt!!.getExit(revExit) == 0) {
+                                if (boardAt.getExit(revExit) == 0) {
                                     boardAt.setExit(revExit, newBoardIdx)
                                     newBoard.setExit(exit, boardAtIdx)
                                 }
@@ -2659,7 +2678,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun blankBoard(name: String): Board {
-        return if (worldData!!.isSuperZZT) {
+        return if (worldData.isSuperZZT) {
             SZZTBoard(name)
         } else {
             ZZTBoard(name)
@@ -2837,7 +2856,7 @@ class WorldEditor @JvmOverloads constructor(
                     board.finaliseStats()
                 }
             }
-            canvas!!.setCursor(cursorX, cursorY)
+            canvas.setCursor(cursorX, cursorY)
 
             if (drawing) {
                 afterModification()
@@ -2886,8 +2905,8 @@ class WorldEditor @JvmOverloads constructor(
             for (i in 0..dist) {
                 val x = dx * i / dist + oldMousePosX
                 val y = dy * i / dist + oldMousePosY
-                val ncx = canvas!!.toCharX(x)
-                val ncy = canvas!!.toCharY(y)
+                val ncx = canvas.toCharX(x)
+                val ncy = canvas.toCharY(y)
                 if (ncx != cx || ncy != cy) {
                     cx = ncx
                     cy = ncy
@@ -2902,7 +2921,7 @@ class WorldEditor @JvmOverloads constructor(
             board.finaliseStats()
         }
         afterModification()
-        canvas!!.setCursor(cursorX, cursorY)
+        canvas.setCursor(cursorX, cursorY)
     }
 
     private fun mouseMove(): Boolean {
@@ -2911,7 +2930,7 @@ class WorldEditor @JvmOverloads constructor(
         if (x >= 0 && y >= 0 && x < width && y < height) {
             cursorX = x
             cursorY = y
-            canvas!!.setCursor(cursorX, cursorY)
+            canvas.setCursor(cursorX, cursorY)
             afterUpdate()
             return true
         }
@@ -2926,18 +2945,18 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun mouseCharX(x: Int): Int {
-        return canvas!!.toCharX(x)
+        return canvas.toCharX(x)
     }
 
     private fun mouseCharY(y: Int): Int {
-        return canvas!!.toCharY(y)
+        return canvas.toCharY(y)
     }
 
     private fun mousePlot(x: Int, y: Int, dirty: HashSet<Board>) {
         if (x >= 0 && y >= 0 && x < width && y < height) {
             cursorX = x
             cursorY = y
-            canvas!!.setCursor(cursorX, cursorY)
+            canvas.setCursor(cursorX, cursorY)
             val board = putTileDeferred(cursorX, cursorY, bufferTile, PUT_DEFAULT)
             if (board != null) dirty.add(board)
         }
@@ -3224,7 +3243,7 @@ class WorldEditor @JvmOverloads constructor(
 
                     if (putMode == PUT_DEFAULT) {
                         // If the tile currently there is floor, we will push it down
-                        if (ZType.isFloor(worldData!!.isSuperZZT, currentTile)) {
+                        if (ZType.isFloor(worldData.isSuperZZT, currentTile)) {
                             putMode = PUT_PUSH_DOWN
                         } else {
                             // Not a floor, so does it have one stat? If so, still push down (we will use its uid/uco)
@@ -3297,7 +3316,7 @@ class WorldEditor @JvmOverloads constructor(
         } else {
             "(no board)"
         }
-        frame!!.title = "zloom2 [" + worldName + "] :: " + boardInfo + (if (isDirty) "*" else "")
+        frame.title = "zloom2 [" + worldName + "] :: " + boardInfo + (if (isDirty) "*" else "")
     }
 
     private fun getTileAt(x: Int, y: Int, copy: Boolean): Tile? {
@@ -3322,31 +3341,31 @@ class WorldEditor @JvmOverloads constructor(
         var x: Int
         var y: Int
         if (centreView) {
-            canvas!!.revalidate()
-            val visibleRect = canvas!!.visibleRect
-            w = clamp(visibleRect.width, 0, canvas!!.getCharW(width))
-            h = clamp(visibleRect.height, 0, canvas!!.getCharH(height))
-            val charW = canvas!!.getCharW(1)
-            val charH = canvas!!.getCharH(1)
-            x = max(0.0, (canvas!!.getCharW(cursorX) + (charW - w) / 2).toDouble()).toInt()
-            y = max(0.0, (canvas!!.getCharH(cursorY) + (charH - h) / 2).toDouble()).toInt()
+            canvas.revalidate()
+            val visibleRect = canvas.visibleRect
+            w = clamp(visibleRect.width, 0, canvas.getCharW(width))
+            h = clamp(visibleRect.height, 0, canvas.getCharH(height))
+            val charW = canvas.getCharW(1)
+            val charH = canvas.getCharH(1)
+            x = max(0.0, (canvas.getCharW(cursorX) + (charW - w) / 2).toDouble()).toInt()
+            y = max(0.0, (canvas.getCharH(cursorY) + (charH - h) / 2).toDouble()).toInt()
             centreView = false
         } else {
-            w = canvas!!.getCharW(1)
-            h = canvas!!.getCharH(1)
-            x = canvas!!.getCharW(cursorX)
-            y = canvas!!.getCharH(cursorY)
+            w = canvas.getCharW(1)
+            h = canvas.getCharH(1)
+            x = canvas.getCharW(cursorX)
+            y = canvas.getCharH(cursorY)
 
             // Expand this slightly
             val EXPAND_X = 4
             val EXPAND_Y = 4
-            x -= canvas!!.getCharW(EXPAND_X)
-            y -= canvas!!.getCharH(EXPAND_Y)
-            w += canvas!!.getCharW(EXPAND_X * 2)
-            h += canvas!!.getCharH(EXPAND_Y * 2)
+            x -= canvas.getCharW(EXPAND_X)
+            y -= canvas.getCharH(EXPAND_Y)
+            w += canvas.getCharW(EXPAND_X * 2)
+            h += canvas.getCharH(EXPAND_Y * 2)
         }
         val rect = Rectangle(x, y, w, h)
-        canvas!!.scrollRectToVisible(rect)
+        canvas.scrollRectToVisible(rect)
     }
 
     private fun afterChangeShowing() {
@@ -3380,7 +3399,7 @@ class WorldEditor @JvmOverloads constructor(
     %d: %s
     B.Mem: %5d  
     """.trimIndent(),
-                currentBoard!!.statCount - 1, if (!worldData!!.isSuperZZT) 150 else 128,
+                currentBoard!!.statCount - 1, if (!worldData.isSuperZZT) 150 else 128,
                 boardX + 1, boardY + 1,
                 boardIdx, limitedName, currentBoard!!.currentSize
             )
@@ -3388,7 +3407,7 @@ class WorldEditor @JvmOverloads constructor(
 
         s += String.format("W.Mem: %6d", worldSize)
 
-        infoBox!!.text = s
+        infoBox.text = s
 
         updateEditingMode()
 
@@ -3443,15 +3462,15 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun createLabel(cursorTile: Tile): JLabel {
-        val szzt = worldData!!.isSuperZZT
+        val szzt = worldData.isSuperZZT
         val chr = ZType.getChar(szzt, cursorTile)
         val col = ZType.getColour(szzt, cursorTile)
         val name = ZType.getName(szzt, cursorTile.id)
         val chBg = ((cursorTile.col) or (32 shl 8)).toChar()
         val chFg = ((cursorTile.col) or (254 shl 8)).toChar()
         val pattern = "@ $chBg$chFg$chBg"
-        val imgBlinkOff = canvas!!.extractCharImage(chr, col, 2, 2, false, pattern)
-        val imgBlinkOn = canvas!!.extractCharImage(chr, col, 2, 2, true, pattern)
+        val imgBlinkOff = canvas.extractCharImage(chr, col, 2, 2, false, pattern)
+        val imgBlinkOn = canvas.extractCharImage(chr, col, 2, 2, true, pattern)
         val tileLabelIcon = BlinkingImageIcon(imgBlinkOff, imgBlinkOn)
 
         val tileLabel = JLabel()
@@ -3539,8 +3558,8 @@ class WorldEditor @JvmOverloads constructor(
                     tileInfo.append("</tr><tr>")
                 }
                 tileInfo.append("<th align=\"left\">Under:</th>")
-                val bgcol = canvas!!.htmlColour(stat.uco / 16)
-                val fgcol = canvas!!.htmlColour(stat.uco % 16)
+                val bgcol = canvas.htmlColour(stat.uco / 16)
+                val fgcol = canvas.htmlColour(stat.uco % 16)
                 tileInfo.append(
                     String.format(
                         "<td align=\"left\"><span bgcolor=\"%s\" color=\"%s\">&nbsp;&nbsp;■&nbsp;&nbsp;</span></td>",
@@ -3552,7 +3571,7 @@ class WorldEditor @JvmOverloads constructor(
                 tileInfo.append(
                     String.format(
                         "<td align=\"left\" colspan=\"2\">%s</td>",
-                        ZType.getName(worldData!!.isSuperZZT, stat.uid)
+                        ZType.getName(worldData.isSuperZZT, stat.uid)
                     )
                 )
                 tileInfo.append("</tr>")
@@ -3575,9 +3594,9 @@ class WorldEditor @JvmOverloads constructor(
 
     private val worldSize: Int
         get() {
-            var size = worldData!!.boardListOffset()
+            var size = worldData.boardListOffset()
             for (board in boards) {
-                size += board!!.currentSize
+                size += board.currentSize
             }
             return size
         }
@@ -3602,8 +3621,8 @@ class WorldEditor @JvmOverloads constructor(
         mouseY = mouseCharY(mousePosY)
 
         // Translate into local space
-        mouseScreenX = e.xOnScreen - frame!!.locationOnScreen.x
-        mouseScreenY = e.yOnScreen - frame!!.locationOnScreen.y
+        mouseScreenX = e.xOnScreen - frame.locationOnScreen.x
+        mouseScreenY = e.yOnScreen - frame.locationOnScreen.y
         if (heldDown == 1) {
             mouseDraw()
             oldMousePosX = mousePosX
@@ -3726,17 +3745,17 @@ class WorldEditor @JvmOverloads constructor(
         cursorY = (cursorY % boardH) + boardH * -minY
         width = boardW * gridW
         height = boardH * gridH
-        canvas!!.setCursor(cursorX, cursorY)
+        canvas.setCursor(cursorX, cursorY)
         invalidateCache()
         afterModification()
-        canvas!!.revalidate()
+        canvas.revalidate()
         val rect = Rectangle(
-            canvas!!.getCharW(-minX * boardW),
-            canvas!!.getCharH(-minY * boardH),
-            canvas!!.getCharW(boardW),
-            canvas!!.getCharH(boardH)
+            canvas.getCharW(-minX * boardW),
+            canvas.getCharH(-minY * boardH),
+            canvas.getCharW(boardW),
+            canvas.getCharH(boardH)
         )
-        canvas!!.scrollRectToVisible(rect)
+        canvas.scrollRectToVisible(rect)
         resetUndoList()
     }
 
@@ -3757,7 +3776,7 @@ class WorldEditor @JvmOverloads constructor(
         }
         invalidateCache()
         afterModification()
-        canvas!!.revalidate()
+        canvas.revalidate()
     }
 
     override fun keyTyped(e: KeyEvent) {
@@ -3786,7 +3805,7 @@ class WorldEditor @JvmOverloads constructor(
 
                     afterModification()
                 }
-                canvas!!.setCursor(cursorX, cursorY)
+                canvas.setCursor(cursorX, cursorY)
             }
         }
     }
@@ -3794,9 +3813,9 @@ class WorldEditor @JvmOverloads constructor(
     override fun keyPressed(e: KeyEvent) {}
     override fun keyReleased(e: KeyEvent) {}
 
-    private fun disableAlt() {
+    private fun JFrame.disableAlt() {
         // From https://stackoverflow.com/a/3994002
-        frame!!.addFocusListener(object : FocusListener {
+        this.addFocusListener(object : FocusListener {
             private val altDisabler = KeyEventDispatcher { e: KeyEvent -> e.keyCode == 18 }
 
             override fun focusGained(e: FocusEvent) {
@@ -3835,7 +3854,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     fun refreshKeymapping() {
-        addKeybinds(frame!!.layeredPane)
+        frame.addKeybinds(frame.layeredPane)
     }
 
     override fun popupMenuWillBecomeVisible(e: PopupMenuEvent) {
@@ -3844,12 +3863,12 @@ class WorldEditor @JvmOverloads constructor(
 
     override fun popupMenuWillBecomeInvisible(e: PopupMenuEvent) {
         popupOpen = false
-        frame!!.requestFocusInWindow()
+        frame.requestFocusInWindow()
     }
 
     override fun popupMenuCanceled(e: PopupMenuEvent) {
         popupOpen = false
-        frame!!.requestFocusInWindow()
+        frame.requestFocusInWindow()
     }
 
     override fun menuSelected(e: MenuEvent) {
@@ -3858,12 +3877,12 @@ class WorldEditor @JvmOverloads constructor(
 
     override fun menuDeselected(e: MenuEvent) {
         popupOpen = false
-        frame!!.requestFocusInWindow()
+        frame.requestFocusInWindow()
     }
 
     override fun menuCanceled(e: MenuEvent) {
         popupOpen = false
-        frame!!.requestFocusInWindow()
+        frame.requestFocusInWindow()
     }
 
     companion object {

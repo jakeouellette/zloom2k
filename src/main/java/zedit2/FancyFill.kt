@@ -77,30 +77,41 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
         defaultCloseOperation = DISPOSE_ON_CLOSE
         val cp = contentPane
         cp.layout = BorderLayout()
-        val gradientStyleBox = JPanel(GridLayout(1, 0))
-        gradientStyleBox.border = BorderFactory.createTitledBorder("Gradient style")
         btnLinear = JRadioButton("Linear")
         btnBox = JRadioButton("Box")
         btnRadial = JRadioButton("Radial")
         btnConic = JRadioButton("Conical")
         btnSlime = JRadioButton("Slime")
-        val styleGroup = ButtonGroup()
-        styleGroup.add(btnLinear)
-        styleGroup.add(btnBox)
-        styleGroup.add(btnRadial)
-        styleGroup.add(btnConic)
-        styleGroup.add(btnSlime)
-        gradientStyleBox.add(btnLinear)
-        gradientStyleBox.add(btnBox)
-        gradientStyleBox.add(btnRadial)
-        gradientStyleBox.add(btnConic)
-        gradientStyleBox.add(btnSlime)
+        val styleGroup = object : ButtonGroup() {
+            init {
+                this.add(btnLinear)
+                this.add(btnBox)
+                this.add(btnRadial)
+                this.add(btnConic)
+                this.add(btnSlime)
+            }
+        }
+        val gradientStyleBox = object : JPanel(GridLayout(1, 0)) {
+            init {
+                this.border = BorderFactory.createTitledBorder("Gradient style")
+                this.add(btnLinear)
+                this.add(btnBox)
+                this.add(btnRadial)
+                this.add(btnConic)
+                this.add(btnSlime)
+            }
+        }
+
 
         btnLinear.isSelected = true
         cp.add(gradientStyleBox, BorderLayout.NORTH)
 
-        val gradientBox = JPanel(BorderLayout())
-        gradientBox.border = BorderFactory.createTitledBorder("Gradient")
+        val gradientBox = object : JPanel(BorderLayout()) {
+            init {
+                this.border = BorderFactory.createTitledBorder("Gradient")
+            }
+        }
+
         val comboBoxRenderer = FancyFillRenderer(editor)
         gradientCombo = JComboBox()
 
@@ -158,28 +169,38 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
         middleLeftPanel.add(gradientBox, BorderLayout.NORTH)
 
         val gradOptionsLeft = JPanel(GridLayout(1, 2))
-        sliderStart = JSpinner(SpinnerNumberModel(0.0, -10.0, 10.0, 0.01))
-        sliderEnd = JSpinner(SpinnerNumberModel(1.0, -10.0, 10.0, 0.01))
-        sliderStart.preferredSize = sliderStart.minimumSize
-        sliderEnd.preferredSize = sliderEnd.minimumSize
-        sliderStart.model.value = 0.0
-        sliderEnd.model.value = 1.0
-        sliderStart.toolTipText = "Gradient start point"
-        sliderEnd.toolTipText = "Gradient finish point"
-        val sliderStartBox = JPanel(BorderLayout())
-        val sliderEndBox = JPanel(BorderLayout())
-        sliderStartBox.add(sliderStart, BorderLayout.CENTER)
-        sliderEndBox.add(sliderEnd, BorderLayout.CENTER)
-        sliderStartBox.border = BorderFactory.createTitledBorder("Start")
-        sliderEndBox.border = BorderFactory.createTitledBorder("Finish")
+        sliderStart = object : JSpinner(SpinnerNumberModel(0.0, -10.0, 10.0, 0.01)) {
+            init {
+                this.preferredSize = this.minimumSize
+                this.model.value = 0.0
+                this.toolTipText = "How far into the gradient to start (negative expands the space at the start)"
+            }
+        }
+        sliderEnd = object : JSpinner(SpinnerNumberModel(1.0, -10.0, 10.0, 0.01)) {
+            init {
+                this.preferredSize = this.minimumSize
+                this.model.value = 1.0
+                this.toolTipText = "How far into the gradient to finish (>1 expands the space at the end)"
+
+            }
+        }
+
+        val sliderStartBox = object : JPanel(BorderLayout()) {
+            init {
+                this.add(sliderStart, BorderLayout.CENTER)
+                this.border = BorderFactory.createTitledBorder("Start")
+            }
+        }
         gradOptionsLeft.add(sliderStartBox)
+        val sliderEndBox = object : JPanel(BorderLayout()) {
+            init {
+                this.add(sliderEnd, BorderLayout.CENTER)
+                this.border = BorderFactory.createTitledBorder("Finish")
+
+            }
+        }
         gradOptionsLeft.add(sliderEndBox)
-
-        sliderStart.toolTipText = "How far into the gradient to start (negative expands the space at the start)"
-        sliderEnd.toolTipText = "How far into the gradient to finish (>1 expands the space at the end)"
-
         middleLeftPanel.add(gradOptionsLeft, BorderLayout.SOUTH)
-
         cp.add(middleLeftPanel, BorderLayout.WEST)
 
         val gradOptionsRight = JPanel(GridLayout(0, 4, 4, 4))

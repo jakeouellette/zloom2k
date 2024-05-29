@@ -226,7 +226,7 @@ public class BoardManager @JvmOverloads constructor(
                         val exitBox = JComboBox(boardSelectArray)
 
                         val board = boards[table.convertRowIndexToModel(rowIndex)]
-                        val boardExit = board!!.getExit(columnToExit(columnIndex))
+                        val boardExit = board.getExit(columnToExit(columnIndex))
                         if (boardExit >= 0 && boardExit < boardSelectArray.size) {
                             exitBox.setSelectedIndex(boardExit)
                         } else {
