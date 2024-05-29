@@ -1,0 +1,5 @@
+.gradle/
+build/
+!**/docs/**/build/
+!**/src/**/build/
+.idea/
