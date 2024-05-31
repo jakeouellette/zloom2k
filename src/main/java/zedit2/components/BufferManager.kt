@@ -1,7 +1,10 @@
 package zedit2.components
 
 import zedit2.model.BufferModel
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.awt.BorderLayout
+import java.awt.Dimension
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.awt.datatransfer.Transferable
@@ -13,25 +16,24 @@ import java.awt.event.WindowListener
 import java.io.IOException
 import javax.swing.*
 
-class BufferManager(private val editor: WorldEditor) : JDialog(), WindowListener, MouseListener {
-    private var list: JList<String?>
-    private val listModel: BufferModel
+class BufferManager(private val editor: WorldEditor) : JList<String?>(), MouseListener {
+    //        defaultCloseOperation = DISPOSE_ON_CLOSE
+//        addWindowListener(this)
+//        setIconImage(editor.canvas.extractCharImage(228, 0x5F, 1, 1, false, "$"))
+//        title = "Buffer Manager"
+//        contentPane.layout = BorderLayout()
+    private var listModel: BufferModel
+    public val scrollpane = JScrollPane(this)
 
     init {
-        defaultCloseOperation = DISPOSE_ON_CLOSE
-        addWindowListener(this)
-        setIconImage(editor.canvas.extractCharImage(228, 0x5F, 1, 1, false, "$"))
-        title = "Buffer Manager"
-        contentPane.layout = BorderLayout()
-        listModel = BufferModel(this, editor)
-        list = JList(listModel)
-        list.layoutOrientation = JList.HORIZONTAL_WRAP
-        list.setCellRenderer(listModel)
-        list.addMouseListener(this)
-        list.dropMode = DropMode.ON
-        list.dragEnabled = true
+//        this.layout = BorderLayout()
+        this.layoutOrientation = HORIZONTAL_WRAP
+
+        this.addMouseListener(this)
+        this.dropMode = DropMode.ON
+        this.dragEnabled = true
         // http://www.java2s.com/example/java/swing/drag-and-drop-custom-transferhandler-for-a-jlist.html
-        list.transferHandler = object : TransferHandler() {
+        this.transferHandler = object : TransferHandler() {
             override fun getSourceActions(c: JComponent): Int {
                 return COPY_OR_MOVE
             }
@@ -101,14 +103,19 @@ class BufferManager(private val editor: WorldEditor) : JDialog(), WindowListener
                 }
             }
         }
-        isResizable = false
-        val scrollPane = JScrollPane(list)
-        contentPane.add(scrollPane, BorderLayout.CENTER)
+
+//        isResizable = false
+//        val scrollPane = JScrollPane(list)
+//        contentPane.add(scrollPane, BorderLayout.CENTER)
+        listModel = BufferModel(this, editor)
+        this.setCellRenderer(listModel)
+        this.model = listModel
+
         resizeList()
-        setLocationRelativeTo(editor.frameForRelativePositioning)
-        focusableWindowState = false
-        isAlwaysOnTop = true
-        isVisible = true
+//        setLocationRelativeTo(editor.frameForRelativePositioning)
+//        focusableWindowState = false
+//        isAlwaysOnTop = true
+//        isVisible = true
     }
 
     fun updateBuffer(num: Int) {
@@ -119,14 +126,14 @@ class BufferManager(private val editor: WorldEditor) : JDialog(), WindowListener
         listModel.updateSelected(num)
     }
 
-    override fun windowClosed(e: WindowEvent) {
-        editor.removeBufferManager()
-    }
+//    override fun windowClosed(e: WindowEvent) {
+//        editor.removeBufferManager()
+//    }
 
     override fun mouseClicked(e: MouseEvent) {
-        val cell = list!!.locationToIndex(e.point)
+        val cell = this.locationToIndex(e.point)
         if (cell == -1) return
-        val bounds = list.getCellBounds(cell, cell) ?: return
+        val bounds = this.getCellBounds(cell, cell) ?: return
         val x = e.x
         val y = e.y
         if (x >= bounds.x && y >= bounds.y && x < bounds.x + bounds.getWidth() && y < bounds.y + bounds.getHeight()) {
@@ -136,24 +143,24 @@ class BufferManager(private val editor: WorldEditor) : JDialog(), WindowListener
         e.consume()
     }
 
-    override fun windowOpened(e: WindowEvent) {}
-    override fun windowClosing(e: WindowEvent) {}
-    override fun windowIconified(e: WindowEvent) {}
-    override fun windowDeiconified(e: WindowEvent) {}
-    override fun windowActivated(e: WindowEvent) {}
-    override fun windowDeactivated(e: WindowEvent) {}
+//    override fun windowOpened(e: WindowEvent) {}
+//    override fun windowClosing(e: WindowEvent) {}
+//    override fun windowIconified(e: WindowEvent) {}
+//    override fun windowDeiconified(e: WindowEvent) {}
+//    override fun windowActivated(e: WindowEvent) {}
+//    override fun windowDeactivated(e: WindowEvent) {}
 
-    override fun mousePressed(e: MouseEvent) {}
+    override fun mousePressed(e: MouseEvent) {           System.out.println("Buffer Size $preferredSize, ${listModel.size}")}
     override fun mouseReleased(e: MouseEvent) {}
     override fun mouseEntered(e: MouseEvent) {}
     override fun mouseExited(e: MouseEvent) {}
 
     fun resizeList() {
-        if (list != null) {
+        Logger.i(TAG) {"Buffer Size $preferredSize, ${listModel.size}"}
             //System.out.println("Before (actual): " + scrollPane.getSize());
             //int beforeHeight = scrollPane.getHeight();
             //int beforeWidth = scrollPane.getWidth();
-            list.visibleRowCount = (listModel.size + 4) / 5
+        this.visibleRowCount = (listModel.size + 4) / 5
 
             //int afterHeight = scrollPane.getPreferredSize().getHeight();
             //int afterWidth = scrollPane.getPreferredSize().getWidth();
@@ -163,13 +170,13 @@ class BufferManager(private val editor: WorldEditor) : JDialog(), WindowListener
             //if (beforeHeight < MAX_HEIGHT && afterHeight > MAX_HEIGHT) {
 //                maxHeight = Math.min(maxHeight, MAX_HEIGHT);
 //            }
-//            scrollPane.setPreferredSize(new Dimension(maxWidth, maxHeight));
-            pack()
+        // TODO(jakeouellette): previously, this pack was called
+//            pack()
 
             //if (maxHeight > MAX_HEIGHT) {
             //    scrollPane.setPreferredSize(new Dimension(maxWidth, maxHeight));
             //}
-        }
+        Logger.i(TAG) {"visible row count $visibleRowCount"}
     }
 
     companion object {

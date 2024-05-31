@@ -2,6 +2,9 @@ package zedit2.components
 
 import zedit2.util.Data
 import zedit2.model.Atlas
+import zedit2.util.ImageExtractors
+import zedit2.util.ImageExtractors.ExtractionResponse
+import zedit2.util.TilePainters
 import java.awt.*
 import java.awt.event.*
 import java.awt.image.BufferedImage
@@ -83,6 +86,49 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         refreshBuffer()
     }
 
+    // todo(jakeouellette): Move to a separate factory.
+    public fun extractCharImage(
+        chr: Int,
+        col: Int,
+        zoomx: Int,
+        zoomy: Int,
+        blinkingTime: Boolean,
+        pattern: String
+    ): BufferedImage =
+        ImageExtractors.extractCharImage(
+            chr,
+            col,
+            zoomx,
+            zoomy,
+            blinkingTime,
+            pattern,
+            blink,
+            palette = palette,
+            charBuffer = charBuffer
+        ).image
+
+    public fun extractCharImageWH(
+        chr: Int,
+        col: Int,
+        zoomx: Int,
+        zoomy: Int,
+        blinkingTime: Boolean,
+        pattern: String, w: Int, h: Int
+    ): BufferedImage =
+        ImageExtractors.extractCharImageWH(
+            chr,
+            col,
+            zoomx,
+            zoomy,
+            blinkingTime,
+            pattern,
+            w,
+            h,
+            blink,
+            palette = palette,
+            charBuffer = charBuffer
+        ).image
+
     private fun refreshBuffer() {
         val hashes = intArrayOf(palette.contentHashCode(), charset.contentHashCode())
         val charBufferHash = hashes.contentHashCode()
@@ -128,7 +174,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
 
     @Throws(IOException::class)
     private fun loadPalette(path: File?) {
-        var pdata : ByteArray;
+        var pdata: ByteArray;
         if (path != null) {
             pdata = Files.readAllBytes(path.toPath())
             if (pdata.size != 16 * 3) {
@@ -261,11 +307,35 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
                     val chr = chars[dpos].toInt() and 0xFF
                     val col = cols[dpos].toInt() and 0xFF
 
-                    drawTile(boardBufferGraphics[0], chr, col, x, y, 1, 1, false)
+                    TilePainters.drawTile(
+                        boardBufferGraphics[0],
+                        chr,
+                        col,
+                        x,
+                        y,
+                        1,
+                        1,
+                        blink,
+                        false,
+                        palette,
+                        charBuffer
+                    )
                     if (tshow.toInt() != 0) {
                         drawShow(boardBufferGraphics[1], chr, col, x, y, 1, 1, tshow)
                     } else {
-                        drawTile(boardBufferGraphics[1], chr, col, x, y, 1, 1, true)
+                        TilePainters.drawTile(
+                            boardBufferGraphics[1],
+                            chr,
+                            col,
+                            x,
+                            y,
+                            1,
+                            1,
+                            blink,
+                            true,
+                            palette,
+                            charBuffer
+                        )
                     }
                 }
             }
@@ -294,132 +364,21 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         if (chr == chrs[show.toInt()]) {
             chrs[show.toInt()] = ' '.code
         }
-        drawTile(g, chrs[show.toInt()], cols[show.toInt()], x, y, zoomx, zoomy, false, false)
+        TilePainters.drawTile(
+            g,
+            chrs[show.toInt()],
+            cols[show.toInt()],
+            x,
+            y,
+            zoomx,
+            zoomy,
+            false,
+            false,
+            palette,
+            charBuffer
+        )
     }
 
-    private fun drawTile(
-        g: Graphics?,
-        chr: Int,
-        col: Int,
-        x: Int,
-        y: Int,
-        zoomx: Int,
-        zoomy: Int,
-        blinkingTime: Boolean
-    ) {
-        drawTile(g, chr, col, x, y, zoomx, zoomy, blink, blinkingTime)
-    }
-
-    private fun drawTile(
-        g: Graphics?,
-        chr: Int,
-        col: Int,
-        x: Int,
-        y: Int,
-        zoomx: Int,
-        zoomy: Int,
-        blink: Boolean,
-        blinkingTime: Boolean
-    ) {
-        var col = col
-        if (blink && col >= 128) {
-            // If blinking is on, for cXY and X >= 8, colours alternate between c(X-8)Y and c(X-8)(X-8)
-            val bg = ((col and 0xF0) shr 4) - 8
-            val fg = col and 0x0F
-            col = if (!blinkingTime) {
-                bg shl 4 or fg
-            } else {
-                bg shl 4 or bg
-            }
-        }
-        val sx1 = chr * CHAR_W
-        val sy1 = (col and 0x0F) * CHAR_H
-        val sx2 = sx1 + CHAR_W
-        val sy2 = sy1 + CHAR_H
-        val dx1 = x * CHAR_W * zoomx
-        val dy1 = y * CHAR_H * zoomy
-        val dx2 = dx1 + CHAR_W * zoomx
-        val dy2 = dy1 + CHAR_H * zoomy
-        val bgColor = Color(palette[col and 0xF0 shr 4], true)
-
-        g!!.drawImage(charBuffer, dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2, bgColor, null)
-    }
-
-    /**
-     * Format of pattern is:
-     * @ - character
-     * $ - character, but no blink
-     * - blank
-     * _ - col (bg)
-     * # - col (fg)
-     * >255 - 0xAABB (A = chr, B = col)
-     *
-     */
-    fun extractCharImage(
-        chr: Int,
-        col: Int,
-        zoomx: Int,
-        zoomy: Int,
-        blinkingTime: Boolean,
-        pattern: String
-    ): BufferedImage {
-        return extractCharImageWH(chr, col, zoomx, zoomy, blinkingTime, pattern, pattern.length, 1)
-    }
-
-    fun extractCharImageWH(
-        chr: Int,
-        col: Int,
-        zoomx: Int,
-        zoomy: Int,
-        blinkingTime: Boolean,
-        pattern: String,
-        w: Int,
-        h: Int
-    ): BufferedImage {
-        val img = BufferedImage(CHAR_W * zoomx * w, CHAR_H * zoomy * h, BufferedImage.TYPE_INT_ARGB)
-        val blinkSaved = blink
-        for (i in 0 until pattern.length) {
-            val c = pattern[i]
-            when (c) {
-                '@' -> drawTile(img.graphics, chr, col, i % w, i / w, zoomx, zoomy, blinkingTime)
-                '$' -> {
-                    blink = false
-                    drawTile(img.graphics, chr, col, i % w, i / w, zoomx, zoomy, blinkingTime)
-                    blink = blinkSaved
-                }
-
-                '_' -> {
-                    blink = false
-                    drawTile(img.graphics, 32, col, i % w, i / w, zoomx, zoomy, blinkingTime)
-                    blink = blinkSaved
-                }
-
-                '#' -> {
-                    blink = false
-                    drawTile(img.graphics, 254, col, i % w, i / w, zoomx, zoomy, blinkingTime)
-                    blink = blinkSaved
-                }
-
-                ' ' -> {}
-                else -> {
-                    val cVal = c.code
-                    blink = false
-                    drawTile(
-                        img.graphics,
-                        (cVal and 0xFF00) shr 8,
-                        cVal and 0xFF,
-                        i % w,
-                        i / w,
-                        zoomx,
-                        zoomy,
-                        blinkingTime
-                    )
-                    blink = blinkSaved
-                }
-            }
-        }
-        return img
-    }
 
     private fun tileX(x: Int): Int {
         return Math.round(x * CHAR_W * zoomx).toInt()

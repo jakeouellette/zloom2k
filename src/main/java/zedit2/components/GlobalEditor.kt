@@ -4,6 +4,8 @@ import zedit2.util.CP437.registerFont
 import zedit2.model.Clip.Companion.decode
 import zedit2.model.Clip.Companion.encode
 import zedit2.model.Tile
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import zedit2.util.Writer
 import zedit2.util.ZType
 import java.io.File
@@ -162,7 +164,7 @@ object GlobalEditor {
 
 
     fun initProperties() {
-        System.out.println("Initializing properties...");
+        Logger.i(TAG) { "Initializing properties..." }
         properties = Properties()
         var foundProperties = false
 

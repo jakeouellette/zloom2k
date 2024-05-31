@@ -1,12 +1,10 @@
 package zedit2.components
 
+import net.miginfocom.swing.MigLayout
 import zedit2.*
-import zedit2.util.CP437.font
-import zedit2.util.CP437.toBytes
-import zedit2.util.CP437.toUnicode
+import zedit2.components.*
 import zedit2.components.ColourSelector.Companion.createColourSelector
 import zedit2.components.GlobalEditor.updateTimestamp
-import zedit2.model.SZZTWorldData.Companion.createWorld
 import zedit2.components.Settings.Companion.board
 import zedit2.components.Settings.Companion.boardExits
 import zedit2.components.Settings.Companion.world
@@ -18,14 +16,20 @@ import zedit2.components.Util.evalConfigDir
 import zedit2.components.Util.getExtensionless
 import zedit2.components.Util.getKeyStroke
 import zedit2.components.Util.keyStrokeString
+import javax.swing.BoxLayout
 import zedit2.components.Util.pair
-import zedit2.model.WorldData.Companion.loadWorld
-import zedit2.components.*
+import zedit2.components.editor.TileInfoPanel
 import zedit2.event.KeyActionReceiver
 import zedit2.event.TileEditorCallback
 import zedit2.model.*
-import zedit2.util.Data
-import zedit2.util.ZType
+import zedit2.model.SZZTWorldData.Companion.createWorld
+import zedit2.model.WorldData.Companion.loadWorld
+import zedit2.util.*
+import zedit2.util.CP437.font
+import zedit2.util.CP437.toBytes
+import zedit2.util.CP437.toUnicode
+import zedit2.util.Constants.EDITOR_FONT
+import zedit2.util.Logger.TAG
 import java.awt.*
 import java.awt.datatransfer.Clipboard
 import java.awt.datatransfer.DataFlavor
@@ -46,7 +50,7 @@ import java.util.Timer
 import java.util.regex.Pattern
 import javax.imageio.ImageIO
 import javax.swing.*
-import javax.swing.border.BevelBorder
+import javax.swing.BoxLayout.X_AXIS
 import javax.swing.event.*
 import javax.swing.filechooser.FileFilter
 import kotlin.math.abs
@@ -116,7 +120,7 @@ class WorldEditor @JvmOverloads constructor(
     private lateinit var canvasScrollPane: JScrollPane
     private lateinit var menuBar: JMenuBar
     private lateinit var editingModePane: EditingModePane
-
+    private lateinit var onBufferTileUpdated : JComponent.(Tile?) -> Unit
     private var currentlyShowing = SHOW_NOTHING
 
     private val blinkingImageIcons = ArrayList<BlinkingImageIcon>()
@@ -134,7 +138,7 @@ class WorldEditor @JvmOverloads constructor(
 
     private val testThreads = ArrayList<Thread>()
 
-    private var currentBufferManager: BufferManager? = null
+    private lateinit var currentBufferManager: BufferManager
     private var mouseState = 0
     private var undoDirty = false
 
@@ -531,9 +535,12 @@ class WorldEditor @JvmOverloads constructor(
 
                 infoBox = object : JTextArea(3, 20) {
                     init {
-                        border = BorderFactory.createBevelBorder(BevelBorder.LOWERED)
-                        font = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+//                        border = BorderFactory.createBevelBorder(BevelBorder.LOWERED)
+//                        font = Font(Font.SANS_SERIF, Font.PLAIN, 12)
                         //infoBox.setFont(CP437.INSTANCE.getFont());
+//                        this.background = Color(0x0000AA)
+//                        this.foreground = Color(0xFFFFFF)
+                        this.font = EDITOR_FONT
                         isEditable = false
                         isFocusable = false
                     }
@@ -546,25 +553,36 @@ class WorldEditor @JvmOverloads constructor(
                         this.isOpaque = false
                     }
                 }
-                //infoBox.setPreferredSize(new Dimension(80, 40));
+                infoBox.setPreferredSize( Dimension(80, 40))
                 val controlScrollPane = object : JScrollPane(bufferPane) {
                     init {
                         horizontalScrollBarPolicy = HORIZONTAL_SCROLLBAR_NEVER
                     }
                 }
 
-                val brushSelectorPane = JPanel()
-                this@WorldEditor.brushesPane = object : JPanel(BorderLayout()) {
-                    init {
-                        add(infoBox, BorderLayout.WEST)
-                        add(brushSelectorPane, BorderLayout.CENTER)
-                        val tile = bufferTile
-                        if (tile != null) {
-                            add(TileInfoPanel("Brush", tile))
-                        }
+//                val brushSelectorPane = JPanel()
+                this@WorldEditor.currentBufferManager = BufferManager(this@WorldEditor)
 
+                this@WorldEditor.onBufferTileUpdated = { tile : Tile? ->
+                    this.removeAll()
+                    this.add(infoBox, "west")
+                    infoBox.alignmentY = TOP_ALIGNMENT
+                    val board = this@WorldEditor.currentBoard
+                    if (tile != null && board != null) {
+                        val infoTile = TileInfoPanel(dosCanvas = canvas, this@WorldEditor.worldData,"Brush", tile, board, onBlinkingImageIconAdded = {})
+                        infoTile.alignmentY = TOP_ALIGNMENT
+
+                        this.add(infoTile, "push")
                     }
+                    this.add(currentBufferManager, "east")
+                    currentBufferManager.alignmentY = TOP_ALIGNMENT
                 }
+
+                this@WorldEditor.brushesPane = JPanel()
+                val layout = MigLayout()
+                this@WorldEditor.brushesPane.layout = layout
+                this@WorldEditor.brushesPane.onBufferTileUpdated(bufferTile)
+
                 this@WorldEditor.cursorInfoPane = object : JPanel() {
                     init {
                         this.add(controlScrollPane)
@@ -1098,7 +1116,7 @@ class WorldEditor @JvmOverloads constructor(
             m.add()
             m.add("Erase player from board", "Ctrl-E") { e: ActionEvent? -> operationErasePlayer() }
             m.add()
-            m.add("Buffer manager", "Ctrl-B") { e: ActionEvent? -> operationOpenBufferManager() }
+//            m.add("Buffer manager", "Ctrl-B") { e: ActionEvent? -> operationOpenBufferManager() }
             m.add()
             for (f in 3..10) {
                 val fMenuName = getFMenuName(f)
@@ -1641,7 +1659,7 @@ class WorldEditor @JvmOverloads constructor(
                 "S" -> menuSaveAs()
                 "X" -> operationBoardExits()
                 "Ctrl-A" -> atlas()
-                "Ctrl-B" -> operationOpenBufferManager()
+//                "Ctrl-B" -> operationOpenBufferManager()
                 "Ctrl-E" -> operationErasePlayer()
                 "Ctrl-P" -> operationModifyBuffer(true)
                 "Ctrl-R" -> atlasRemoveBoard()
@@ -1788,15 +1806,6 @@ class WorldEditor @JvmOverloads constructor(
             }
         }
 
-    private fun operationOpenBufferManager() {
-        if (currentBufferManager != null) {
-            currentBufferManager!!.toFront()
-            frame.requestFocus()
-        } else {
-            currentBufferManager = BufferManager(this)
-        }
-    }
-
     fun prefix(): String {
         return if (worldData.isSuperZZT) "SZZT_" else "ZZT_"
     }
@@ -1817,9 +1826,7 @@ class WorldEditor @JvmOverloads constructor(
             ).toInt()
         )
         GlobalEditor.setBufferPos(bufferNum, currentBufferManager)
-        if (currentBufferManager != null) {
-            currentBufferManager!!.updateBuffer(bufferNum)
-        }
+        currentBufferManager.updateBuffer(bufferNum)
         afterUpdate()
         editingModePane.display(Color.MAGENTA, 1500, "Saved to buffer #$bufferNum")
     }
@@ -1829,9 +1836,7 @@ class WorldEditor @JvmOverloads constructor(
         if (GlobalEditor.isKey(key)) {
             GlobalEditor.decodeBuffer(GlobalEditor.getString(key))
             GlobalEditor.setBufferPos(bufferNum, currentBufferManager)
-            if (currentBufferManager != null) {
-                currentBufferManager!!.updateBuffer(bufferNum)
-            }
+            currentBufferManager.updateBuffer(bufferNum)
             afterUpdate()
             editingModePane.display(Color.PINK, 750, "Loaded from buffer #$bufferNum")
         }
@@ -2866,7 +2871,7 @@ class WorldEditor @JvmOverloads constructor(
 
     // TODO(jakeouellette): Make this behave a bit more reactive
     private fun onBoardsUpdated(boards : ArrayList<Board>) {
-        System.out.println("Boards updated. ${boards.size}")
+        Logger.i(TAG) {"Boards updated. ${boards.size}"}
         this.boardListPane.remove(boardSelector)
         this.boards = boards
         this.boardSelector = createBoardSelector()
@@ -3444,13 +3449,13 @@ class WorldEditor @JvmOverloads constructor(
 
             s = String.format(
                 """
-    Stats: %3d/%d   X/Y: %d,%d
-    %d: %s
-    B.Mem: %5d  
+    Stat:  %3d/%d
+    X/Y:   %d,%d
+    B.Mem: %5d
+    
     """.trimIndent(),
                 currentBoard!!.statCount - 1, if (!worldData.isSuperZZT) 150 else 128,
-                boardX + 1, boardY + 1,
-                boardIdx, limitedName, currentBoard!!.currentSize
+                boardX + 1, boardY + 1, currentBoard!!.currentSize
             )
         }
 
@@ -3465,6 +3470,7 @@ class WorldEditor @JvmOverloads constructor(
         blinkingImageIcons.clear()
         val cursorTile = getTileAt(cursorX, cursorY, false)
         addTileInfoDisplay("Cursor", cursorTile)
+        brushesPane.onBufferTileUpdated(bufferTile)
         bufferPane.repaint()
     }
 
@@ -3509,138 +3515,11 @@ class WorldEditor @JvmOverloads constructor(
         else editingModePane.display(Color.BLUE, "Editing")
     }
 
-    private fun createLabel(cursorTile: Tile): JLabel {
-        val szzt = worldData.isSuperZZT
-        val chr = ZType.getChar(szzt, cursorTile)
-        val col = ZType.getColour(szzt, cursorTile)
-        val name = ZType.getName(szzt, cursorTile.id)
-        val chBg = ((cursorTile.col) or (32 shl 8)).toChar()
-        val chFg = ((cursorTile.col) or (254 shl 8)).toChar()
-        val pattern = "@ $chBg$chFg$chBg"
-        val imgBlinkOff = canvas.extractCharImage(chr, col, 2, 2, false, pattern)
-        val imgBlinkOn = canvas.extractCharImage(chr, col, 2, 2, true, pattern)
-        val tileLabelIcon = BlinkingImageIcon(imgBlinkOff, imgBlinkOn)
 
-        val tileLabel = JLabel()
-        tileLabel.font = Font(Font.SANS_SERIF, Font.BOLD, 14)
-        tileLabel.icon = tileLabelIcon
-        tileLabel.text = name
-        blinkingImageIcons.add(tileLabelIcon)
-
-        return tileLabel
-    }
-
-    private inner class TileInfoPanel(title: String, cursorTile : Tile) : JPanel(BorderLayout()) {
-        init {
-            val tileLabel = createLabel(cursorTile)
-
-            //this.setText("<html>Test</html>");
-            //this.add(label);
-            this.border = BorderFactory.createTitledBorder(title)
-            this.add(tileLabel, BorderLayout.NORTH)
-            if (!cursorTile.stats.isEmpty()) {
-                val tileInfoBox = JLabel()
-                val tileInfo = StringBuilder()
-                tileInfo.append("<html>")
-
-                var firstStat = true
-
-                for (stat in cursorTile.stats) {
-                    if (!firstStat) {
-                        tileInfo.append("<hr></hr>")
-                    }
-                    firstStat = false
-
-                    tileInfo.append("<table>")
-                    tileInfo.append("<tr>")
-                    val statId = stat.statId
-
-                    tileInfo.append(
-                        String.format(
-                            "<th align=\"left\">%s</th><td>%s</td>",
-                            "Stat ID:",
-                            if (statId != -1) statId else ""
-                        )
-                    )
-                    tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Cycle:", stat.cycle))
-                    tileInfo.append("</tr><tr>")
-                    tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "X-Step:", stat.stepX))
-                    tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Y-Step:", stat.stepY))
-                    tileInfo.append("</tr><tr>")
-                    tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Param 1:", stat.p1))
-                    tileInfo.append(
-                        String.format(
-                            "<th align=\"left\">%s</th><td>%d</td>",
-                            "Follower:",
-                            stat.follower
-                        )
-                    )
-                    tileInfo.append("</tr><tr>")
-                    tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Param 2:", stat.p2))
-                    tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Leader:", stat.leader))
-                    tileInfo.append("</tr><tr>")
-                    tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Param 3:", stat.p3))
-                    tileInfo.append(String.format("<th align=\"left\">%s</th><td>%d</td>", "Instr. Ptr:", stat.ip))
-                    tileInfo.append("</tr><tr>")
-                    // Code
-                    val codeLen = stat.codeLength
-                    if (codeLen != 0) {
-                        if (codeLen >= 0) {
-                            tileInfo.append(
-                                String.format(
-                                    "<th colspan=\"2\" align=\"left\">%s</th><td colspan=\"2\">%d</td>",
-                                    "Code length:",
-                                    codeLen
-                                )
-                            )
-                        } else {
-                            val boundTo = -codeLen
-                            var appendMessage = ""
-                            if (boundTo < currentBoard!!.statCount) {
-                                val boundToStat = currentBoard!!.getStat(boundTo)
-                                appendMessage = " @ " + boundToStat!!.x + "," + boundToStat.y
-                            }
-                            tileInfo.append(
-                                String.format(
-                                    "<th align=\"left\">%s</th><td colspan=\"3\">%s</td>",
-                                    "Bound to:",
-                                    "#$boundTo$appendMessage"
-                                )
-                            )
-                        }
-                        tileInfo.append("</tr><tr>")
-                    }
-                    tileInfo.append("<th align=\"left\">Under:</th>")
-                    val bgcol = canvas.htmlColour(stat.uco / 16)
-                    val fgcol = canvas.htmlColour(stat.uco % 16)
-                    tileInfo.append(
-                        String.format(
-                            "<td align=\"left\"><span bgcolor=\"%s\" color=\"%s\">&nbsp;&nbsp;■&nbsp;&nbsp;</span></td>",
-                            bgcol,
-                            fgcol
-                        )
-                    )
-
-                    tileInfo.append(
-                        String.format(
-                            "<td align=\"left\" colspan=\"2\">%s</td>",
-                            ZType.getName(worldData.isSuperZZT, stat.uid)
-                        )
-                    )
-                    tileInfo.append("</tr>")
-                    tileInfo.append("</table>")
-                }
-
-                tileInfo.append("</html>")
-                tileInfoBox.horizontalAlignment = SwingConstants.LEFT
-                tileInfoBox.text = tileInfo.toString()
-                this.add(tileInfoBox, BorderLayout.CENTER)
-            }
-        }
-    }
     private fun addTileInfoDisplay(title: String, cursorTile: Tile?) {
-        if (cursorTile == null) return
-        val tileInfoPanel = TileInfoPanel(title, cursorTile)
+        val cb = currentBoard
+        if (cursorTile == null || cb == null) return
+        val tileInfoPanel = TileInfoPanel(dosCanvas = canvas, worldData, title, cursorTile, cb, {b -> })
 
         //int w = bufferPane.getWidth() - 16;
         //tileInfoPanel.setPreferredSize(new Dimension(w, tileInfoPanel.getPreferredSize().getHeight()));
@@ -3899,17 +3778,17 @@ class WorldEditor @JvmOverloads constructor(
         operationZoomOut(true)
         e.consume()
     }
-
-    fun removeBufferManager() {
-        currentBufferManager = null
-    }
-
+//
+//    fun removeBufferManager() {
+//        currentBufferManager = null
+//    }
+//
     override fun windowGainedFocus(e: WindowEvent) {
-        if (currentBufferManager != null) currentBufferManager!!.isAlwaysOnTop = true
+//        if (currentBufferManager != null) currentBufferManager!!.isAlwaysOnTop = true
     }
 
     override fun windowLostFocus(e: WindowEvent) {
-        if (currentBufferManager != null) currentBufferManager!!.isAlwaysOnTop = false
+//        if (currentBufferManager != null) currentBufferManager!!.isAlwaysOnTop = false
     }
 
     fun refreshKeymapping() {

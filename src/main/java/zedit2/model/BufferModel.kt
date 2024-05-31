@@ -5,6 +5,8 @@ import zedit2.components.BufferManager
 import zedit2.components.BufferManager.Companion.getBufferDataString
 import zedit2.components.DosCanvas
 import zedit2.components.WorldEditor
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.awt.Color
 import java.awt.Component
 import java.awt.image.BufferedImage
@@ -22,7 +24,7 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
 
     init {
         selected = GlobalEditor.currentBufferNum
-        updateBuffer()
+        updateBuffer(true)
     }
 
     override fun getSize(): Int {
@@ -36,6 +38,7 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
         return if (GlobalEditor.isKey(key)) {
             GlobalEditor.getString(key)
         } else {
+
             null
         }
     }
@@ -57,8 +60,8 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
     ): Component {
         val bufferNum = idxToBufNum(index)
         val isSel = bufferNum == selected
-        val BUFFER_W = 64
-        val BUFFER_H = 64
+        val BUFFER_W = 32
+        val BUFFER_H = 32
 
         val img = BufferedImage(BUFFER_W, BUFFER_H, BufferedImage.TYPE_INT_RGB)
         val g = img.graphics
@@ -90,7 +93,6 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
             }
             val offsetX = (BUFFER_W - scaleW) / 2
             val offsetY = (BUFFER_H - scaleH) / 2
-
             g.drawImage(bufImg, offsetX, offsetY, offsetX + scaleW, offsetY + scaleH, 0, 0, imgW, imgH, null)
         }
 
@@ -123,7 +125,7 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
         //return new JLabel(String.format("%s%d%s", isSel ? "*" : "", bufferNum, containsSomething ? " X" : ""));
     }
 
-    fun updateBuffer() {
+    fun updateBuffer(initializing :Boolean) {
         val ge = editor.globalEditor
         var bufMax = GlobalEditor.getInt(prefix + "BUF_MAX", 0)
         if (GlobalEditor.isKey(prefix + "BUF_0") && bufMax == 0) bufMax = 9
@@ -136,7 +138,7 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
         } else if (size < oldSize) {
             updateListeners(ListDataEvent.INTERVAL_REMOVED, size, oldSize - 1)
         }
-        if (size != oldSize) {
+        if (size != oldSize && !initializing) {
             manager.resizeList()
         }
     }
@@ -145,7 +147,7 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
         var bufferNum = bufferNum
         bufferNum = bufNumToIdx(bufferNum)
         val withinOldRange = bufferNum < size
-        updateBuffer()
+        updateBuffer(false)
         if (withinOldRange) {
             updateListeners(ListDataEvent.CONTENTS_CHANGED, bufferNum, bufferNum)
         }
