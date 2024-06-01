@@ -3,3 +3,4 @@ build/
 !**/docs/**/build/
 !**/src/**/build/
 .idea/
+zedit2.cfg

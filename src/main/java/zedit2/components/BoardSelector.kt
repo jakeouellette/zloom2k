@@ -25,8 +25,9 @@ class BoardSelector(
                 if (boardNames[i].length < 20) boardNames[i] = (boardNames[i] + "                    ").substring(0, 20)
             }
         }
-        this.setListData(boardNames.toTypedArray())
         boardNames.add("(add board)")
+        this.setListData(boardNames.toTypedArray())
+
         this.selectedIndex = editor.boardIdx
         this.background = Color(0x0000AA)
         this.foreground = Color(0xFFFFFF)
