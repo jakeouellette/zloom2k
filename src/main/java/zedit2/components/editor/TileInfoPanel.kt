@@ -124,7 +124,7 @@ class TileInfoPanel(val dosCanvas: DosCanvas, worldData: WorldData, title: Strin
             tileInfoBox.horizontalAlignment = SwingConstants.LEFT
             tileInfoBox.text = tileInfo.toString()
             tileInfoBox.font = Constants.EDITOR_FONT
-
+            // TODO(jakeouellette) add edit buttons here
             this.add(tileInfoBox, BorderLayout.CENTER)
         }
     }

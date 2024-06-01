@@ -4,8 +4,11 @@ import zedit2.util.CP437.font
 import zedit2.util.CP437.toUnicode
 import zedit2.components.ColourSelector.Companion.createColourSelector
 import zedit2.components.StatSelector.Companion.getStatIdx
+import zedit2.components.editor.code.CodeEditor
+import zedit2.components.editor.code.CodeEditorFactory
 import zedit2.event.TileEditorCallback
 import zedit2.model.Board
+import zedit2.model.IconFactory
 import zedit2.model.Stat
 import zedit2.model.Tile
 import zedit2.util.SZZTType
@@ -902,73 +905,11 @@ class TileEditor(
     }
 
     private fun codeEditor(stat: Stat?, listener: ActionListener) {
-        var followStat = stat
-        val followedStats = HashSet<Int>()
-        var success = false
-        var depth = 0
-        while (true) {
-            if (followedStats.contains(followStat!!.statId)) break
-            followedStats.add(followStat.statId)
-            val codeLen = followStat.codeLength
-            if (codeLen >= 0) {
-                success = true
-                break
-            } else {
-                val boundTo = -codeLen
-                if (boundTo < board.statCount) {
-                    followStat = board.getStat(boundTo)
-                    depth++
-                } else {
-                    break
-                }
-            }
-        }
-        if (success) {
-            val txt = if (stat!!.statId == -1) {
-                "tat"
-            } else {
-                String.format("tat #%d", stat.statId)
-            }
-            if (depth > 0) {
-                CodeEditor(
-                    icon,
-                    followStat!!,
-                    editor,
-                    listener,
-                    true,
-                    String.format("S%s, bound to stat #%d (read only)", txt, followStat.statId)
-                )
-            } else {
-                var readOnly = false
-                val caption: String
-                if (tileX == -1 && tileY == -1 && !editExempt) {
-                    // Buffer stats get a readonly code editor
-                    readOnly = true
-                    caption = String.format(
-                        "Viewing code of s%s (This stat exists only in the buffer. Editing disabled.)",
-                        txt
-                    )
-                } else {
-                    caption = String.format("Editing code of s%s", txt)
-                }
-                CodeEditor(icon, followStat!!, editor, listener, readOnly, caption)
-            }
-        } else {
-            JOptionPane.showMessageDialog(
-                relativeFrame(),
-                "Unable to reach this object's code.",
-                "Unable to reach code",
-                JOptionPane.ERROR_MESSAGE
-            )
-        }
+        CodeEditorFactory.create(tileX, tileY, editExempt, relativeFrame(), editor, icon, board, stat, listener)
     }
 
     private val icon: Image
-        get() {
-            val chr = ZType.getChar(szzt, tile)
-            val col = ZType.getColour(szzt, tile)
-            return editor.canvas.extractCharImage(chr, col, 4, 4, false, "$")
-        }
+        get() = IconFactory.getIcon(szzt, tile, editor)
 
     private fun addUcoBtn(panel: JPanel, label: String, stat: Stat, actionListener: ActionListener, tooltip: String) {
         val initVal = stat.uco

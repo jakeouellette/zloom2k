@@ -19,6 +19,7 @@ import zedit2.components.Util.keyStrokeString
 import javax.swing.BoxLayout
 import zedit2.components.Util.pair
 import zedit2.components.editor.TileInfoPanel
+import zedit2.components.editor.code.CodeEditorFactory
 import zedit2.event.KeyActionReceiver
 import zedit2.event.TileEditorCallback
 import zedit2.model.*
@@ -562,7 +563,7 @@ class WorldEditor @JvmOverloads constructor(
 
 //                val brushSelectorPane = JPanel()
                 this@WorldEditor.currentBufferManager = BufferManager(this@WorldEditor)
-
+                val frameThis = this
                 this@WorldEditor.onBufferTileUpdated = { tile : Tile? ->
                     this.removeAll()
                     this.add(infoBox, "west")
@@ -570,15 +571,60 @@ class WorldEditor @JvmOverloads constructor(
                     val board = this@WorldEditor.currentBoard
                     if (tile != null && board != null) {
                         val infoTile = TileInfoPanel(dosCanvas = canvas, this@WorldEditor.worldData,"Brush", tile, board, onBlinkingImageIconAdded = {})
-                        infoTile.alignmentY = TOP_ALIGNMENT
+                        infoTile.minimumSize = Dimension(200, 220)
+                        val container = object : JPanel() {
+                            init {
+                                this.layout = MigLayout("al center center, wrap")
 
+
+
+                                val editButton = JButton("Edit Brush")
+                                editButton.addActionListener { e ->
+                                    operationModifyBuffer(true)
+                                }
+                                this.add(editButton, )
+                                val swapColorsButton = JButton("Swap Colors")
+                                swapColorsButton.addActionListener { e ->
+                                        operationBufferSwapColour()
+                                    }
+                                this.add(swapColorsButton)
+                                val selectColorButton = JButton("Select Color")
+                                selectColorButton.addActionListener { e ->
+                                    operationColour()
+                                }
+                                this.add(selectColorButton)
+
+                                val editCodeButton = JButton("View Code")
+                                editCodeButton.addActionListener { e ->
+                                    // TODO(jakeouellette): I dunno why it is always stats[0]
+                                    CodeEditorFactory.create(-1, -1, true, frameThis, this@WorldEditor,
+                                        IconFactory.getIcon(worldData.isSuperZZT, tile, this@WorldEditor), board, tile.stats[0])
+                                }
+                                this.add(editCodeButton)
+                                val editsPanel = JPanel()
+
+                                val undoButton = JButton("↩")
+                                undoButton.addActionListener { e ->
+                                    operationUndo()
+                                }
+                                editsPanel.add(undoButton)
+                                val redoButton = JButton("↪")
+                                redoButton.addActionListener { e ->
+                                    operationRedo()
+                                }
+                                editsPanel.add(redoButton)
+                                this.add(editsPanel)
+                            }
+                        }
                         this.add(infoTile, "push")
+                        this.add(container, )
                     }
                     this.add(currentBufferManager, "east")
                     currentBufferManager.alignmentY = TOP_ALIGNMENT
                 }
 
                 this@WorldEditor.brushesPane = JPanel()
+
                 val layout = MigLayout()
                 this@WorldEditor.brushesPane.layout = layout
                 this@WorldEditor.brushesPane.onBufferTileUpdated(bufferTile)
@@ -3526,6 +3572,13 @@ class WorldEditor @JvmOverloads constructor(
         bufferPaneContents.add(tileInfoPanel, BorderLayout.NORTH)
         val childPanel = JPanel(BorderLayout())
         bufferPaneContents.add(childPanel, BorderLayout.CENTER)
+        val editButton = JButton("Edit Code")
+        editButton.addActionListener({
+            CodeEditorFactory.create(-1, -1, true, frame, this@WorldEditor,
+                IconFactory.getIcon(worldData.isSuperZZT, cursorTile, this@WorldEditor), cb, cursorTile.stats[0])
+        })
+        bufferPaneContents.add(editButton, BorderLayout.SOUTH)
+
         bufferPaneContents = childPanel
     }
 

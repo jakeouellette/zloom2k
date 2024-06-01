@@ -1,6 +1,8 @@
-package zedit2.components
+package zedit2.components.editor.code
 
 import zedit2.*
+import zedit2.components.*
+import zedit2.components.Menu
 import zedit2.model.MusicLine
 import zedit2.model.Stat
 import zedit2.model.Undo
