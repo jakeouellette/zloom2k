@@ -17,6 +17,7 @@ import zedit2.components.Util.getExtensionless
 import zedit2.components.Util.getKeyStroke
 import zedit2.components.Util.keyStrokeString
 import zedit2.components.Util.pair
+import zedit2.components.editor.BrushMenuPanel
 import zedit2.components.editor.TileInfoPanel
 import zedit2.components.editor.code.CodeEditor
 import zedit2.components.editor.code.CodeEditorFactory
@@ -594,54 +595,31 @@ class WorldEditor @JvmOverloads constructor(
                             board,
                             onBlinkingImageIconAdded = {})
                         infoTile.minimumSize = Dimension(200, 220)
-                        val container = object : JPanel() {
-                            init {
-                                this.layout = MigLayout("al center center, wrap")
-
-
-                                val editButton = JButton("Edit Brush")
-                                editButton.addActionListener { e ->
-                                    operationModifyBuffer(true)
-                                }
-                                this.add(editButton)
-                                val swapColorsButton = JButton("Swap Colors")
-                                swapColorsButton.addActionListener { e ->
-                                    operationBufferSwapColour()
-                                }
-                                this.add(swapColorsButton)
-                                val selectColorButton = JButton("Select Color")
-                                selectColorButton.addActionListener { e ->
-                                    operationColour()
-                                }
-                                this.add(selectColorButton)
-
-                                when (tile.id) {
-                                    ZType.OBJECT,
-                                    ZType.SCROLL -> {
-                                    val editCodeButton = JButton("View Code")
-                                    editCodeButton.addActionListener { e ->
-                                        // TODO(jakeouellette): I dunno why it is always stats[0]
-                                        CodeEditorFactory.create(
-                                            -1,
-                                            -1,
-                                            true,
-                                            frameThis,
-                                            this@WorldEditor,
-                                            IconFactory.getIcon(worldData.isSuperZZT, tile, this@WorldEditor),
-                                            board,
-                                            tile.stats[0]
-                                        )
-                                    }
-                                    this.add(editCodeButton)
-                                    }
-
-
-                                    else -> {}
-                                }
-                            }
+                        val onCodeSaved = { e : ActionEvent ->
+                            // TODO(jakeouellette): I dunno why it is always stats[0]
+                            CodeEditorFactory.create(
+                                -1,
+                                -1,
+                                true,
+                                frameThis,
+                                this@WorldEditor,
+                                IconFactory.getIcon(worldData.isSuperZZT, tile, this@WorldEditor),
+                                board,
+                                tile.stats[0]
+                            )
                         }
+
                         this.add(infoTile, "push")
-                        this.add(container)
+                        val shouldShowViewCode = tile.id ==  ZType.OBJECT || tile.id ==  ZType.SCROLL
+
+                        val brushMenu = BrushMenuPanel(
+
+                            shouldShowViewCode,
+                            { operationModifyBuffer(true) },
+                            {operationColour()},
+                            { operationBufferSwapColour() },
+                            onCodeSaved)
+                        this.add(brushMenu)
                     }
                     this.add(currentBufferManager, "east")
                     currentBufferManager.alignmentY = TOP_ALIGNMENT
@@ -3608,40 +3586,27 @@ class WorldEditor @JvmOverloads constructor(
             val board = cb
             val editButton = JButton("Edit Code")
 
-            editButton.addActionListener({
+            editButton.addActionListener {
                 CodeEditorFactory.create(-1, -1, true, frame, this@WorldEditor,
-                    IconFactory.getIcon(worldData.isSuperZZT, cursorTile, this@WorldEditor), cb, cursorTile.stats[0],
+                    IconFactory.getIcon(worldData.isSuperZZT, cursorTile, this@WorldEditor), cb, cursorTile.stats[0]
+                ) { e ->
+                    if (e!!.actionCommand == "update") {
+                        val source = e.source as CodeEditor
 
-                    { e ->
-                        if (e!!.actionCommand == "update") {
-                            val source = e.source as CodeEditor
+                        val cloneOfFirst = cursorTile.stats[0].clone()
+                        cloneOfFirst.code = source.code
 
-                            val cloneOfFirst = cursorTile.stats[0].clone()
-                            cloneOfFirst.code = source.code
+                        val mutableStats = mutableListOf<Stat>()
+                        mutableStats.addAll(cursorTile.stats)
+                        mutableStats.set(0, cloneOfFirst)
 
-                            val mutableStats = mutableListOf<Stat>()
-                            mutableStats.addAll(cursorTile.stats)
-                            mutableStats.set(0, cloneOfFirst)
-
-                            setStats(board, boardX, cursorY, cursorX, cursorY, mutableStats)
-                            // TODO(jakeouellette): Decide if these are needed
-//                            (e.source as StatSelector).dataChanged()
-                            afterModification()
-                        }
-                    })
-//                        openTileEditor(board.getStatsAt(x, y), board, x, y, TileEditorCallback { resultTile: Tile ->
-//                    setStats(board, boardX, boardY, x, y, resultTile.stats)
-//                    if (resultTile.id != -1) {
-//                        addRedraw(x + boardX, y + boardY, x + boardX, y + boardY)
-//                        board.setTileRaw(x, y, resultTile.id, resultTile.col)
-//                    }
-//                    (e.source as StatSelector).dataChanged()
-//                    afterModification()
-//                }
-//
-//
-
-            })
+                        setStats(board, boardX, boardY, cursorX, cursorY, mutableStats)
+                        // TODO(jakeouellette): Decide if this is needed
+                        // (e.source as StatSelector).dataChanged()
+                        afterModification()
+                    }
+                }
+            }
             bufferPaneContents.add(editButton, BorderLayout.SOUTH)
         }
         bufferPaneContents = childPanel

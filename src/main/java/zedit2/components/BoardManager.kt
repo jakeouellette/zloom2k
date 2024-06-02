@@ -187,6 +187,7 @@ public class BoardManager @JvmOverloads constructor(
                 this.setAutoResizeMode(AUTO_RESIZE_OFF)
                 this.getSelectionModel().addListSelectionListener { e: ListSelectionEvent? -> updateButtons() }
             }
+
             override fun getCellRenderer(rowIndex: Int, columnIndex: Int): TableCellRenderer {
                 val renderer =
                     TableCellRenderer { table: JTable, value: Any, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int ->
@@ -238,7 +239,7 @@ public class BoardManager @JvmOverloads constructor(
         upButton = panelButton(name = "↑", toolTipText = "Move selected boards up$note") {
             moveSelected(-1)
         }
-        downButton = panelButton(name = "↓",toolTipText = "Move selected boards down$note") {
+        downButton = panelButton(name = "↓", toolTipText = "Move selected boards down$note") {
             moveSelected(1)
         }
         delButton = panelButton(name = "×", toolTipText = "Delete selected boards$note") {
@@ -281,7 +282,7 @@ public class BoardManager @JvmOverloads constructor(
         this.dialog = dialog
     }
 
-    private fun panelButton(name:String, toolTipText : String, action : ActionListener) = object : JButton(name) {
+    fun panelButton(name: String, toolTipText: String, action: ActionListener) = object : JButton(name) {
         init {
             this.addActionListener(action)
             this.toolTipText = toolTipText
@@ -290,20 +291,23 @@ public class BoardManager @JvmOverloads constructor(
 
     private fun exportSelected() {
         if (table.selectedRows.isEmpty()) return
-        val fileChooser = JFileChooser()
-        fileChooser.currentDirectory = GlobalEditor.defaultDirectory
-        fileChooser.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-        fileChooser.isAcceptAllFileFilterUsed = false
-        if (fileChooser.showOpenDialog(dialog) == JFileChooser.APPROVE_OPTION) {
-            val targetDir = fileChooser.selectedFile
-            val boards = editor.boards
-            for (viewRow in table.selectedRows) {
-                val modelRow = table.convertRowIndexToModel(viewRow)
-                val file = File(targetDir, "$modelRow.brd")
-                try {
-                    boards[modelRow].saveTo(file)
-                } catch (e: IOException) {
-                    JOptionPane.showMessageDialog(dialog, e, "Error exporting board", JOptionPane.ERROR_MESSAGE)
+        object : JFileChooser() {
+            init {
+                this.currentDirectory = GlobalEditor.defaultDirectory
+                this.fileSelectionMode = DIRECTORIES_ONLY
+                this.isAcceptAllFileFilterUsed = false
+                if (this.showOpenDialog(dialog) == APPROVE_OPTION) {
+                    val targetDir = this.selectedFile
+                    val boards = editor.boards
+                    for (viewRow in table.selectedRows) {
+                        val modelRow = table.convertRowIndexToModel(viewRow)
+                        val file = File(targetDir, "$modelRow.brd")
+                        try {
+                            boards[modelRow].saveTo(file)
+                        } catch (e: IOException) {
+                            JOptionPane.showMessageDialog(dialog, e, "Error exporting board", JOptionPane.ERROR_MESSAGE)
+                        }
+                    }
                 }
             }
         }
