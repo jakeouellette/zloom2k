@@ -1,5 +1,8 @@
 package zedit2.components
 
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
+import java.awt.Component
 import java.awt.Desktop
 import java.awt.Dimension
 import java.awt.event.WindowAdapter
@@ -13,7 +16,7 @@ import javax.swing.JEditorPane
 import javax.swing.JScrollPane
 import javax.swing.event.HyperlinkEvent
 
-class Help(editor: WorldEditor) {
+class Help(val imageRetriever: ImageRetriever, val relativeFrame: Component) {
     private var dialog: JDialog? = null
     private var currentFile: String? = null
 
@@ -21,12 +24,11 @@ class Help(editor: WorldEditor) {
         if (helpInstance != null) {
             helpInstance!!.dialog!!.toFront()
         } else {
-            openHelp(editor)
+            openHelp()
         }
     }
 
-    private fun openHelp(editor: WorldEditor) {
-        val canvas = editor.canvas
+    private fun openHelp() {
         dialog = JDialog()
         dialog!!.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
         dialog!!.addWindowListener(object : WindowAdapter() {
@@ -47,7 +49,7 @@ class Help(editor: WorldEditor) {
             val h = GlobalEditor.getInt("HELPBROWSER_HEIGHT")
             editorPane.preferredSize = Dimension(w, h)
             dialog!!.title = "ZEdit2 help"
-            dialog!!.setIconImage(canvas.extractCharImage('?'.code, 0x9F, 1, 1, false, "$"))
+            dialog!!.setIconImage(imageRetriever.extractCharImage('?'.code, 0x9F, 1, 1, false, "$"))
             editorPane.addHyperlinkListener { e ->
                 if (e.eventType == HyperlinkEvent.EventType.ACTIVATED) {
                     try {
@@ -55,9 +57,9 @@ class Help(editor: WorldEditor) {
                             Desktop.getDesktop().browse(e.url.toURI())
                         } else {
                             val ref = e.url.ref
-                            println("ref: $ref")
+                            Logger.i(TAG) { "ref: $ref" }
                             if (e.url.file != currentFile) {
-                                println("Loading page")
+                                Logger.i(TAG) {"Loading page"}
                                 editorPane.page = e.url
                             }
                             editorPane.scrollToReference(ref)
@@ -69,7 +71,7 @@ class Help(editor: WorldEditor) {
             }
             dialog!!.add(scrollPane)
             dialog!!.pack()
-            dialog!!.setLocationRelativeTo(editor.frameForRelativePositioning)
+            dialog!!.setLocationRelativeTo(relativeFrame)
             dialog!!.isVisible = true
             helpInstance = this
         } catch (e: MalformedURLException) {

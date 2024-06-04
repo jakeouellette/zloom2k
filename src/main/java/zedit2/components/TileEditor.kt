@@ -878,14 +878,14 @@ class TileEditor(
                     )
                 }
                 if (confirm == JOptionPane.OK_OPTION) {
-                    StatSelector(editor, board, { e1: ActionEvent ->
+                    StatSelector(editor.boardXOffset, editor.boardYOffset,editor.boardIdx,editor.canvas, board, { e1: ActionEvent ->
                         (e1.source as StatSelector).close()
                         val `val` = getStatIdx(e1.actionCommand)
                         if (`val` != stat.statId) {
                             stat.codeLength = -`val`
                         }
                         upd()
-                    }, arrayOf("Select"), null, null)
+                    }, arrayOf("Select"), null, null, editor.frameForRelativePositioning, editor.worldData.isSuperZZT, { x, y -> editor.canvas.setIndicate(x, y)})
                 }
             }
         } else {
@@ -998,11 +998,11 @@ class TileEditor(
             val spinPanelSel = JPanel(BorderLayout())
             val spinPanelSearch = JButton("\uD83D\uDD0D")
             spinPanelSearch.addActionListener { e: ActionEvent? ->
-                StatSelector(editor, board, { e1: ActionEvent ->
+                StatSelector(editor.boardXOffset, editor.boardYOffset, editor.boardIdx, editor.canvas, board, { e1: ActionEvent ->
                     (e1.source as StatSelector).close()
                     val `val` = getStatIdx(e1.actionCommand)
                     spinner.value = `val`
-                }, arrayOf("Select"), null, null)
+                }, arrayOf("Select"), null, null, editor.frameForRelativePositioning, editor.worldData.isSuperZZT, { x, y -> editor.canvas.setIndicate(x, y)}))
             }
             spinPanelSearch.toolTipText = String.format("Find a %s", tooltip)
             spinPanelSel.add(spinPanelSearch, BorderLayout.WEST)

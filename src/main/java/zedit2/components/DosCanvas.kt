@@ -19,7 +19,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JPanel(), MouseListener,
-    MouseMotionListener, MouseWheelListener {
+    MouseMotionListener, MouseWheelListener, ImageRetriever {
     lateinit var charset: ByteArray
         private set
 
@@ -87,7 +87,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     }
 
     // todo(jakeouellette): Move to a separate factory.
-    public fun extractCharImage(
+    override fun extractCharImage(
         chr: Int,
         col: Int,
         zoomx: Int,

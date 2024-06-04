@@ -20,7 +20,10 @@ import javax.swing.*
 import javax.swing.event.*
 import javax.swing.text.AbstractDocument
 
-class Settings(private val editor: WorldEditor) {
+class Settings(private val onMenuCreateRequested: ()-> Unit,
+               private val onKeymapRefreshRequested: () -> Unit,
+    val frameForRelativePositioning: Component,
+    val globalEditor: GlobalEditor) {
     private val dialog = JDialog()
 
     init {
@@ -41,7 +44,7 @@ class Settings(private val editor: WorldEditor) {
 
         dialog.add(tabbedPane)
         dialog.pack()
-        dialog.setLocationRelativeTo(editor.frameForRelativePositioning)
+        dialog.setLocationRelativeTo(frameForRelativePositioning)
         dialog.isVisible = true
     }
 
@@ -51,7 +54,7 @@ class Settings(private val editor: WorldEditor) {
         val applyButton = JButton("Apply")
 
         val editPanel = JPanel(GridLayout(2, 4, 8, 8))
-        val ge = editor.globalEditor
+        val ge = globalEditor
 
         val trHandler = transferHandler
 
@@ -84,7 +87,7 @@ class Settings(private val editor: WorldEditor) {
             editPanel.add(elementMenuPanel)
             val elementMenuTitle = JTextField()
             elementMenuTitle.font = titleFieldFont
-            val elText = GlobalEditor.getString(String.format("F%d_MENU", f), "")
+            val elText = globalEditor.getString(String.format("F%d_MENU", f), "")
             menuTitleFields[f] = elementMenuTitle
             elementMenuTitle.text = elText
             val elementMenuTitlePane = JPanel(BorderLayout())
@@ -103,7 +106,7 @@ class Settings(private val editor: WorldEditor) {
             var i = 0
             while (true) {
                 val key = String.format("F%d_MENU_%d", f, i)
-                val `val` = GlobalEditor.getString(key, "")
+                val `val` = globalEditor.getString(key, "")
                 if (`val`.isEmpty()) break
                 itemVec.add(`val`)
                 i++
@@ -141,8 +144,8 @@ class Settings(private val editor: WorldEditor) {
                     var i = 0
                     while (true) {
                         val key = String.format("F%d_MENU_%d", f, i)
-                        val s = GlobalEditor.getString(key, "")
-                        GlobalEditor.removeKey(key)
+                        val s = globalEditor.getString(key, "")
+                        globalEditor.removeKey(key)
                         if (s.isEmpty()) {
                             break
                         }
@@ -151,15 +154,14 @@ class Settings(private val editor: WorldEditor) {
                 }
 
                 val title = elementMenuTitle.text
-                GlobalEditor.setString(String.format("F%d_MENU", f), title)
+                globalEditor.setString(String.format("F%d_MENU", f), title)
                 for (i in 0 until menuModel!!.size) {
                     val element = menuModel.getElementAt(i)
-                    GlobalEditor.setString(String.format("F%d_MENU_%d", f, i), element)
+                    globalEditor.setString(String.format("F%d_MENU_%d", f, i), element)
                 }
-                GlobalEditor.setString(String.format("F%d_MENU_%d", f, menuModel.size), "")
+                globalEditor.setString(String.format("F%d_MENU_%d", f, menuModel.size), "")
             }
-            editor.createMenu()
-            editor.updateMenu()
+            onMenuCreateRequested()
             applyButton.isEnabled = false
         }
         okButton.addActionListener { e: ActionEvent? ->
@@ -338,10 +340,9 @@ class Settings(private val editor: WorldEditor) {
     }
 
     private fun testConfig(): Component {
-        val ge = editor.globalEditor
         val testChangeBoard =
             JCheckBox("Start the tested world on the current board",
-                GlobalEditor.getBoolean("TEST_SWITCH_BOARD", false)
+                globalEditor.getBoolean("TEST_SWITCH_BOARD", false)
             )
         testChangeBoard.border = BorderFactory.createEmptyBorder(8, 8, 8, 8)
         val configPanel = multiFrame(null, null)
@@ -434,12 +435,11 @@ class Settings(private val editor: WorldEditor) {
     }
 
     private fun writeToConfig(cfgMap: HashMap<String, Any>) {
-        val ge = editor.globalEditor
         for (cfgKey in cfgMap.keys) {
             val cfgVal = cfgMap[cfgKey]
-            if (cfgVal is Int) GlobalEditor.setInt(cfgKey, (cfgVal as Int?)!!)
-            else if (cfgVal is Boolean) GlobalEditor.setBoolean(cfgKey, (cfgVal as Boolean?)!!)
-            else if (cfgVal is String) GlobalEditor.setString(cfgKey, (cfgVal as String?)!!)
+            if (cfgVal is Int) globalEditor.setInt(cfgKey, (cfgVal as Int?)!!)
+            else if (cfgVal is Boolean) globalEditor.setBoolean(cfgKey, (cfgVal as Boolean?)!!)
+            else if (cfgVal is String) globalEditor.setString(cfgKey, (cfgVal as String?)!!)
             else throw RuntimeException("Invalid config field")
         }
         cfgMap.clear()
@@ -462,13 +462,12 @@ class Settings(private val editor: WorldEditor) {
         tt: String,
         ea: JButton
     ): JPanel {
-        val ge = editor.globalEditor
         val panel = JPanel(BorderLayout())
         val label = JLabel(desc)
         label.border = BorderFactory.createEmptyBorder(0, 0, 0, 12)
         val btn = JButton()
 
-        val col = Color(GlobalEditor.getString(cfgString, "000000").toInt(16))
+        val col = Color(globalEditor.getString(cfgString, "000000").toInt(16))
         btn.icon = colIcon(col)
         btn.addActionListener { e: ActionEvent? ->
             val returnedCol = JColorChooser.showDialog(dialog, desc, col)
@@ -496,11 +495,10 @@ class Settings(private val editor: WorldEditor) {
         tt: String,
         ea: JButton
     ): Component {
-        val ge = editor.globalEditor
         val panel = JPanel(BorderLayout())
         val label = JLabel(desc)
         label.border = BorderFactory.createEmptyBorder(0, 0, 0, 12)
-        val spin = JSpinner(SpinnerNumberModel(GlobalEditor.getInt(cfgString, 0), 1, 9999, 1))
+        val spin = JSpinner(SpinnerNumberModel(globalEditor.getInt(cfgString, 0), 1, 9999, 1))
         spin.addChangeListener { e: ChangeEvent? ->
             ea.isEnabled = true
             cfgMap[cfgString] = spin.value
@@ -521,10 +519,9 @@ class Settings(private val editor: WorldEditor) {
         tt: String,
         ea: JButton
     ): JPanel {
-        val ge = editor.globalEditor
         val panel = JPanel(BorderLayout())
 
-        val isSelected = GlobalEditor.getBoolean(cfgString, false)
+        val isSelected = globalEditor.getBoolean(cfgString, false)
 
         val lbl = JLabel(desc)
         lbl.border = BorderFactory.createEmptyBorder(0, 0, 0, 12)
@@ -552,11 +549,10 @@ class Settings(private val editor: WorldEditor) {
         tt: String,
         ea: JButton
     ): Component {
-        val ge = editor.globalEditor
         val panel = JPanel(BorderLayout())
         val label = JLabel(desc)
         label.border = BorderFactory.createEmptyBorder(0, 0, 0, 12)
-        val tf = JTextField(GlobalEditor.getString(cfgString, ""))
+        val tf = JTextField(globalEditor.getString(cfgString, ""))
         tf.document.addDocumentListener(object : DocumentListener {
             override fun insertUpdate(e: DocumentEvent) {
                 upd()
@@ -589,11 +585,10 @@ class Settings(private val editor: WorldEditor) {
         tt: String,
         ea: JButton
     ): Component {
-        val ge = editor.globalEditor
         val panel = JPanel(BorderLayout())
         val label = JLabel(desc)
         label.border = BorderFactory.createEmptyBorder(0, 0, 0, 12)
-        val path = GlobalEditor.getString(cfgString, "")
+        val path = globalEditor.getString(cfgString, "")
         val file = File(path)
         val dirOk = file.isDirectory
         val tf = JTextField(path)
@@ -623,9 +618,9 @@ class Settings(private val editor: WorldEditor) {
                 fc.currentDirectory = file
                 fc.selectedFile = file
             } else {
-                fc.currentDirectory = GlobalEditor.defaultDirectory
+                fc.currentDirectory = globalEditor.defaultDirectory
             }
-            val r = fc.showOpenDialog(editor.frameForRelativePositioning)
+            val r = fc.showOpenDialog(frameForRelativePositioning)
             if (r == JFileChooser.APPROVE_OPTION) {
                 tf.text = fc.selectedFile.toString()
             }
@@ -646,11 +641,10 @@ class Settings(private val editor: WorldEditor) {
         tt: String,
         ea: JButton
     ): Component {
-        val ge = editor.globalEditor
         val panel = JPanel(BorderLayout())
 
-        val isSelected = GlobalEditor.getBoolean(cfgString, false)
-        val delay = GlobalEditor.getInt(cfgString + "_DELAY", 0)
+        val isSelected = globalEditor.getBoolean(cfgString, false)
+        val delay = globalEditor.getInt(cfgString + "_DELAY", 0)
 
         val a = JCheckBox("After", isSelected)
         a.border = BorderFactory.createEmptyBorder()
@@ -843,14 +837,13 @@ class Settings(private val editor: WorldEditor) {
             "COMMA", "Move stat up in stats table",
             "PERIOD", "Move stat down in stats table",
         )
-        val ge = editor.globalEditor
 
         val keyMap = HashMap<String, KeyStroke?>()
         run {
             var i = 0
             while (i < keymappings.size) {
                 val actionName = keymappings[i]
-                val keyStroke = Util.getKeyStroke(ge, actionName)
+                val keyStroke = Util.getKeyStroke(globalEditor, actionName)
                 keyMap[actionName] = keyStroke
                 i += 2
             }
@@ -892,7 +885,7 @@ class Settings(private val editor: WorldEditor) {
             val actionName = keymappings[i]
             val keyDescription = keymappings[i + 1]
             val keyDescriptionLabel = JLabel(keyDescription)
-            val keyStrokeName = Util.keyStrokeString(Util.getKeyStroke(ge, actionName))
+            val keyStrokeName = Util.keyStrokeString(Util.getKeyStroke(globalEditor, actionName))
             val keyBind = JPanel(BorderLayout())
             val clearButton = JButton("Clear")
 
@@ -931,12 +924,11 @@ class Settings(private val editor: WorldEditor) {
     }
 
     private fun applyKeymap(keyMap: HashMap<String, KeyStroke?>) {
-        val ge = editor.globalEditor
         for (actionName in keyMap.keys) {
             val keyStrokeString = keyMap[actionName]
-            Util.setKeyStroke(ge, actionName, keyStrokeString)
+            Util.setKeyStroke(globalEditor, actionName, keyStrokeString)
         }
-        editor.refreshKeymapping()
+        onKeymapRefreshRequested()
     }
 
     private fun keystrokeSet(

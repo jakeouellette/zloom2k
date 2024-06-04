@@ -1,22 +1,19 @@
 package zedit2.components
 
+import zedit2.components.editor.operation.BufferOperation
 import zedit2.model.BufferModel
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
-import java.awt.BorderLayout
-import java.awt.Dimension
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.awt.datatransfer.Transferable
 import java.awt.datatransfer.UnsupportedFlavorException
 import java.awt.event.MouseEvent
 import java.awt.event.MouseListener
-import java.awt.event.WindowEvent
-import java.awt.event.WindowListener
 import java.io.IOException
 import javax.swing.*
 
-class BufferManager(private val editor: WorldEditor) : JList<String?>(), MouseListener {
+class BufferManager(val bufferOperation : BufferOperation, prefix : String, dosCanvas : DosCanvas, globalEditor : GlobalEditor) : JList<String?>(), MouseListener {
     //        defaultCloseOperation = DISPOSE_ON_CLOSE
 //        addWindowListener(this)
 //        setIconImage(editor.canvas.extractCharImage(228, 0x5F, 1, 1, false, "$"))
@@ -107,7 +104,7 @@ class BufferManager(private val editor: WorldEditor) : JList<String?>(), MouseLi
 //        isResizable = false
 //        val scrollPane = JScrollPane(list)
 //        contentPane.add(scrollPane, BorderLayout.CENTER)
-        listModel = BufferModel(this, editor)
+        listModel = BufferModel(this, prefix, dosCanvas, globalEditor)
         this.setCellRenderer(listModel)
         this.model = listModel
 
@@ -137,7 +134,7 @@ class BufferManager(private val editor: WorldEditor) : JList<String?>(), MouseLi
         val x = e.x
         val y = e.y
         if (x >= bounds.x && y >= bounds.y && x < bounds.x + bounds.getWidth() && y < bounds.y + bounds.getHeight()) {
-            editor.operationGetFromBuffer(listModel.idxToBufNum(cell))
+            bufferOperation.operationGetFromBuffer(listModel.idxToBufNum(cell))
         }
 
         e.consume()
@@ -150,7 +147,9 @@ class BufferManager(private val editor: WorldEditor) : JList<String?>(), MouseLi
 //    override fun windowActivated(e: WindowEvent) {}
 //    override fun windowDeactivated(e: WindowEvent) {}
 
-    override fun mousePressed(e: MouseEvent) {           System.out.println("Buffer Size $preferredSize, ${listModel.size}")}
+override fun mousePressed(e: MouseEvent) {
+        Logger.i(TAG) { "Buffer Size $preferredSize, ${listModel.size}" }
+    }
     override fun mouseReleased(e: MouseEvent) {}
     override fun mouseEntered(e: MouseEvent) {}
     override fun mouseExited(e: MouseEvent) {}

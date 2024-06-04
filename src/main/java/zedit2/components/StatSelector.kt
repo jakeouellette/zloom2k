@@ -4,6 +4,7 @@ import zedit2.model.Tile
 import zedit2.util.ZType
 import zedit2.util.CP437.toUnicode
 import zedit2.model.Board
+import java.awt.Component
 import java.awt.Dialog
 import java.awt.event.*
 import javax.swing.*
@@ -11,8 +12,9 @@ import javax.swing.event.ListSelectionEvent
 import javax.swing.table.AbstractTableModel
 
 class StatSelector(
-    editor: WorldEditor, board: Board, private val listener: ActionListener?, private val options: Array<String>,
-    upKeybind: KeyStroke?, downKeybind: KeyStroke?
+    boardXOffset :Int, boardYOffset :Int, currentBoard: Int, imageRetriever: ImageRetriever, board: Board, private val listener: ActionListener?, private val options: Array<String>,
+    upKeybind: KeyStroke?, downKeybind: KeyStroke?, frameForRelativePositioning: Component,
+    isSuperZZT : Boolean, onIndicateSet : (IntArray?, IntArray?) -> Unit
 ) {
     /*
 case COL_IMAGE:
@@ -44,11 +46,11 @@ case COL_UCO:
         dialog.modalityType = Dialog.ModalityType.APPLICATION_MODAL
         dialog.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
         dialog.title =
-            "Stat list :: Board #" + editor.boardIdx + " :: " + toUnicode(board.getName()) + " :: Double-click to select"
-        dialog.setIconImage(editor.canvas.extractCharImage(240, 0x1F, 2, 2, false, "$"))
+            "Stat list :: Board #" + currentBoard + " :: " + toUnicode(board.getName()) + " :: Double-click to select"
+        dialog.setIconImage(imageRetriever.extractCharImage(240, 0x1F, 2, 2, false, "$"))
         dialog.addWindowListener(object : WindowAdapter() {
             override fun windowClosed(e: WindowEvent) {
-                editor.canvas.setIndicate(null, null)
+                onIndicateSet(null, null)
             }
         })
 
@@ -83,19 +85,16 @@ case COL_UCO:
                 } else {
                     Tile(-1, -1, board.getStatsAt(x, y))
                 }
-                val worldData = editor.worldData
-                val szzt = worldData.isSuperZZT
-                val canvas = editor.canvas
 
                 when (columnIndex) {
                     COL_IMAGE -> {
-                        val chr = ZType.getChar(worldData.isSuperZZT, tile)
-                        val col = ZType.getColour(worldData.isSuperZZT, tile)
+                        val chr = ZType.getChar(isSuperZZT, tile)
+                        val col = ZType.getColour(isSuperZZT, tile)
                         return ImageIcon(
-                            canvas.extractCharImage(
+                            imageRetriever.extractCharImage(
                                 chr,
                                 col,
-                                if (worldData.isSuperZZT) 2 else 1,
+                                if (isSuperZZT) 2 else 1,
                                 1,
                                 false,
                                 "$"
@@ -104,10 +103,10 @@ case COL_UCO:
                     }
 
                     COL_STATID -> return stat.statId
-                    COL_TYPE -> return ZType.getName(szzt, tile.id)
+                    COL_TYPE -> return ZType.getName(isSuperZZT, tile.id)
                     COL_COLOUR -> {
                         val col = tile.col
-                        return ImageIcon(canvas.extractCharImage(0, col, 1, 1, false, "_#_"))
+                        return ImageIcon(imageRetriever.extractCharImage(0, col, 1, 1, false, "_#_"))
                     }
 
                     COL_X -> return x + 1
@@ -137,10 +136,10 @@ case COL_UCO:
                     COL_LEADER -> return stat.leader
                     COL_IP -> return stat.ip
                     COL_CODELEN -> return stat.codeLength
-                    COL_UID -> return ZType.getName(szzt, stat.uid)
+                    COL_UID -> return ZType.getName(isSuperZZT, stat.uid)
                     COL_UCO -> {
                         val col = stat.uco
-                        return ImageIcon(canvas.extractCharImage(0, col, 1, 1, false, "_#_"))
+                        return ImageIcon(imageRetriever.extractCharImage(0, col, 1, 1, false, "_#_"))
                     }
 
                     COL_ORDER -> return stat.order
@@ -152,7 +151,7 @@ case COL_UCO:
         table.autoCreateRowSorter = true
 
         // Set column preferred widths
-        table.columnModel.getColumn(COL_IMAGE).preferredWidth = if (editor.worldData.isSuperZZT) 16 else 8
+        table.columnModel.getColumn(COL_IMAGE).preferredWidth = if (isSuperZZT) 16 else 8
         table.columnModel.getColumn(COL_STATID).preferredWidth = 26
         table.columnModel.getColumn(COL_TYPE).preferredWidth = 64
         table.columnModel.getColumn(COL_COLOUR).preferredWidth = 25
@@ -220,7 +219,6 @@ case COL_UCO:
             }
         })
         table.selectionModel.addListSelectionListener { e: ListSelectionEvent? ->
-            val canvas = editor.canvas
             val rows = table.selectedRows
             val indicateX = IntArray(rows.size)
             val indicateY = IntArray(rows.size)
@@ -229,8 +227,8 @@ case COL_UCO:
                 var x = board.getStat(row)!!.x - 1
                 var y = board.getStat(row)!!.y - 1
                 if (x >= 0 && y >= 0 && x < board.width && y < board.height) {
-                    x += editor.boardXOffset
-                    y += editor.boardYOffset
+                    x += boardXOffset
+                    y += boardYOffset
                     indicateX[i] = x
                     indicateY[i] = y
                 } else {
@@ -238,13 +236,13 @@ case COL_UCO:
                     indicateY[i] = -1
                 }
             }
-            canvas.setIndicate(indicateX, indicateY)
+            onIndicateSet(indicateX, indicateY)
         }
 
         val scroll = JScrollPane(table)
         dialog.contentPane.add(scroll)
         dialog.pack()
-        dialog.setLocationRelativeTo(editor.frameForRelativePositioning)
+        dialog.setLocationRelativeTo(frameForRelativePositioning)
         dialog.isVisible = true
     }
 

@@ -6,11 +6,9 @@ import zedit2.components.Menu
 import zedit2.model.MusicLine
 import zedit2.model.Stat
 import zedit2.model.Undo
-import zedit2.util.Audio
+import zedit2.util.*
 import zedit2.util.Audio.Companion.playSequence
-import zedit2.util.AudioCallback
-import zedit2.util.CP437
-import zedit2.util.MusicNote
+import zedit2.util.Logger.TAG
 import java.awt.*
 import java.awt.event.*
 import java.util.*
@@ -572,7 +570,7 @@ class CodeEditor(
 
     private fun find(replace: Boolean) {
         if (findDialog != null) {
-            println("Closing")
+            Logger.i(TAG) {"Closing"}
             findDialog!!.dispose()
         }
         selFromRep = false

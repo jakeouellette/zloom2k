@@ -3,6 +3,7 @@ package zedit2.components
 import zedit2.model.Board
 import zedit2.util.CP437
 import java.awt.Color
+import java.awt.Component
 import java.awt.event.*
 import javax.swing.JComponent
 import javax.swing.JDialog
@@ -12,7 +13,10 @@ import javax.swing.ListSelectionModel
 import javax.swing.event.ListSelectionEvent
 
 class BoardSelector(
-    private val editor: WorldEditor,
+    private val imageRetriever: ImageRetriever,
+    currentBoard : Int,
+    private val frameForPositioning: Component,
+    private val onBoardAddRequested: () -> Unit,
     private val boards: ArrayList<Board>,
     private val listener: ActionListener
 ) : JList<String?>() {
@@ -28,7 +32,7 @@ class BoardSelector(
         boardNames.add("(add board)")
         this.setListData(boardNames.toTypedArray())
 
-        this.selectedIndex = editor.boardIdx
+        this.selectedIndex = currentBoard
         this.background = Color(0x0000AA)
         this.foreground = Color(0xFFFFFF)
         this.font = CP437.font
@@ -59,7 +63,7 @@ class BoardSelector(
             }
         }
 
-        this.ensureIndexIsVisible(editor.boardIdx)
+        this.ensureIndexIsVisible(currentBoard)
 
     }
 
@@ -69,7 +73,7 @@ class BoardSelector(
         // TODO(jakeouellette): Make dialog close again after selecting item.
 //        dialog.dispose()
         if (boardIdx == boards.size) {
-            editor.operationAddBoard()
+            onBoardAddRequested()
         } else {
             listener.actionPerformed(ActionEvent(this, ActionEvent.ACTION_PERFORMED, boardIdx.toString()))
         }
@@ -82,14 +86,11 @@ class BoardSelector(
                 this.modalityType = ModalityType.APPLICATION_MODAL
                 this.defaultCloseOperation = DISPOSE_ON_CLOSE
                 this.title = "Select a board"
-                this.setIconImage(editor.canvas.extractCharImage(240, 0x0F, 2, 2, false, "$"))
+                this.setIconImage(imageRetriever.extractCharImage(240, 0x0F, 2, 2, false, "$"))
                 this.pack()
-                this.setLocationRelativeTo(editor.frameForRelativePositioning)
+                this.setLocationRelativeTo(frameForPositioning)
                 this.isVisible = true
                 this.contentPane.add(boardList)
             }
         }
-
-
-
 }

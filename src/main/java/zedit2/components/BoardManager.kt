@@ -18,7 +18,7 @@ import javax.swing.table.AbstractTableModel
 import javax.swing.table.TableCellEditor
 import javax.swing.table.TableCellRenderer
 
-public class BoardManager @JvmOverloads constructor(
+class BoardManager @JvmOverloads constructor(
     private val editor: WorldEditor,
     private var boards: List<Board>,
     private val modal: Boolean = true

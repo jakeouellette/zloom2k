@@ -1,12 +1,9 @@
 package zedit2.model
 
-import zedit2.components.GlobalEditor
 import zedit2.components.BufferManager
 import zedit2.components.BufferManager.Companion.getBufferDataString
 import zedit2.components.DosCanvas
-import zedit2.components.WorldEditor
-import zedit2.util.Logger
-import zedit2.util.Logger.TAG
+import zedit2.components.GlobalEditor
 import java.awt.Color
 import java.awt.Component
 import java.awt.image.BufferedImage
@@ -15,15 +12,18 @@ import javax.swing.event.ListDataEvent
 import javax.swing.event.ListDataListener
 import kotlin.math.max
 
-class BufferModel(private val manager: BufferManager, private val editor: WorldEditor) : AbstractListModel<String?>(),
+class BufferModel(private val manager: BufferManager,
+                  private val prefix: String,
+                  private val canvas : DosCanvas,
+                  private val globalEditor : GlobalEditor
+) : AbstractListModel<String?>(),
     ListCellRenderer<String?> {
     private var size = 0
     private var selected: Int
-    private val prefix: String = editor.prefix()
     var listeners: ArrayList<ListDataListener> = ArrayList()
 
     init {
-        selected = GlobalEditor.currentBufferNum
+        selected = globalEditor.currentBufferNum
         updateBuffer(true)
     }
 
@@ -34,9 +34,8 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
     override fun getElementAt(index: Int): String? {
         val bufferNum = idxToBufNum(index)
         val key = String.format(prefix + "BUF_%d", bufferNum)
-        val ge = editor.globalEditor
-        return if (GlobalEditor.isKey(key)) {
-            GlobalEditor.getString(key)
+        return if (globalEditor.isKey(key)) {
+            globalEditor.getString(key)
         } else {
 
             null
@@ -69,7 +68,7 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
         g.color = Color(0x7F7F7F)
         g.fillRect(0, 0, BUFFER_W, BUFFER_H)
 
-        val bufImg = getClipImage(editor.canvas, value)
+        val bufImg = getClipImage(canvas, value)
         if (bufImg != null) {
             val imgW = bufImg.width
             val imgH = bufImg.height
@@ -126,9 +125,8 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
     }
 
     fun updateBuffer(initializing :Boolean) {
-        val ge = editor.globalEditor
-        var bufMax = GlobalEditor.getInt(prefix + "BUF_MAX", 0)
-        if (GlobalEditor.isKey(prefix + "BUF_0") && bufMax == 0) bufMax = 9
+        var bufMax = globalEditor.getInt(prefix + "BUF_MAX", 0)
+        if (globalEditor.isKey(prefix + "BUF_0") && bufMax == 0) bufMax = 9
         else if (bufMax > 0) bufMax = bufNumToIdx(bufMax)
         bufMax = (bufMax + 10) / 5 * 5
         val oldSize = size
@@ -184,19 +182,18 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
         if (idx < 0) return
         val bufNum = idxToBufNum(idx)
         val key = String.format(prefix + "BUF_%d", bufNum)
-        val ge = editor.globalEditor
-        var bufMax = GlobalEditor.getInt(prefix + "BUF_MAX", 0)
+        var bufMax = globalEditor.getInt(prefix + "BUF_MAX", 0)
         if (selected == bufNum) {
-            GlobalEditor.clearBufferSelected()
+            globalEditor.clearBufferSelected()
             selected = -1
         }
-        GlobalEditor.removeKey(key)
+        globalEditor.removeKey(key)
         if (bufNum == bufMax && bufMax > 0) {
             while (bufMax > 0) {
                 bufMax--
-                if (GlobalEditor.isKey(String.format(prefix + "BUF_%d", bufMax))) break
+                if (globalEditor.isKey(String.format(prefix + "BUF_%d", bufMax))) break
             }
-            GlobalEditor.setInt(prefix + "BUF_MAX", bufMax)
+            globalEditor.setInt(prefix + "BUF_MAX", bufMax)
         }
         updateBuffer(bufNum)
     }
@@ -211,13 +208,12 @@ class BufferModel(private val manager: BufferManager, private val editor: WorldE
         if (dropIndex < 0) return false
         val bufNum = idxToBufNum(dropIndex)
         val key = String.format(prefix + "BUF_%d", bufNum)
-        val ge = editor.globalEditor
-        val bufMax = GlobalEditor.getInt(prefix + "BUF_MAX", 0)
+        val bufMax = globalEditor.getInt(prefix + "BUF_MAX", 0)
         if (bufNum > bufMax) {
-            GlobalEditor.setInt(prefix + "BUF_MAX", bufNum)
+            globalEditor.setInt(prefix + "BUF_MAX", bufNum)
         }
         val encodedBuffer = getBufferDataString(data!!)
-        GlobalEditor.setString(key, encodedBuffer)
+        globalEditor.setString(key, encodedBuffer)
         updateBuffer(bufNum)
         return true
     }

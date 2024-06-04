@@ -1,11 +1,14 @@
 package zedit2.components
 
 import zedit2.model.WorldCorruptedException
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.io.File
 import java.io.IOException
 import javax.swing.JOptionPane
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
+import kotlin.system.exitProcess
 
 class Main : Runnable {
     override fun run() {
@@ -17,21 +20,20 @@ class Main : Runnable {
             if (args.size > 0) {
                 defaultFile = args[args.size - 1]
             }
-            val editor: WorldEditor
             if (!defaultFile.isEmpty()) {
-                editor = WorldEditor(GlobalEditor, File(defaultFile))
+                WorldEditor(GlobalEditor, File(defaultFile))
             } else {
                 val defaultSzzt = GlobalEditor.getBoolean("DEFAULT_SZZT", false)
-                editor = WorldEditor(GlobalEditor, defaultSzzt)
+                WorldEditor(GlobalEditor, defaultSzzt)
             }
         } catch (e: IOException) {
             JOptionPane.showMessageDialog(null, e, "Error loading world", JOptionPane.ERROR_MESSAGE)
-            e.printStackTrace()
-            System.exit(1)
+            Logger.e(TAG, e)
+            exitProcess(1)
         } catch (e: WorldCorruptedException) {
             JOptionPane.showMessageDialog(null, e, "Error loading world", JOptionPane.ERROR_MESSAGE)
-            e.printStackTrace()
-            System.exit(1)
+            Logger.e(TAG, e)
+            exitProcess(1)
         }
     }
 
@@ -49,7 +51,7 @@ class Main : Runnable {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
             } catch (e: Exception) {
-                println("Failed to set system L&F")
+                Logger.e(TAG) {"Failed to set system L&F"}
             }
             //JFrame.setDefaultLookAndFeelDecorated(false);
             SwingUtilities.invokeLater(Main())

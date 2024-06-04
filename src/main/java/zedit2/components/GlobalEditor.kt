@@ -150,9 +150,9 @@ object GlobalEditor {
             val fw = FileWriter(file)
             properties!!.store(fw, "ZEdit v" + Main.VERSION + " Configuration")
             fw.close()
-            println("Wrote properties to $file")
+            Logger.i(TAG) { "Wrote properties to $file" }
         } catch (e: IOException) {
-            println("Failed to write to $file")
+            Logger.i(TAG) { "Failed to write to $file" }
             return false
         }
         return true
@@ -179,7 +179,7 @@ object GlobalEditor {
         }
 
         if (!foundProperties) {
-            System.err.println("Unable to locate properties file.")
+            Logger.e(TAG) {"Unable to locate properties file."}
         }
 
         newConfigOption("ZOOM", "1")
@@ -621,7 +621,7 @@ object GlobalEditor {
             val fr = FileReader(file)
             properties!!.load(fr)
             fr.close()
-            println("Loaded properties from $file")
+            Logger.i(TAG) {"Loaded properties from $file"}
             return file
         } catch (e: IOException) {
             return null

@@ -2,6 +2,7 @@ package zedit2.components
 
 import zedit2.util.CP437
 import java.awt.Color
+import java.awt.Component
 import java.awt.Dialog
 import java.awt.event.*
 import java.util.*
@@ -9,7 +10,7 @@ import javax.swing.JDialog
 import javax.swing.JTextArea
 import javax.swing.Timer
 
-class About(editor: WorldEditor) {
+class About(frameForRelativePositioning: Component) {
     private val aboutBuilder: StringBuilder
     private val sx = DoubleArray(STARS)
     private val vx = DoubleArray(STARS)
@@ -70,7 +71,7 @@ class About(editor: WorldEditor) {
         dialog.title = "About ZEdit2"
 
         dialog.pack()
-        dialog.setLocationRelativeTo(editor.frameForRelativePositioning)
+        dialog.setLocationRelativeTo(frameForRelativePositioning)
         dialog.isVisible = true
     }
 

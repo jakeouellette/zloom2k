@@ -1,5 +1,6 @@
 package zedit2.util
 
+import zedit2.util.Logger.TAG
 import java.io.File
 import java.io.FileWriter
 
@@ -11,15 +12,15 @@ class Writer(file: File) {
         var file = file
         var num = 1
         while (file.exists() && !file.isDirectory) {
-            println("file $file exists. Trying again")
+            Logger.i(TAG) {"file $file exists. Trying again" }
             num++
             val ext = getExtension(file)
             val basename = getBasename(file)
-            println("About to construct $basename-$num$ext")
+            Logger.i(TAG) {"About to construct $basename-$num$ext"}
             file = File("$basename-$num$ext")
-            println("Constructed $file")
+                Logger.i(TAG) {"Constructed $file"}
             if (num >= 99) break
-            println("Looping")
+            Logger.i(TAG) {"Looping"}
         }
 
         this.file = file
