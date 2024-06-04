@@ -1,4 +1,16 @@
-# zloom2
+# zloom2k
+
+This is a Kotlin fork of zloom2, refactoring its codebase in several ways with the goal of ultimately improving the UX. Some changes:
+
+* Kotlinified, making nullability clearer
+* Integrated with Gradle
+* (WIP) Refactoring State. Reducing Global mutables
+* (WIP) Improving the UX. Exposing tools and making editing more intuitive.
+
+This is a fork written by Jake Ouellette.
+
+## Original readme
+
 ZZT and Super ZZT world editor
 
 This is a Weave 3 hack of the MIT-licensed release of zedit2 - past versions can be obtained from https://zedit2.skyend.net/ - hacked versions for Weave 3 can be found at https://meangirls.itch.io/weave-3

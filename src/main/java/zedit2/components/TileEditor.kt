@@ -1002,7 +1002,7 @@ class TileEditor(
                     (e1.source as StatSelector).close()
                     val `val` = getStatIdx(e1.actionCommand)
                     spinner.value = `val`
-                }, arrayOf("Select"), null, null, editor.frameForRelativePositioning, editor.worldData.isSuperZZT, { x, y -> editor.canvas.setIndicate(x, y)}))
+                }, arrayOf("Select"), null, null, editor.frameForRelativePositioning, editor.worldData.isSuperZZT, { x, y -> editor.canvas.setIndicate(x, y)})
             }
             spinPanelSearch.toolTipText = String.format("Find a %s", tooltip)
             spinPanelSel.add(spinPanelSearch, BorderLayout.WEST)
