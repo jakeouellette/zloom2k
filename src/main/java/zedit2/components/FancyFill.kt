@@ -591,26 +591,26 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
         }
     }
 
-    private fun fillTile(i: Int, `val`: Double, x: Int, y: Int) {
+    private fun fillTile(i: Int, value: Double, x: Int, y: Int) {
         // For now, compress the value into the gradient range and pick something
-        var `val` = `val`
-        `val` = Util.clamp(`val`, 0.0, 1.0)
+        var value = value
+        value = Util.clamp(value, 0.0, 1.0)
         val diffusion = diffInput.value as Double
-        `val` += rng.nextGaussian() * diffusion
+        value += rng.nextGaussian() * diffusion
 
         // 0 repeats: 0.0 -> 1.0
         // 1 repeats: 0.0 -> 1.0 -> 0.0
         // 2 repeats: 0.0 -> 1.0 -> 0.0 -> 1.0
-        `val` *= (repeatInput.value as Int + 1).toDouble()
-        `val` = 1.0 - abs((`val` % 2.0) - 1.0)
+        value *= (repeatInput.value as Int + 1).toDouble()
+        value = 1.0 - abs((value % 2.0) - 1.0)
 
         val min = sliderStart.value as Double
         val max = sliderEnd.value as Double
         val rmin = min(min, max)
         val rmax = max(min, max)
         val rdiff = rmax - rmin
-        `val` = `val` * rdiff + rmin
-        `val` = Util.clamp(`val`, 0.0, 1.0)
+        value = value * rdiff + rmin
+        value = Util.clamp(value, 0.0, 1.0)
 
         var tsenged = false
         if (tsengMatr != null) {
@@ -620,16 +620,16 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
             }
         }
 
-        if (invertChk.isSelected xor tsenged) `val` = 1.0 - `val`
+        if (invertChk.isSelected xor tsenged) value = 1.0 - value
 
-        var idx = (`val` * gradientTiles.size).toInt()
+        var idx = (value * gradientTiles.size).toInt()
         if (idx == gradientTiles.size) idx--
         tiles[i] = gradientTiles[idx]
     }
 
-    private fun doublePos(`val`: Int, min: Int, max: Int): Double {
-        if (`val` == min && `val` == max) return 0.5
-        return 1.0 * (`val` - min) / (max - min)
+    private fun doublePos(value: Int, min: Int, max: Int): Double {
+        if (value == min && value == max) return 0.5
+        return 1.0 * (value - min) / (max - min)
     }
 
     private fun slimeFill() {
@@ -658,14 +658,14 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
             val pos = queue.pop()
             val x = pos[0]
             val y = pos[1]
-            val `val` = slimeArea[y][x]
-            max = max(max.toDouble(), slimeExpand(x + 1, y, width, height, `val` + xScale, queue, slimeArea).toDouble())
+            val value = slimeArea[y][x]
+            max = max(max.toDouble(), slimeExpand(x + 1, y, width, height, value + xScale, queue, slimeArea).toDouble())
                 .toFloat()
-            max = max(max.toDouble(), slimeExpand(x - 1, y, width, height, `val` + xScale, queue, slimeArea).toDouble())
+            max = max(max.toDouble(), slimeExpand(x - 1, y, width, height, value + xScale, queue, slimeArea).toDouble())
                 .toFloat()
-            max = max(max.toDouble(), slimeExpand(x, y + 1, width, height, `val` + yScale, queue, slimeArea).toDouble())
+            max = max(max.toDouble(), slimeExpand(x, y + 1, width, height, value + yScale, queue, slimeArea).toDouble())
                 .toFloat()
-            max = max(max.toDouble(), slimeExpand(x, y - 1, width, height, `val` + yScale, queue, slimeArea).toDouble())
+            max = max(max.toDouble(), slimeExpand(x, y - 1, width, height, value + yScale, queue, slimeArea).toDouble())
                 .toFloat()
         }
         for (i in xs.indices) {

@@ -94,13 +94,13 @@ object Util {
     }
 
     @JvmStatic
-    fun clamp(`val`: Int, min: Int, max: Int): Int {
-        return max(min(`val`.toDouble(), max.toDouble()), min.toDouble()).toInt()
+    fun clamp(value: Int, min: Int, max: Int): Int {
+        return max(min(value.toDouble(), max.toDouble()), min.toDouble()).toInt()
     }
 
     @JvmStatic
-    fun clamp(`val`: Double, min: Double, max: Double): Double {
-        return max(min(`val`, max), min)
+    fun clamp(value: Double, min: Double, max: Double): Double {
+        return max(min(value, max), min)
     }
 
     fun setInt32(bytes: ByteArray, offset: Int, value: Int) {
@@ -111,11 +111,11 @@ object Util {
     }
 
     fun getInt32(bytes: ByteArray, offset: Int): Int {
-        var `val` = toUInt8(bytes[offset])
-        `val` = `val` or (toUInt8(bytes[offset + 1]) shl 8)
-        `val` = `val` or (toUInt8(bytes[offset + 2]) shl 16)
-        `val` = `val` or (toUInt8(bytes[offset + 3]) shl 24)
-        return `val`
+        var value = toUInt8(bytes[offset])
+        value = value or (toUInt8(bytes[offset + 1]) shl 8)
+        value = value or (toUInt8(bytes[offset + 2]) shl 16)
+        value = value or (toUInt8(bytes[offset + 3]) shl 24)
+        return value
     }
 
     @JvmStatic

@@ -398,8 +398,8 @@ class CodeDocument(editor: WorldEditor) : DefaultStyledDocument() {
             // Single-character movement optionally takes a number in Super ZZT.
             if (szzt) {
                 val nextp = scanIn(text, pos, end)
-                val `val` = parseNumber(nextp, 0, 255)
-                if (`val` != null) {
+                val value = parseNumber(nextp, 0, 255)
+                if (value != null) {
                     setCharacterAttributes(pos, nextp.length, hlNumber, false)
                     pos += nextp.length
                     pos = skipSpaces(text, pos, end)
@@ -765,9 +765,9 @@ class CodeDocument(editor: WorldEditor) : DefaultStyledDocument() {
         if (!text.isEmpty()) {
             if (text.matches(".*\\d.*".toRegex())) {
                 try {
-                    val `val` = text.toInt()
-                    if (`val` >= min && `val` <= max) {
-                        return `val`
+                    val value = text.toInt()
+                    if (value >= min && value <= max) {
+                        return value
                     }
                 } catch (ignored: NumberFormatException) {
                     return null

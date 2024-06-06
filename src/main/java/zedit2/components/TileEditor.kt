@@ -26,6 +26,13 @@ import javax.swing.event.ListSelectionListener
 
 class TileEditor(
     editor: WorldEditor,
+    private val boardXOffset: Int,
+    private val boardYOffset: Int,
+    val currentBoard: Int,
+    val isSuperZZT: Boolean,
+    private val boards : List<Board>,
+    private val imageRetriever: ImageRetriever,
+    val frameForRelativePositioning : Component,
     board: Board,
     inputTile: Tile?,
     stats: List<Stat>?,
@@ -34,7 +41,9 @@ class TileEditor(
     y: Int,
     advanced: Boolean,
     selected: Int,
-    editExempt: Boolean
+    editExempt: Boolean,
+    private val onIndicateSet : (IntArray?, IntArray?) -> Unit,
+    val getKeystroke : (stroke : String) -> KeyStroke
 ) {
     private val editExempt: Boolean
     private val selected: Int
@@ -87,7 +96,7 @@ class TileEditor(
             tile = inputTile.clone()
         }
         originalTile = tile!!.clone()
-        szzt = editor.worldData.isSuperZZT
+        szzt = isSuperZZT
         if (advanced) {
             createAdvancedGUI()
         } else {
@@ -143,7 +152,7 @@ class TileEditor(
         otherEditorPanelActive = otherEditorPanel
 
         val tileId = tile!!.id
-        val szzt = editor.worldData.isSuperZZT
+        val szzt = isSuperZZT
         when (tileId) {
             ZType.PASSAGE -> {
                 editorAddBoardSelect(PARAM_P3)
@@ -362,7 +371,7 @@ class TileEditor(
 
     private fun editorAddBoardSelect(param: Int) {
         val destination = getParam(param)
-        val boards = editor.boards
+        val boards = boards
         val boardNames = arrayOfNulls<String>(boards.size)
         for (i in boardNames.indices) {
             boardNames[i] = toUnicode(boards[i].getName())
@@ -396,7 +405,7 @@ class TileEditor(
     private fun relativeFrame(): Component {
         val frame = tileEditorFrame
         if (frame != null) return frame
-        return editor.frameForRelativePositioning
+        return frameForRelativePositioning
     }
 
     private fun editorText() {
@@ -498,8 +507,8 @@ class TileEditor(
     }
 
     private fun setKeystrokes(statList: JList<String?>): KeyListener {
-        val k_PgUp = Util.getKeyStroke(editor.globalEditor, "PgUp")
-        val k_PgDn = Util.getKeyStroke(editor.globalEditor, "PgDn")
+        val k_PgUp = getKeystroke("PgUp")
+        val k_PgDn = getKeystroke("PgDn")
 
         return object : KeyListener {
             override fun keyPressed(e: KeyEvent) {
@@ -652,7 +661,7 @@ class TileEditor(
 
     private fun finaliseGUI() {
         tileEditorFrame!!.pack()
-        tileEditorFrame!!.setLocationRelativeTo(editor.frameForRelativePositioning)
+        tileEditorFrame!!.setLocationRelativeTo(frameForRelativePositioning)
         tileEditorFrame!!.isVisible = true
     }
 
@@ -728,9 +737,9 @@ class TileEditor(
 
     private fun createColButton(col: Int, selectorMode: Int, actionListener: ActionListener): JButton {
         val colSelectIcon: Image = if (selectorMode != ColourSelector.CHAR) {
-            editor.canvas.extractCharImage(0, col, 1, 1, false, "_#_")
+            imageRetriever.extractCharImage(0, col, 1, 1, false, "_#_")
         } else {
-            editor.canvas.extractCharImage(col, 0x8F, 1, 1, false, "_\$_")
+            imageRetriever.extractCharImage(col, 0x8F, 1, 1, false, "_\$_")
         }
         val button = JButton(ImageIcon(colSelectIcon))
         button.addActionListener { e: ActionEvent? ->
@@ -878,14 +887,14 @@ class TileEditor(
                     )
                 }
                 if (confirm == JOptionPane.OK_OPTION) {
-                    StatSelector(editor.boardXOffset, editor.boardYOffset,editor.boardIdx,editor.canvas, board, { e1: ActionEvent ->
+                    StatSelector(boardXOffset, boardYOffset,currentBoard,imageRetriever, board, { e1: ActionEvent ->
                         (e1.source as StatSelector).close()
-                        val `val` = getStatIdx(e1.actionCommand)
-                        if (`val` != stat.statId) {
-                            stat.codeLength = -`val`
+                        val value = getStatIdx(e1.actionCommand)
+                        if (value != stat.statId) {
+                            stat.codeLength = -value
                         }
                         upd()
-                    }, arrayOf("Select"), null, null, editor.frameForRelativePositioning, editor.worldData.isSuperZZT, { x, y -> editor.canvas.setIndicate(x, y)})
+                    }, arrayOf("Select"), null, null, frameForRelativePositioning, isSuperZZT, onIndicateSet)
                 }
             }
         } else {
@@ -998,11 +1007,11 @@ class TileEditor(
             val spinPanelSel = JPanel(BorderLayout())
             val spinPanelSearch = JButton("\uD83D\uDD0D")
             spinPanelSearch.addActionListener { e: ActionEvent? ->
-                StatSelector(editor.boardXOffset, editor.boardYOffset, editor.boardIdx, editor.canvas, board, { e1: ActionEvent ->
+                StatSelector(boardXOffset, boardYOffset, currentBoard, imageRetriever, board, { e1: ActionEvent ->
                     (e1.source as StatSelector).close()
-                    val `val` = getStatIdx(e1.actionCommand)
-                    spinner.value = `val`
-                }, arrayOf("Select"), null, null, editor.frameForRelativePositioning, editor.worldData.isSuperZZT, { x, y -> editor.canvas.setIndicate(x, y)})
+                    val value = getStatIdx(e1.actionCommand)
+                    spinner.value = value
+                }, arrayOf("Select"), null, null, frameForRelativePositioning, isSuperZZT, onIndicateSet)
             }
             spinPanelSearch.toolTipText = String.format("Find a %s", tooltip)
             spinPanelSel.add(spinPanelSearch, BorderLayout.WEST)

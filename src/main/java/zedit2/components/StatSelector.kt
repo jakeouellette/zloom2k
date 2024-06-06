@@ -12,9 +12,18 @@ import javax.swing.event.ListSelectionEvent
 import javax.swing.table.AbstractTableModel
 
 class StatSelector(
-    boardXOffset :Int, boardYOffset :Int, currentBoard: Int, imageRetriever: ImageRetriever, board: Board, private val listener: ActionListener?, private val options: Array<String>,
-    upKeybind: KeyStroke?, downKeybind: KeyStroke?, frameForRelativePositioning: Component,
-    isSuperZZT : Boolean, onIndicateSet : (IntArray?, IntArray?) -> Unit
+    boardXOffset: Int,
+    boardYOffset: Int,
+    currentBoard: Int,
+    imageRetriever: ImageRetriever,
+    board: Board,
+    private val listener: ActionListener?,
+    private val options: Array<String>,
+    upKeybind: KeyStroke?,
+    downKeybind: KeyStroke?,
+    frameForRelativePositioning: Component,
+    isSuperZZT: Boolean,
+    onIndicateSet: (IntArray?, IntArray?) -> Unit
 ) {
     /*
 case COL_IMAGE:
@@ -77,7 +86,8 @@ case COL_UCO:
             }
 
             override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
-                val stat = board.getStat(rowIndex) ?: throw RuntimeException("expected board to have stat at row $rowIndex")
+                val stat =
+                    board.getStat(rowIndex) ?: throw RuntimeException("expected board to have stat at row $rowIndex")
                 val x = stat.x - 1
                 val y = stat.y - 1
                 val tile = if (x >= 0 && y >= 0 && x < board.width && y < board.height) {

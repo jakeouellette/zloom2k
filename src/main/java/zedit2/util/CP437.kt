@@ -9,11 +9,10 @@ import java.io.IOException
 object CP437 {
     private const val unicodeString =
         "\u0000☺☻♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼ !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~⌂ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°\u2219\u00B7√ⁿ²■\u00A0"
-    val font: Font
+    var font: Font
     private var reverse: HashMap<Char, Char>? = null
 
     init {
-        var font : Font
         try {
             //Main.class.getClassLoader().getResource
             //new File("Px437_IBM_EGA8.ttf")
@@ -26,7 +25,6 @@ object CP437 {
             e.printStackTrace()
             font = Font(Font.MONOSPACED, Font.PLAIN, 11)
         }
-        CP437.font = font
     }
     private fun buildReverseTable() {
         if (reverse == null) {

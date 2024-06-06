@@ -106,9 +106,9 @@ class Settings(private val onMenuCreateRequested: ()-> Unit,
             var i = 0
             while (true) {
                 val key = String.format("F%d_MENU_%d", f, i)
-                val `val` = globalEditor.getString(key, "")
-                if (`val`.isEmpty()) break
-                itemVec.add(`val`)
+                val value = globalEditor.getString(key, "")
+                if (value.isEmpty()) break
+                itemVec.add(value)
                 i++
             }
             val menuModel = ElementListModel(ge, f)

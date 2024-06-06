@@ -4,24 +4,59 @@ import zedit2.util.CP437.toUnicode
 import zedit2.components.Util
 import java.util.*
 
-class Stat {
-    var statId: Int
-    var x = -1
-    var y = -1
-    var stepX: Int
-    var stepY: Int
-    var cycle: Int
-    var p1: Int
-    var p2: Int
-    var p3: Int
-    var follower: Int
-    var leader: Int
-    var uid: Int
-    var uco: Int
-    var pointer: Int
-    var ip: Int
+class Stat(szzt: Boolean = false,
+           var stepX : Int = 0,
+           var stepY : Int = 0,
+           var cycle : Int = 1,
+           var p1 : Int = 0,
+           var p2 : Int = 0,
+           var p3 : Int = 0,
+           var statId : Int = -1,
+           var follower : Int = -1,
+           var leader : Int = -1,
+           var uid : Int = 0,
+           var uco : Int = 0,
+           var pointer : Int = 0,
+           var ip : Int = 0,
+           var x : Int = -1,
+           var y : Int = -1,
+           var cachedCodeLength : Int = 0,
+           var internalTag : Int = 0) {
 
-    var cachedCodeLength = 0
+    constructor(worldData: ByteArray, offset: Int, paddingSize: Int, statId: Int)
+            : this(
+        szzt = false,
+        statId = statId,
+                x = Util.getInt8(worldData, offset + 0),
+            y = Util.getInt8(worldData, offset + 1),
+            stepX = Util.getInt16(worldData, offset + 2),
+            stepY = Util.getInt16(worldData, offset + 4),
+            cycle = Util.getInt16(worldData, offset + 6),
+            p1 = Util.getInt8(worldData, offset + 8),
+            p2 = Util.getInt8(worldData, offset + 9),
+            p3 = Util.getInt8(worldData, offset + 10),
+            follower = Util.getInt16(worldData, offset + 11),
+            leader = Util.getInt16(worldData, offset + 13),
+            uid = Util.getInt8(worldData, offset + 15),
+            uco = Util.getInt8(worldData, offset + 16),
+            pointer = Util.getInt32(worldData, offset + 17),
+            ip = Util.getInt16(worldData, offset + 21),
+            cachedCodeLength = Util.getInt16(worldData, offset + 23),
+            internalTag = 0
+            ) {
+
+        padding = Arrays.copyOfRange(worldData, offset + 25, offset + 25 + paddingSize)
+        if (codeLength > 0) {
+            val codeOffset = offset + 25 + paddingSize
+            code = Arrays.copyOfRange(worldData, codeOffset, codeOffset + codeLength)
+        } else {
+            code = ByteArray(0)
+        }
+        migrateOldZeditInfo()
+    }
+
+
+
     var codeLength: Int = 0
         set(value) {
             if (value > 0) {
@@ -33,64 +68,16 @@ class Stat {
         get() {
             return cachedCodeLength
         }
-    var internalTag = 0
 
-    var padding: ByteArray
+
+    var padding: ByteArray = ByteArray(if (szzt) 0 else 8)
         set(value) {field = value.clone()}
 
-    var code: ByteArray
+    var code: ByteArray = ByteArray(0)
         set(value) {
             field = value.clone()
             cachedCodeLength = field.size
         }
-
-    constructor(szzt: Boolean) {
-        stepX = 0
-        stepY = 0
-        cycle = 1
-        p1 = 0
-        p2 = 0
-        p3 = 0
-        statId = -1
-        follower = -1
-        leader = -1
-        uid = 0
-        uco = 0
-        pointer = 0
-        ip = 0
-        codeLength = 0
-        padding = ByteArray(if (szzt) 0 else 8)
-        code = ByteArray(0)
-    }
-
-    constructor(worldData: ByteArray, offset: Int, paddingSize: Int, statId: Int) {
-        this.statId = statId
-        x = Util.getInt8(worldData, offset + 0)
-        y = Util.getInt8(worldData, offset + 1)
-        stepX = Util.getInt16(worldData, offset + 2)
-        stepY = Util.getInt16(worldData, offset + 4)
-        cycle = Util.getInt16(worldData, offset + 6)
-        p1 = Util.getInt8(worldData, offset + 8)
-        p2 = Util.getInt8(worldData, offset + 9)
-        p3 = Util.getInt8(worldData, offset + 10)
-        follower = Util.getInt16(worldData, offset + 11)
-        leader = Util.getInt16(worldData, offset + 13)
-        uid = Util.getInt8(worldData, offset + 15)
-        uco = Util.getInt8(worldData, offset + 16)
-        pointer = Util.getInt32(worldData, offset + 17)
-        ip = Util.getInt16(worldData, offset + 21)
-        cachedCodeLength = Util.getInt16(worldData, offset + 23)
-        internalTag = 0
-
-        padding = Arrays.copyOfRange(worldData, offset + 25, offset + 25 + paddingSize)
-        if (codeLength > 0) {
-            val codeOffset = offset + 25 + paddingSize
-            code = Arrays.copyOfRange(worldData, codeOffset, codeOffset + codeLength)
-        } else {
-            code = ByteArray(0)
-        }
-        migrateOldZeditInfo()
-    }
 
     // TODO(jakeouellette): These override clone, but probably shouldn't. Refactor.
     fun clone(): Stat {

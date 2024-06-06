@@ -116,12 +116,12 @@ class ColourSelector(
     }
 
     private fun upd() {
-        dialog.title = TITLES[selectorMode] + ": " + col
-        if (selectorMode != CHAR) {
-            dialog.setIconImage(canvas.extractCharImage(254, col, 2, 2, false, "$"))
-        } else {
-            dialog.setIconImage(canvas.extractCharImage(col, 0x1b, 2, 2, false, "$"))
-        }
+//        dialog.title = TITLES[selectorMode] + ": " + col
+//        if (selectorMode != CHAR) {
+//            dialog.setIconImage(canvas.extractCharImage(254, col, 2, 2, false, "$"))
+//        } else {
+//            dialog.setIconImage(canvas.extractCharImage(col, 0x1b, 2, 2, false, "$"))
+//        }
         repaint()
     }
 
@@ -225,17 +225,18 @@ class ColourSelector(
             listener: ActionListener,
             selectorMode: Int
         ) {
-            val colourSelectorDialog = if (owner != null) {
-                if (owner is Dialog) JDialog(owner as Dialog?)
-                else if (owner is Frame) JDialog(owner as Frame?)
-                else if (owner is Window) JDialog(owner as Window?)
+            val colourSelectorDialog =  if (owner != null) {
+                if (owner is Dialog) PopoverDialog(owner as Dialog?)
+                else if (owner is Frame) PopoverDialog(owner as Frame?)
+                else if (owner is Window) PopoverDialog(owner as Window?)
                 else throw RuntimeException("invalid owner")
             } else {
-                JDialog()
+                PopoverDialog()
             }
-            colourSelectorDialog.modalityType = Dialog.ModalityType.APPLICATION_MODAL
+            colourSelectorDialog.modalityType = Dialog.ModalityType.MODELESS
             colourSelectorDialog.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
             colourSelectorDialog.isResizable = false
+            colourSelectorDialog.isUndecorated = true
             val ge = editor.globalEditor
             val cs = ColourSelector(ge, col, colourSelectorDialog, listener, editor.canvas, selectorMode)
             colourSelectorDialog.contentPane.add(cs)

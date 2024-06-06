@@ -32,6 +32,7 @@ import zedit2.util.CP437.font
 import zedit2.util.CP437.toBytes
 import zedit2.util.CP437.toUnicode
 import zedit2.util.Constants.EDITOR_FONT
+import zedit2.util.FileUtil.getFileChooser
 import zedit2.util.Logger.TAG
 import java.awt.*
 import java.awt.datatransfer.Clipboard
@@ -224,7 +225,7 @@ class WorldEditor @JvmOverloads constructor(
         changeBoard(cb)
     }
 
-    fun changeToIndividualBoard(newBoardIdx: Int) {
+    private fun changeToIndividualBoard(newBoardIdx: Int) {
         setCurrentBoard(newBoardIdx)
         atlases.remove(newBoardIdx)
         currentAtlas = null
@@ -255,7 +256,7 @@ class WorldEditor @JvmOverloads constructor(
         // Search the atlas for this board
         val atlas = atlases[newBoardIdx]
         if (atlas != null) {
-            val gridPos = checkNotNull(searchInAtlas(atlas, newBoardIdx))
+            val gridPos = checkNotNull(atlas.search(newBoardIdx))
             val x = gridPos[0]
             val y = gridPos[1]
             cursorX = (cursorX % boardW) + x * boardW
@@ -372,9 +373,6 @@ class WorldEditor @JvmOverloads constructor(
                         if (boards[boardIdx].timestampEquals(undoBoard)) {
                             addTo = false
                         }
-                        //System.out.println("Current board timestamp: " + boards.get(boardIdx).getDirtyTimestamp());
-                        //System.out.println("Undo board timestamp: " + undoBoard.getDirtyTimestamp());
-                        //System.out.println("addTo: " + addTo);
                     }
 
                     if (addTo) {
@@ -397,17 +395,6 @@ class WorldEditor @JvmOverloads constructor(
                 }
             }
         }
-    }
-
-    private fun searchInAtlas(atlas: Atlas, idx: Int): ArrayList<Int>? {
-        for (y in 0 until atlas.h) {
-            for (x in 0 until atlas.w) {
-                if (atlas.grid[y][x] == idx) {
-                    return pair(x, y)
-                }
-            }
-        }
-        return null
     }
 
     private fun invalidateCache() {
@@ -499,7 +486,7 @@ class WorldEditor @JvmOverloads constructor(
                 //var ico = ImageIO.read(new File("zediticon.png"));
                 val ico = ImageIO.read(ByteArrayInputStream(Data.ZEDITICON_PNG))
                 this.iconImage = ico
-                this.defaultCloseOperation = JFrame.DO_NOTHING_ON_CLOSE
+                this.defaultCloseOperation = DO_NOTHING_ON_CLOSE
                 this.addWindowListener(object : WindowAdapter() {
                     override fun windowClosed(e: WindowEvent) {
                         GlobalEditor.editorClosed()
@@ -796,32 +783,6 @@ class WorldEditor @JvmOverloads constructor(
         }
 
         return true
-    }
-
-    private fun getFileChooser(exts: Array<String>, desc: String): JFileChooser {
-        val fileChooser = JFileChooser()
-        val filter: FileFilter = object : FileFilter() {
-            override fun accept(f: File): Boolean {
-                if (f.isDirectory) return true
-                val name = f.name
-                val extPos = name.lastIndexOf('.')
-                if (extPos != -1) {
-                    val ext = name.substring(extPos + 1)
-                    for (validExt in exts) {
-                        if (ext.equals(validExt, ignoreCase = true)) return true
-                    }
-                }
-                return false
-            }
-
-            override fun getDescription(): String {
-                return desc
-            }
-        }
-        fileChooser.fileFilter = filter
-        fileChooser.currentDirectory = GlobalEditor.defaultDirectory
-        //fileChooser.setCurrentDirectory(new File("C:\\Users\\" + System.getProperty("user.name") + "\\Dropbox\\YHWH\\zzt\\zzt\\"));
-        return fileChooser
     }
 
     private fun menuSave() {
@@ -1160,6 +1121,16 @@ class WorldEditor @JvmOverloads constructor(
             m.add("Undo", "Ctrl-Z") { e: ActionEvent? -> operationUndo() }
             m.add("Redo", "Ctrl-Y") { e: ActionEvent? -> operationRedo() }
             m.add()
+
+            m.add("Convert image", null) { e: ActionEvent? -> operationLoadImage() }
+            m.add("Convert image from clipboard", "Ctrl-V") { e: ActionEvent? -> operationPasteImage() }
+            m.add()
+            m.add("Erase player from board", "Ctrl-E") { e: ActionEvent? -> operationErasePlayer() }
+
+            menus.add(m)
+//            m.add("Buffer manager", "Ctrl-B") { e: ActionEvent? -> operationOpenBufferManager() }
+
+            m = Menu("Brush")
             m.add("Select colour", "C") { e: ActionEvent? -> operationColour() }
             m.add("Modify buffer tile", "P") { e: ActionEvent? -> operationModifyBuffer(false) }
             m.add("Modify buffer tile (advanced)", "Ctrl-P") { e: ActionEvent? -> operationModifyBuffer(true) }
@@ -1177,13 +1148,6 @@ class WorldEditor @JvmOverloads constructor(
             m.add("Flood fill", "F") { e: ActionEvent? -> operationFloodfill(cursorX, cursorY, false) }
             m.add("Gradient fill", "Alt-F") { e: ActionEvent? -> operationFloodfill(cursorX, cursorY, true) }
             m.add()
-            m.add("Convert image", null) { e: ActionEvent? -> operationLoadImage() }
-            m.add("Convert image from clipboard", "Ctrl-V") { e: ActionEvent? -> operationPasteImage() }
-            m.add()
-            m.add("Erase player from board", "Ctrl-E") { e: ActionEvent? -> operationErasePlayer() }
-            m.add()
-//            m.add("Buffer manager", "Ctrl-B") { e: ActionEvent? -> operationOpenBufferManager() }
-            m.add()
             for (f in 3..10) {
                 val fMenuName = getFMenuName(f)
                 if (fMenuName != null && !fMenuName.isEmpty()) {
@@ -1193,7 +1157,6 @@ class WorldEditor @JvmOverloads constructor(
                 }
             }
             menus.add(m)
-
             m = Menu("View")
             m.add("Zoom in", "Ctrl-=") { e: ActionEvent? -> operationZoomIn(false) }
             m.add("Zoom out", "Ctrl--") { e: ActionEvent? -> operationZoomOut(false) }
@@ -1499,13 +1462,11 @@ class WorldEditor @JvmOverloads constructor(
     private fun setBufferToElement(element: String, editOnPlace: Boolean) {
         val tile = getTileFromElement(element, getTileColour(bufferTile!!))
         if (editOnPlace) {
-            openTileEditorExempt(
-                tile,
-                currentBoard,
-                -1,
-                -1,
-                { tile: Tile -> this.elementPlaceAtCursor(tile) },
-                false
+            openCurrentTileEditor(
+                callback = { tile: Tile -> this.elementPlaceAtCursor(tile) },
+                exempt = true,
+                advanced = false,
+                tile = tile,
             )
         } else {
             elementPlaceAtCursor(tile)
@@ -1525,7 +1486,8 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun paintTile(tile: Tile, col: Int) {
-        val backupTile = tile.clone()
+        // TODO(jakeouellette): Decide if this was ever needed.
+        // val backupTile = tile.clone()
         if (isText(tile)) {
             tile.id = (col % 128) + 128
         } else {
@@ -1540,8 +1502,7 @@ class WorldEditor @JvmOverloads constructor(
     private fun getTileColour(bufferTile: Tile): Int {
         var col = bufferTile.col
         val id = bufferTile.id
-        val szzt = worldData.isSuperZZT
-        val tcol = ZType.getTextColour(szzt, id)
+        val tcol = ZType.getTextColour(worldData.isSuperZZT, id)
         if (tcol != -1) {
             col = tcol
         }
@@ -3125,25 +3086,38 @@ class WorldEditor @JvmOverloads constructor(
         val x = cursorX % boardW
         val y = cursorY % boardH
         if (tile != null && board != null) {
-            openTileEditor(tile, board, x, y, TileEditorCallback { resultTile: Tile ->
-                // Put this tile down, subject to the following:
-                // - Any stat IDs on this tile that matches a stat ID on the destination tile go in in-place
-                // - If there are stats on the destination tile that weren't replaced, delete them
-                // - If there are stats on this tile that didn't go in, add them to the end
-                setStats(board, cursorX / boardW * boardW, cursorY / boardH * boardH, x, y, resultTile.stats)
-                addRedraw(cursorX, cursorY, cursorX, cursorY)
-                board.setTileRaw(x, y, resultTile.id, resultTile.col)
-                if (grab) bufferTile = getTileAt(cursorX, cursorY, true)
-                afterModification()
-            }, advanced)
+            createTileEditor(
+                board = board,
+                x = x,
+                y = y,
+                callback = { resultTile: Tile ->
+                    // Put this tile down, subject to the following:
+                    // - Any stat IDs on this tile that matches a stat ID on the destination tile go in in-place
+                    // - If there are stats on the destination tile that weren't replaced, delete them
+                    // - If there are stats on this tile that didn't go in, add them to the end
+                    setStats(board, cursorX / boardW * boardW, cursorY / boardH * boardH, x, y, resultTile.stats)
+                    addRedraw(cursorX, cursorY, cursorX, cursorY)
+                    board.setTileRaw(x, y, resultTile.id, resultTile.col)
+                    if (grab) bufferTile = getTileAt(cursorX, cursorY, true)
+                    afterModification()
+                },
+                advanced = advanced,
+                tile = tile,
+                exempt = false,
+            )
         }
     }
 
     private fun operationModifyBuffer(advanced: Boolean) {
-        openTileEditor(bufferTile!!, currentBoard, -1, -1, TileEditorCallback { resultTile: Tile? ->
-            bufferTile = resultTile
-            afterUpdate()
-        }, advanced)
+        openCurrentTileEditor(
+            callback = { resultTile: Tile? ->
+                bufferTile = resultTile
+                afterUpdate()
+            },
+            exempt = false,
+            advanced = advanced,
+            tile = bufferTile!!
+        )
     }
 
     private fun operationStatList() {
@@ -3160,61 +3134,83 @@ class WorldEditor @JvmOverloads constructor(
             "Move to end"
         )
         var upStroke: KeyStroke? = getKeyStroke(globalEditor, "COMMA")
-        if (upStroke != null) {
-            val upString = keyStrokeString(upStroke)
-            if (upString != null && !upString.isEmpty()) {
-                contextOptions[3] = contextOptions[3] + " (" + upString + ")"
-            } else {
-                upStroke = null
-            }
+
+        val upString = keyStrokeString(upStroke)
+        if (!upString.isNullOrEmpty()) {
+            contextOptions[3] = contextOptions[3] + " (" + upString + ")"
+        } else {
+            upStroke = null
         }
+
         var downStroke: KeyStroke? = getKeyStroke(globalEditor, "PERIOD")
-        if (downStroke != null) {
-            val downString = keyStrokeString(downStroke)
-            if (downString != null && !downString.isEmpty()) {
-                contextOptions[4] = contextOptions[4] + " (" + downString + ")"
-            } else {
-                downStroke = null
-            }
+
+        val downString = keyStrokeString(downStroke)
+        if (!downString.isNullOrEmpty()) {
+            contextOptions[4] = contextOptions[4] + " (" + downString + ")"
+        } else {
+            downStroke = null
         }
 
-        StatSelector(this.boardXOffset, this.boardYOffset, this.boardIdx, this.canvas,board, { e: ActionEvent ->
-            val `val` = getStatIdx(e.actionCommand)
-            val option = getOption(e.actionCommand)
-            val stat = board.getStat(`val`)
-            when (option) {
-                0, 1 -> {
-                    val x = stat!!.x - 1
-                    val y = stat.y - 1
+        StatSelector(
+            this.boardXOffset,
+            this.boardYOffset,
+            this.boardIdx,
+            this.canvas,
+            board,
+            { e: ActionEvent ->
+                val value = getStatIdx(e.actionCommand)
+                val option = getOption(e.actionCommand)
+                val stat = board.getStat(value)
+                when (option) {
+                    0, 1 -> {
+                        val x = stat!!.x - 1
+                        val y = stat.y - 1
 
-                    openTileEditor(board.getStatsAt(x, y), board, x, y, { resultTile: Tile ->
-                        setStats(board, boardX, boardY, x, y, resultTile.stats)
-                        if (resultTile.id != -1) {
-                            addRedraw(x + boardX, y + boardY, x + boardX, y + boardY)
-                            board.setTileRaw(x, y, resultTile.id, resultTile.col)
+                        createTileEditor(
+                            board = board,
+                            x = x,
+                            y = y,
+                            callback = { resultTile: Tile ->
+                                setStats(board, boardX, boardY, x, y, resultTile.stats)
+                                if (resultTile.id != -1) {
+                                    addRedraw(x + boardX, y + boardY, x + boardX, y + boardY)
+                                    board.setTileRaw(x, y, resultTile.id, resultTile.col)
+                                }
+                                (e.source as StatSelector).dataChanged()
+                                afterModification()
+                            },
+                            advanced = option == 1,
+                            exempt = false,
+                            selected = value,
+                            tile = null,
+                            stats = board.getStatsAt(x, y)
+                        )
+                    }
+
+                    2, 3, 4, 5 -> {
+                        val destination = when (option) {
+                            2 -> 1
+                            3 -> value - 1
+                            4 -> value + 1
+                            else -> board.statCount - 1
                         }
-                        (e.source as StatSelector).dataChanged()
-                        afterModification()
-                    }, option == 1, `val`)
-                }
-
-                2, 3, 4, 5 -> {
-                    val destination = when (option) {
-                        2 -> 1
-                        3 -> `val` - 1
-                        4 -> `val` + 1
-                        else -> board.statCount - 1
-                    }
-                    if (moveStatTo(board, `val`, destination)) {
-                        (e.source as StatSelector).dataChanged()
-                        (e.source as StatSelector).focusStat(destination)
-                        afterModification()
+                        if (moveStatTo(board, value, destination)) {
+                            (e.source as StatSelector).dataChanged()
+                            (e.source as StatSelector).focusStat(destination)
+                            afterModification()
+                        }
                     }
                 }
-            }
-        }, contextOptions, upStroke, downStroke, this.frameForRelativePositioning, this.worldData.isSuperZZT, { x, y -> this.canvas.setIndicate(x, y)})
+            },
+            contextOptions,
+            upStroke,
+            downStroke,
+            this.frameForRelativePositioning,
+            this.worldData.isSuperZZT,
+            { x, y -> this.canvas.setIndicate(x, y) })
     }
 
+    private fun getKeystroke(stroke: String): KeyStroke = getKeyStroke(this.globalEditor, stroke)
     private fun moveStatTo(board: Board, src: Int, destination: Int): Boolean {
         var destination = destination
         if (src < 1) {
@@ -3234,40 +3230,57 @@ class WorldEditor @JvmOverloads constructor(
         return true
     }
 
-
-    private fun openTileEditor(
-        tile: Tile,
-        board: Board?,
-        x: Int,
-        y: Int,
-        callback: TileEditorCallback,
-        advanced: Boolean
-    ) {
-        TileEditor(this, board!!, tile, null, callback, x, y, advanced, -1, false)
-    }
-
-    private fun openTileEditorExempt(
-        tile: Tile,
-        board: Board?,
-        x: Int,
-        y: Int,
-        callback: TileEditorCallback,
-        advanced: Boolean
-    ) {
-        TileEditor(this, board!!, tile, null, callback, x, y, advanced, -1, true)
-    }
-
-    private fun openTileEditor(
-        stats: List<Stat>,
-        board: Board,
-        x: Int,
-        y: Int,
+    private fun openCurrentTileEditor(
         callback: TileEditorCallback,
         advanced: Boolean,
-        selected: Int
-    ) {
-        TileEditor(this, board, null, stats, callback, x, y, advanced, selected, false)
-    }
+        exempt: Boolean,
+        tile: Tile,
+    ) =
+        createTileEditor(
+            board = currentBoard,
+            x = -1,
+            y = -1,
+            stats = null,
+            tile = tile,
+            advanced = advanced,
+            exempt = exempt,
+            callback = callback,
+            selected = -1
+        )
+
+    private fun createTileEditor(
+        callback: TileEditorCallback,
+        advanced: Boolean,
+        exempt: Boolean,
+        board: Board?,
+        x: Int,
+        y: Int,
+        stats: List<Stat>? = null,
+        tile: Tile? = null,
+        selected: Int = -1,
+    ) =
+        TileEditor(
+            this,
+            this.boardXOffset,
+            this.boardYOffset,
+            this.boardIdx,
+            this.worldData.isSuperZZT,
+            this.boards,
+            this.canvas,
+            this.frameForRelativePositioning,
+            board!!,
+            tile,
+            stats,
+            callback,
+            x,
+            y,
+            advanced,
+            selected,
+            exempt,
+            { x, y -> this.canvas.setIndicate(x, y) },
+            this::getKeystroke
+        )
+
 
     private fun setStats(board: Board, bx: Int, by: Int, x: Int, y: Int, stats: List<Stat>) {
         // If any stats move, invalidate the entire board

@@ -703,9 +703,9 @@ object GlobalEditor {
         var startFrom = 0
         for (i in 0 until recentMax) {
             val key = String.format("RECENT_%d", i)
-            val `val` = getString(key)
-            if (`val` != null) {
-                if (`val` == path.toString()) {
+            val value = getString(key)
+            if (value != null) {
+                if (value == path.toString()) {
                     startFrom = i
                     break
                 }
@@ -740,9 +740,9 @@ object GlobalEditor {
         val recentMax = getInt("RECENT_MAX", 10)
         for (i in 0 until recentMax) {
             val key = String.format("RECENT_%d", i)
-            val `val` = getString(key)
-            if (`val` != null) {
-                if (`val` == recentFileName) {
+            val value = getString(key)
+            if (value != null) {
+                if (value == recentFileName) {
                     for (j in i until recentMax) {
                         val jkey = String.format("RECENT_%d", j)
                         if (isKey(jkey)) {
