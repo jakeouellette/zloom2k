@@ -3561,15 +3561,30 @@ class WorldEditor @JvmOverloads constructor(
         bufferPane.repaint()
     }
 
+    enum class EditType {
+        TEXT_ENTRY, DRAWING, SELECTING, EDITING
+    }
+    private fun getBrushMode() : EditType {
+        if (textEntry) {
+            return EditType.TEXT_ENTRY
+        } else if (drawing) {
+            return EditType.DRAWING
+        } else if (GlobalEditor.isBlockBuffer() || moveBlockW != 0) {
+            return EditType.SELECTING
+        }
+
+        return EditType.EDITING
+    }
     private fun updateEditingMode() {
         val enter = keyStrokeString(getKeyStroke(globalEditor, "Enter"))
-        if (textEntry) editingModePane.display(Color.YELLOW, "Type to place text")
+        val brushMode = getBrushMode()
+        if (brushMode == EditType.TEXT_ENTRY) editingModePane.display(Color.YELLOW, "Type to place text")
         else if (blockStartX != -1) editingModePane.display(
             arrayOf(Color(0, 127, 255), Color.CYAN),
             "$enter on other corner"
         )
-        else if (drawing) editingModePane.display(Color.GREEN, "Drawing")
-        else if (GlobalEditor.isBlockBuffer() || moveBlockW != 0) editingModePane.display(
+        else if (brushMode == EditType.DRAWING) editingModePane.display(Color.GREEN, "Drawing")
+        else if (brushMode == EditType.SELECTING) editingModePane.display(
             arrayOf(
                 Color.ORANGE,
                 Color.RED

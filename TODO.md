@@ -19,6 +19,17 @@ Convert common Idioms / edit modes into different brush selections in a dropdown
 * Gradient Fill
 * Drawing
 
+When in selection mode:
+
+Currently, Clicking begins selection
+Hitting Enter ends selection
+Clicking again adjusts the second block.
+
+Change to:
+
+Clicking once begins selection, releasing ends selection
+Clicking again starts a new selection.
+
 
 ## Random
 
