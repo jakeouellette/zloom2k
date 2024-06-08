@@ -4,6 +4,8 @@ import zedit2.util.Data
 import zedit2.model.Atlas
 import zedit2.util.ImageExtractors
 import zedit2.util.ImageExtractors.ExtractionResponse
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import zedit2.util.TilePainters
 import java.awt.*
 import java.awt.event.*
@@ -18,7 +20,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JPanel(), MouseListener,
+class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JPanel(), MouseListener, FocusListener,
     MouseMotionListener, MouseWheelListener, ImageRetriever {
     lateinit var charset: ByteArray
         private set
@@ -69,6 +71,8 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         addMouseListener(this)
         addMouseMotionListener(this)
         addMouseWheelListener(this)
+        this.isFocusable = true
+        addFocusListener(this)
     }
 
     fun setBlinkMode(state: Boolean) {
@@ -571,6 +575,8 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     }
 
     override fun mouseClicked(e: MouseEvent) {
+        Logger.i(TAG) {"Requesting Focus."}
+        this.requestFocusInWindow()
         mouseMoveCommon(e)
     }
 
@@ -784,5 +790,13 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         private const val TRANSPARENT = 0x00000000
 
         private val charBufferCache = WeakHashMap<Int, BufferedImage?>()
+    }
+
+    override fun focusGained(e: FocusEvent?) {
+        Logger.i(TAG) {"Focus gained, $e"}
+    }
+
+    override fun focusLost(e: FocusEvent?) {
+        Logger.i(TAG) {"Focus lost, $e"}
     }
 }

@@ -82,8 +82,8 @@ class CodeEditor(
 
         form = object : JDialog() {
             init {
-                this.modalityType = Dialog.ModalityType.APPLICATION_MODAL
-                this.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
+                this.modalityType = ModalityType.APPLICATION_MODAL
+                this.defaultCloseOperation = DISPOSE_ON_CLOSE
                 this.setIconImage(icon)
                 val codeEditor = this@CodeEditor
                 this.addWindowListener(object : WindowAdapter() {
@@ -91,7 +91,11 @@ class CodeEditor(
                         if (listener != null) {
                             stopAudio()
                             val act =
-                                ActionEvent(codeEditor, ActionEvent.ACTION_PERFORMED, if (readOnly) "readOnly" else "update")
+                                ActionEvent(
+                                    codeEditor,
+                                    ActionEvent.ACTION_PERFORMED,
+                                    if (readOnly) "readOnly" else "update"
+                                )
                             listener.actionPerformed(act)
                         }
                         val currentDialog = findDialog
@@ -122,6 +126,7 @@ class CodeEditor(
                 val size = this.preferredSize
                 super.setBounds(x, y, max(size.width.toDouble(), width.toDouble()).toInt(), height)
             }
+
             init {
                 this.setSelectionColor(propCol("EDITOR_SELECTION_COL", "FF0000"))
                 this.setSelectedTextColor(propCol("EDITOR_SELECTED_TEXT_COL", "000000"))
@@ -129,14 +134,14 @@ class CodeEditor(
                 this.addMouseMotionListener(this@CodeEditor)
                 this.addKeyListener(this@CodeEditor)
                 val initialText = CP437.toUnicode(stat.code, false)
-                this.setText(initialText)
+                this.text = initialText
                 lastText = initialText
 
 
                 cd.reHighlight()
                 this.setCaretPosition(0)
                 recordUndo = true
-                this.getDocument().addDocumentListener(object : DocumentListener {
+                this.document.addDocumentListener(object : DocumentListener {
                     override fun insertUpdate(e: DocumentEvent) {
                         if (recordUndo) addUndo(true, e.length, e.offset)
                         upd(true, e.length, e.offset)
@@ -159,16 +164,15 @@ class CodeEditor(
                 })
                 this.addCaretListener { upd() }
                 if (readOnly) {
-                    this.setEditable(false)
-                    this.getCaret().isVisible = true
-                    this.getCaret().isSelectionVisible = true
+                    this.isEditable = false
+                    this.caret.isVisible = true
+                    this.caret.isSelectionVisible = true
                     this.setCursor(Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR))
                 }
                 this.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4))
 
             }
         }
-
 
 
         val scroll = JScrollPane(editor)
@@ -570,7 +574,7 @@ class CodeEditor(
 
     private fun find(replace: Boolean) {
         if (findDialog != null) {
-            Logger.i(TAG) {"Closing"}
+            Logger.i(TAG) { "Closing" }
             findDialog!!.dispose()
         }
         selFromRep = false
@@ -636,6 +640,7 @@ class CodeEditor(
                 this.pack()
                 this.setLocationRelativeTo(form)
                 this.isVisible = true
+                Logger.i(TAG) {"Requesting Focus."}
                 findTextField.requestFocusInWindow()
             }
         }

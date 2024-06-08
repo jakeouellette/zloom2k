@@ -11,6 +11,8 @@ import zedit2.model.Board
 import zedit2.model.IconFactory
 import zedit2.model.Stat
 import zedit2.model.Tile
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import zedit2.util.SZZTType
 import zedit2.util.ZType
 import zedit2.util.ZZTType
@@ -717,6 +719,7 @@ class TileEditor(
     }
 
     private fun restoreFocus(container: Container, focusedElement: String, listener: KeyListener) {
+        Logger.i(TAG) {"Restore Focus"}
         val components = container.components
         for (component in components) {
             if (component is JComponent) {
@@ -724,6 +727,7 @@ class TileEditor(
                 jcomponent.addKeyListener(listener)
                 val tooltip = jcomponent.toolTipText
                 if (tooltip != null && tooltip == focusedElement) {
+                    Logger.i(TAG) {"Requesting Focus."}
                     jcomponent.requestFocusInWindow()
                     return
                 }

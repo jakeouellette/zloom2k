@@ -125,13 +125,14 @@ object Util {
 
     @JvmStatic
     fun addKeybind(ge: GlobalEditor, receiver: KeyActionReceiver, component: JComponent, actionName: String) {
+
         if (actionName.isBlank()) return
         val keyStroke = getKeyStroke(ge, actionName) ?: return
-        component.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(keyStroke, actionName)
+        component.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(keyStroke, actionName)
         if ((keyStroke.modifiers or InputEvent.ALT_DOWN_MASK) != 0) {
             val altgrMod = keyStroke.modifiers or InputEvent.ALT_GRAPH_DOWN_MASK
             val altgrKeyStroke = KeyStroke.getKeyStroke(keyStroke.keyCode, altgrMod)
-            component.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(altgrKeyStroke, actionName)
+            component.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(altgrKeyStroke, actionName)
         }
         component.actionMap.put(actionName, object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent) {

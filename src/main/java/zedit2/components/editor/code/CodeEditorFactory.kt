@@ -3,21 +3,17 @@ package zedit2.components.editor.code
 import zedit2.components.WorldEditor
 import zedit2.model.Board
 import zedit2.model.Stat
-import zedit2.model.Tile
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
-import zedit2.util.ZType
 import java.awt.Component
 import java.awt.Image
-import java.awt.event.ActionEvent
 import java.awt.event.ActionListener
-import java.awt.image.BufferedImage
 import javax.swing.JOptionPane
 
 object CodeEditorFactory {
     fun create(
-        tileX : Int,
-        tileY : Int,
+        tileX: Int,
+        tileY: Int,
         editExempt: Boolean,
         relativeFrame: Component,
         worldEditor: WorldEditor,
@@ -27,12 +23,14 @@ object CodeEditorFactory {
         listener: ActionListener = ActionListener { e ->
             if (e!!.actionCommand == "update") {
                 Logger.i(TAG) { "$e, $stat" }
-                Logger.i(TAG) { "Output:\n" +
-                        "$tileX\n" +
-                        "$tileY\n" +
-                        "$editExempt\n" +
-                        "$relativeFrame\n" +
-                "${board.getName()}"}
+                Logger.i(TAG) {
+                    "Output:\n" +
+                            "$tileX\n" +
+                            "$tileY\n" +
+                            "$editExempt\n" +
+                            "$relativeFrame\n" +
+                            "${board.getName()}"
+                }
                 val source = e.source as CodeEditor
                 stat!!.code = source.code
             }

@@ -10,6 +10,8 @@ import zedit2.model.Board
 import zedit2.model.ElementListModel
 import zedit2.model.WorldData
 import zedit2.util.LimitDocFilter
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.awt.*
 import java.awt.Dialog.ModalityType
 import java.awt.event.*
@@ -869,12 +871,14 @@ class Settings(private val onMenuCreateRequested: ()-> Unit,
         val btnFocus: FocusListener = object : FocusListener {
             var storedBg: Color = Color.MAGENTA
             override fun focusGained(e: FocusEvent) {
+                Logger.i(TAG) { "Focus on settings"}
                 val tf = e.source as JTextField
                 storedBg = tf.background
                 tf.background = Color.WHITE
             }
 
             override fun focusLost(e: FocusEvent) {
+                Logger.i(TAG) {"Focus Lost. $e"}
                 val tf = e.source as JTextField
                 tf.background = storedBg
             }

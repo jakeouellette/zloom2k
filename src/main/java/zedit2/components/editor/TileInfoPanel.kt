@@ -7,23 +7,28 @@ import zedit2.model.Tile
 import zedit2.model.WorldData
 import zedit2.util.Constants
 import zedit2.util.Constants.EDITOR_FONT
-import zedit2.util.ImageExtractors
 import zedit2.util.ZType
 import java.awt.BorderLayout
-import java.awt.Image
-import java.awt.image.BufferedImage
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 import javax.swing.border.TitledBorder
 
-class TileInfoPanel(val dosCanvas: DosCanvas, worldData: WorldData, title: String, cursorTile : Tile, currentBoard : Board, onBlinkingImageIconAdded: (BlinkingImageIcon) -> Unit) : JPanel(BorderLayout()) {
+class TileInfoPanel(
+    val dosCanvas: DosCanvas,
+    worldData: WorldData,
+    title: String,
+    cursorTile: Tile,
+    currentBoard: Board,
+    onBlinkingImageIconAdded: (BlinkingImageIcon) -> Unit
+) : JPanel(BorderLayout()) {
     init {
         val tileLabel = createLabel(worldData, cursorTile, onBlinkingImageIconAdded)
 
         //this.setText("<html>Test</html>");
         //this.add(label);
-        this.border = TitledBorder(null, title, TitledBorder.LEADING, TitledBorder.DEFAULT_POSITION, Constants.EDITOR_FONT, null)
+        this.border =
+            TitledBorder(null, title, TitledBorder.LEADING, TitledBorder.DEFAULT_POSITION, EDITOR_FONT, null)
 
         this.add(tileLabel, BorderLayout.NORTH)
         if (cursorTile.stats.isNotEmpty()) {
@@ -123,12 +128,17 @@ class TileInfoPanel(val dosCanvas: DosCanvas, worldData: WorldData, title: Strin
             tileInfo.append("</html>")
             tileInfoBox.horizontalAlignment = SwingConstants.LEFT
             tileInfoBox.text = tileInfo.toString()
-            tileInfoBox.font = Constants.EDITOR_FONT
+            tileInfoBox.font = EDITOR_FONT
             // TODO(jakeouellette) add edit buttons here
             this.add(tileInfoBox, BorderLayout.CENTER)
         }
     }
-    private fun createLabel(worldData: WorldData, cursorTile: Tile, onBlinkingImageIconAdded: (BlinkingImageIcon) -> Unit): JLabel {
+
+    private fun createLabel(
+        worldData: WorldData,
+        cursorTile: Tile,
+        onBlinkingImageIconAdded: (BlinkingImageIcon) -> Unit
+    ): JLabel {
         val szzt = worldData.isSuperZZT
         val chr = ZType.getChar(szzt, cursorTile)
         val col = ZType.getColour(szzt, cursorTile)
@@ -145,7 +155,7 @@ class TileInfoPanel(val dosCanvas: DosCanvas, worldData: WorldData, title: Strin
             init {
                 //        tileLabel.font = Font(Font.SANS_SERIF, Font.BOLD, 14)
                 this.font = EDITOR_FONT
-            this.icon = tileLabelIcon
+                this.icon = tileLabelIcon
                 this.text = name
             }
         }

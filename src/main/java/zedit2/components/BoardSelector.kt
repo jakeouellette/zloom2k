@@ -2,6 +2,8 @@ package zedit2.components
 
 import zedit2.model.Board
 import zedit2.util.CP437
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.awt.Color
 import java.awt.Component
 import java.awt.event.*
@@ -17,6 +19,7 @@ class BoardSelector(
     currentBoard : Int,
     private val frameForPositioning: Component,
     private val onBoardAddRequested: () -> Unit,
+    private val onBoardFocusRequested: () -> Unit,
     private val boards: ArrayList<Board>,
     private val listener: ActionListener
 ) : JList<String?>() {
@@ -41,6 +44,11 @@ class BoardSelector(
         val boardSelector = this
         this.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
+                Logger.i(TAG) {"Key Processed"}
+                // TODO(jakeouellette): Fix the fact that this doesn't use keymappings.
+                if (e.keyCode == KeyEvent.VK_B) {
+                    onBoardFocusRequested()
+                }
                 if (e.keyCode == KeyEvent.VK_ENTER) {
                     this@BoardSelector.selectBoard()
                     e.consume()
@@ -55,6 +63,16 @@ class BoardSelector(
                 }
             }
         })
+        this.addFocusListener(object : FocusListener {
+            override fun focusGained(e: FocusEvent?) {
+                Logger.i(this@BoardSelector.TAG) {"Focus gained, $e"}
+            }
+
+            override fun focusLost(e: FocusEvent?) {
+                Logger.i(this@BoardSelector.TAG) {"Focus lost, $e"}
+            }
+        })
+        this.isFocusable = true
 
         this.addListSelectionListener { e: ListSelectionEvent? ->
             val boardIdx = this.selectedIndex
@@ -62,6 +80,7 @@ class BoardSelector(
                 listener.actionPerformed(ActionEvent(boardSelector, ActionEvent.ACTION_PERFORMED, boardIdx.toString()))
             }
         }
+
 
         this.ensureIndexIsVisible(currentBoard)
 

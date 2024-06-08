@@ -1,7 +1,6 @@
 package zedit2.components.editor
 
 import net.miginfocom.swing.MigLayout
-import zedit2.util.ZType
 import java.awt.event.ActionEvent
 import javax.swing.JButton
 import javax.swing.JPanel
@@ -38,7 +37,7 @@ class BrushMenuPanel(
                 selectColorButton.addActionListener(onEditColorSelected)
                 this.add(selectColorButton)
 
-                if(shouldShowViewCode) {
+                if (shouldShowViewCode) {
                     val editCodeButton = JButton("View Code")
                     editCodeButton.addActionListener(onCodeSaved)
                     this.add(editCodeButton)

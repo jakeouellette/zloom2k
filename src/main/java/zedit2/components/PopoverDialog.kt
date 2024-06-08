@@ -1,5 +1,7 @@
 package zedit2.components
 
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.awt.Dialog
 import java.awt.Frame
 import java.awt.Window
@@ -18,10 +20,13 @@ class PopoverDialog : JDialog{
         this.addWindowFocusListener(object : WindowFocusListener {
             override fun windowGainedFocus(e: WindowEvent) {
                 //do nothing
+                Logger.i(TAG) {"Focus Gained. $e"}
             }
 
             override fun windowLostFocus(e: WindowEvent) {
+                Logger.i(TAG) {"Focus lost. $e"}
                 if (e.oppositeWindow != null && SwingUtilities.isDescendingFrom(e.oppositeWindow, this@PopoverDialog)) {
+                    Logger.i(TAG) {"Descending..."}
                     return
                 }
 //                this@ClickAwayDialog.isVisible = false

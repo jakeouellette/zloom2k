@@ -1,6 +1,8 @@
 package zedit2.components
 
 import zedit2.event.KeyActionReceiver
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.awt.*
 import java.awt.event.*
 import javax.swing.JDialog
@@ -31,6 +33,16 @@ class ColourSelector(
 
     init {
         this.addMouseListener(this)
+        this.addFocusListener(object : FocusListener {
+            override fun focusGained(e: FocusEvent?) {
+                Logger.i(this@ColourSelector.TAG) {"Focus Gained"}
+            }
+
+            override fun focusLost(e: FocusEvent?) {
+                Logger.i(this@ColourSelector.TAG) {"Focus Lost"}
+            }
+
+        })
         this.selectorMode = selectorMode
         if (selectorMode == CHAR) wrap = true
         dialog = outerDialog
@@ -65,6 +77,7 @@ class ColourSelector(
         if (selectorMode == CHAR) {
             dialog.addKeyListener(object : KeyAdapter() {
                 override fun keyTyped(e: KeyEvent) {
+                    Logger.i(this@ColourSelector.TAG) { "Captured Key Event. $e"}
                     val c = e.keyChar.code
                     if (c >= 32 && c <= 127) {
                         oX = c % oWidth
@@ -239,10 +252,14 @@ class ColourSelector(
             colourSelectorDialog.isUndecorated = true
             val ge = editor.globalEditor
             val cs = ColourSelector(ge, col, colourSelectorDialog, listener, editor.canvas, selectorMode)
+            Logger.i(TAG) { "Requesting focus for color selector" }
+            // FIXME(jakeouellette): The color selector is busted.
+            cs.requestFocusInWindow()
             colourSelectorDialog.contentPane.add(cs)
             colourSelectorDialog.pack()
             colourSelectorDialog.setLocationRelativeTo(relativeTo)
             colourSelectorDialog.isVisible = true
+
         }
     }
 }

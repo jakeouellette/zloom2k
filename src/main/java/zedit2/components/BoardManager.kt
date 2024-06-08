@@ -1,15 +1,19 @@
 package zedit2.components
 
+import zedit2.event.OnBoardUpdatedCallback
 import zedit2.model.Board
 import zedit2.model.CompatWarning
 import zedit2.model.WorldData
 import zedit2.util.CP437
 import zedit2.util.ZType
 import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.Frame
 import java.awt.GridLayout
 import java.awt.event.ActionListener
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
+import java.awt.event.WindowListener
 import java.io.File
 import java.io.IOException
 import javax.swing.*
@@ -19,12 +23,17 @@ import javax.swing.table.TableCellEditor
 import javax.swing.table.TableCellRenderer
 
 class BoardManager @JvmOverloads constructor(
-    private val editor: WorldEditor,
+    private val imageRetriever: ImageRetriever,
+    private val onWindowClosed: WindowListener,
+    private val frameForRelativePositioning: Component,
+    private val onBoardUpdatedCallback: OnBoardUpdatedCallback,
+    private var worldData :WorldData,
     private var boards: List<Board>,
+    private var currentIndex : Int,
+    deleteBoard : Int? = null,
     private val modal: Boolean = true
 ) {
     private var dialog: JDialog? = null
-    private var worldData: WorldData
     private lateinit var table: JTable
     private lateinit var tableModel: AbstractTableModel
     private val szzt: Boolean
@@ -35,28 +44,26 @@ class BoardManager @JvmOverloads constructor(
 
     init {
         // TODO(jakeouellette): Handle more gracefully this null check
-        worldData = editor.worldData
         szzt = worldData.isSuperZZT
 
         updateBoardSelectArray()
         generateTable()
-    }
-
-    constructor(editor: WorldEditor, boards: List<Board>, deleteBoard: Int) : this(editor, boards, false) {
-        if (boards.size > 1) {
-            table.clearSelection()
-            table.rowSorter.sortKeys = null
-            table.addRowSelectionInterval(deleteBoard, deleteBoard)
-            SwingUtilities.invokeLater { this.delSelected() }
-        } else {
-            JOptionPane.showMessageDialog(
-                dialog,
-                "Can't delete the only board.",
-                "Board deletion error",
-                JOptionPane.ERROR_MESSAGE
-            )
-        }
-        dialog?.dispose()
+            if(deleteBoard != null) {
+                if (boards.size > 1) {
+                    table.clearSelection()
+                    table.rowSorter.sortKeys = null
+                    table.addRowSelectionInterval(deleteBoard, deleteBoard)
+                    SwingUtilities.invokeLater { this.delSelected() }
+                } else {
+                    JOptionPane.showMessageDialog(
+                        dialog,
+                        "Can't delete the only board.",
+                        "Board deletion error",
+                        JOptionPane.ERROR_MESSAGE
+                    )
+                }
+                dialog?.dispose()
+            }
     }
 
     private fun generateTable() {
@@ -265,17 +272,13 @@ class BoardManager @JvmOverloads constructor(
                 this.defaultCloseOperation = DISPOSE_ON_CLOSE
                 this.title = "Board list"
 
-                this.setIconImage(editor.canvas.extractCharImage(240, 0x1F, 2, 2, false, "$"))
-                this.addWindowListener(object : WindowAdapter() {
-                    override fun windowClosed(e: WindowEvent) {
-                        editor.canvas.setIndicate(null, null)
-                    }
-                })
+                this.setIconImage(imageRetriever.extractCharImage(240, 0x1F, 2, 2, false, "$"))
+                this.addWindowListener(onWindowClosed)
                 this.contentPane.layout = BorderLayout()
                 this.add(scroll, BorderLayout.CENTER)
                 this.add(buttonPanel, BorderLayout.EAST)
                 this.pack()
-                this.setLocationRelativeTo(editor.frameForRelativePositioning)
+                this.setLocationRelativeTo(frameForRelativePositioning)
                 this.isVisible = true
             }
         }
@@ -298,7 +301,9 @@ class BoardManager @JvmOverloads constructor(
                 this.isAcceptAllFileFilterUsed = false
                 if (this.showOpenDialog(dialog) == APPROVE_OPTION) {
                     val targetDir = this.selectedFile
-                    val boards = editor.boards
+                    // FIXME(jakeouellette): I made this not be the local copy,
+                    // We should make this whole function be passed in instead
+                    val boards = boards
                     for (viewRow in table.selectedRows) {
                         val modelRow = table.convertRowIndexToModel(viewRow)
                         val file = File(targetDir, "$modelRow.brd")
@@ -504,20 +509,19 @@ class BoardManager @JvmOverloads constructor(
             }
         }
 
-        // Update data structures here and in WorldEditor
-        boards = newBoardList
-        worldData = newWorldData
-        updateBoardSelectArray()
-        editor.worldData = newWorldData
-        editor.replaceBoardList(newBoardList)
-
-        val oldCurrentBoardIdx = editor.boardIdx
+        val oldCurrentBoardIdx = currentIndex
         var newCurrentBoardIdx = 0
         if (oldToNew.containsKey(oldCurrentBoardIdx)) {
             newCurrentBoardIdx = oldToNew[oldCurrentBoardIdx]!!
         }
+
+        // Update data structures here and in WorldEditor
+        boards = newBoardList
+        worldData = newWorldData
+        updateBoardSelectArray()
+        currentIndex = newCurrentBoardIdx
         //if (newCurrentBoardIdx != oldCurrentBoardIdx) {
-        editor.changeBoard(newCurrentBoardIdx)
+        onBoardUpdatedCallback.onBoardUpdated(newWorldData, newBoardList, newCurrentBoardIdx)
 
         //}
         tableModel.fireTableDataChanged()
