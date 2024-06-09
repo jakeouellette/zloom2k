@@ -3,6 +3,9 @@ package zedit2.components.editor.world
 import zedit2.components.GlobalEditor
 import zedit2.components.WorldEditor
 import zedit2.model.Tile
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
+import kotlin.math.min
 
 
 internal fun WorldEditor.operationGrabAndModify(grab: Boolean, advanced: Boolean) {
@@ -24,6 +27,7 @@ internal fun WorldEditor.operationGrabAndModify(grab: Boolean, advanced: Boolean
     val board = getBoardAt(cursorX, cursorY)
     val x = cursorX % boardW
     val y = cursorY % boardH
+
     if (tile != null && board != null) {
         createTileEditor(
             board = board,

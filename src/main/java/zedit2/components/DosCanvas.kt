@@ -1,9 +1,11 @@
 package zedit2.components
 
+import zedit2.components.editor.world.operationBlockEnd
+import zedit2.components.editor.world.operationBlockStart
+import zedit2.components.editor.world.operationGrabAndModify
 import zedit2.util.Data
 import zedit2.model.Atlas
 import zedit2.util.ImageExtractors
-import zedit2.util.ImageExtractors.ExtractionResponse
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
 import zedit2.util.TilePainters
@@ -591,9 +593,31 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
 
     override fun mousePressed(e: MouseEvent) {
         mouseMoveCommon(e, getButton(e))
+        Logger.i(TAG) { "Starting new block operation $blockStartX $blockStartY"}
+        val isMovingNow = editor.moveBlockX > -1 && editor.moveBlockY > -1
+        val isSelectingNow = blockStartX > -1 && blockStartY > -1
+        val isInSelectingMode = editor.editType == WorldEditor.EditType.SELECTING
+        // Either, if when you click you always want a new selection,
+        // or you are already selecting and selection should be refreshed
+        if ((isInSelectingMode && !(isMovingNow || isSelectingNow)) || (isSelectingNow)) {
+            editor.operationBlockStart()
+            Logger.i(TAG) { "Beginning new block operation $blockStartX $blockStartY"}
+        }
     }
 
     override fun mouseReleased(e: MouseEvent) {
+        // TODO(jakeouellette): separate this event out from operationBlockEnd:
+        // Make it so that this one uses whatever is the default behavior
+        // of the current selection brush
+        Logger.i(TAG) { "TODO: Trigger block operation $blockStartX $blockStartY"}
+        // TODO(jakeouellette) do this a very different way
+        if (editor.moveBlockX != -1 && editor.moveBlockY != -1) {
+            editor.operationGrabAndModify(true, false)
+        }
+        if (blockStartX != -1 && blockStartY != -1) {
+            editor.operationBlockEnd()
+        }
+
         mouseMoveCommon(e, 0)
     }
 
@@ -605,6 +629,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     }
 
     override fun mouseEntered(e: MouseEvent) {
+
         mouseMoveCommon(e)
     }
 
@@ -678,6 +703,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     }
 
     fun setPlacingBlock(w: Int, h: Int) {
+        Logger.i(TAG) { "setPlacingBlock $w $h"}
         this.placingBlockW = w
         this.placingBlockH = h
         repaint()

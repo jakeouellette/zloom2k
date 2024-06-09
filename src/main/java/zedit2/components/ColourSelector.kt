@@ -250,13 +250,12 @@ class ColourSelector(
             Logger.i(TAG) { "Requesting focus for color selector" }
             // FIXME(jakeouellette): The color selector is busted.
             cs.isFocusable = true
-            colourSelectorDialog.requestFocusInWindow()
 
             colourSelectorDialog.contentPane.add(cs)
             colourSelectorDialog.pack()
             colourSelectorDialog.setLocationRelativeTo(relativeTo)
             colourSelectorDialog.isVisible = true
-
+            cs.requestFocusInWindow()
         }
     }
 }

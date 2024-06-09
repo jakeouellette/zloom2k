@@ -72,6 +72,7 @@ object GlobalEditor {
     }
 
     fun setBlockBuffer(w: Int, h: Int, data: Array<Tile>?, repeated: Boolean, szzt: Boolean) {
+        Logger.i(TAG) { "Set Block Buffer: $w $h $blockBufferW, $blockBufferH"}
         blockBufferW = w
         blockBufferH = h
         blockBuffer = data
@@ -103,6 +104,7 @@ object GlobalEditor {
             blockBuffer = clip.tiles
             blockBufferSzzt = clip.isSzzt
             blockBufferRepeated = false
+            Logger.i(TAG) { "decodeBufferr: $blockBufferW, $blockBufferH"}
         }
         clearBufferSelected()
     }

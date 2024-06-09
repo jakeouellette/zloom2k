@@ -3,6 +3,8 @@ package zedit2.components
 import zedit2.util.CP437.toUnicode
 import zedit2.event.KeyActionReceiver
 import zedit2.components.ColourSelector.Companion.createColourSelector
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.awt.Component
 import java.awt.Window
 import java.awt.event.ActionEvent
@@ -136,6 +138,7 @@ object Util {
         }
         component.actionMap.put(actionName, object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent) {
+                Logger.i(this@Util.TAG) { "Action for $actionName, $e, "}
                 receiver.keyAction(actionName, e)
             }
         })

@@ -17,6 +17,7 @@ class PopoverDialog : JDialog{
     init {
         this.defaultCloseOperation = DISPOSE_ON_CLOSE
         this.isAlwaysOnTop = true
+        this.isFocusable = true
         this.addWindowFocusListener(object : WindowFocusListener {
             override fun windowGainedFocus(e: WindowEvent) {
                 //do nothing

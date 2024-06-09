@@ -71,6 +71,7 @@ class WorldEditor @JvmOverloads constructor(
     private var zoom: Double
     lateinit var lastFocusedElement : Component
     internal var undoHandler: UndoHandler = UndoHandler(this)
+    internal var selectionModeConfiguration : SelectionModeConfiguration? = null
     internal var cursorX = 0
     internal var cursorY = 0
     private var centreView = false
@@ -78,8 +79,8 @@ class WorldEditor @JvmOverloads constructor(
     internal var blockStartY = -1
     internal var moveBlockW = 0
     private var moveBlockH = 0
-    private var moveBlockX = 0
-    private var moveBlockY = 0
+    internal var moveBlockX = 0
+    internal var moveBlockY = 0
     internal var boardW = 0
     internal var boardH = 0
     internal val atlases = HashMap<Int, Atlas>()
@@ -95,6 +96,15 @@ class WorldEditor @JvmOverloads constructor(
         set(value) {
             field = value
             canvas.setDrawing(value)
+        }
+
+    // FIXME(jakeouellette): Right now edit type just switches
+    // between editing and selecting, but more types are represented
+    // by it as an enum
+    internal var editType : EditType = EditType.EDITING
+        set(value) {
+            field = value
+            // TODO(jakeouellette): Set something in the canvas?
         }
     internal var textEntry = false
         set(value) {
@@ -517,12 +527,24 @@ class WorldEditor @JvmOverloads constructor(
                         val shouldShowViewCode = tile.id == ZType.OBJECT || tile.id == ZType.SCROLL
 
                         val brushMenu = BrushMenuPanel(
-
                             shouldShowViewCode,
-                            { operationModifyBuffer(true) },
+                            { editType = EditType.SELECTING
+                                operationBlockStart()
+                            },
+                            { mode : SelectionModeConfiguration ->
+                                this@WorldEditor.selectionModeConfiguration = mode
+                            },
+                            {
+                                editType = EditType.DRAWING
+                            },
+                            {
+
+                                operationModifyBuffer(true)
+                            },
                             { operationColour() },
                             { operationBufferSwapColour() },
-                            onCodeSaved
+                            onCodeSaved,
+                            this@WorldEditor.selectionModeConfiguration
                         )
                         this.add(brushMenu)
                     }
@@ -1706,6 +1728,10 @@ class WorldEditor @JvmOverloads constructor(
         get() = max(cursorY.toDouble(), blockStartY.toDouble()).toInt()
 
     private fun afterBlockOperation(modified: Boolean) {
+        Logger.i(TAG) { "block operation $cursorX $cursorY $blockStartX $blockStartY"}
+        cursorX = min(blockStartX, cursorX)
+        cursorY = min(blockStartY, cursorY)
+        canvas.setCursor(cursorX, cursorY)
         setBlockStart(-1, -1)
         if (modified) afterModification()
         else afterUpdate()
@@ -1737,6 +1763,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     internal fun blockCopy(repeated: Boolean) {
+        Logger.i(TAG) { "blockCopy, $blockX1, $blockX2"}
         val w = blockX2 + 1 - blockX1
         val h = blockY2 + 1 - blockY1
         val blockBuffer = arrayOfNulls<Tile>(w * h)
@@ -1754,6 +1781,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     internal fun setMoveBlock(w: Int, h: Int) {
+        Logger.i(TAG) { "setMoveBlock $w $h $moveBlockW, $moveBlockH"}
         moveBlockW = w
         moveBlockH = h
         canvas.setPlacingBlock(w, h)
@@ -1770,7 +1798,8 @@ class WorldEditor @JvmOverloads constructor(
 
     internal fun blockFinishMove() {
         // Move from moveBlockX, moveBlockY, moveBlockW, moveBlockH, cursorX, cursorY
-
+        Logger.i(TAG) { "blockMove! $blockX1 $blockX2"}
+        Logger.i(TAG) { "moveBlockX! $blockX1 $blockX2"}
         val blockMap = LinkedHashMap<ArrayList<Board?>, LinkedHashMap<ArrayList<Int>?, ArrayList<Int>?>>()
         addRedraw(cursorX, cursorY, cursorX + moveBlockW - 1, cursorY + moveBlockH - 1)
         addRedraw(moveBlockX, moveBlockY, moveBlockX + moveBlockW - 1, moveBlockY + moveBlockH - 1)
