@@ -793,10 +793,10 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     }
 
     override fun focusGained(e: FocusEvent?) {
-        Logger.i(TAG) {"Focus gained, $e"}
+        Logger.i(this@DosCanvas.TAG) {"Focus gained, $e"}
     }
 
     override fun focusLost(e: FocusEvent?) {
-        Logger.i(TAG) {"Focus lost, $e"}
+        Logger.i(this@DosCanvas.TAG) {"Focus lost, $e"}
     }
 }

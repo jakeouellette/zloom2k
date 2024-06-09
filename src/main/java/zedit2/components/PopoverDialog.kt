@@ -20,13 +20,13 @@ class PopoverDialog : JDialog{
         this.addWindowFocusListener(object : WindowFocusListener {
             override fun windowGainedFocus(e: WindowEvent) {
                 //do nothing
-                Logger.i(TAG) {"Focus Gained. $e"}
+                Logger.i(this@PopoverDialog.TAG) {"Focus Gained. $e"}
             }
 
             override fun windowLostFocus(e: WindowEvent) {
-                Logger.i(TAG) {"Focus lost. $e"}
+                Logger.i(this@PopoverDialog.TAG) {"Focus lost. $e"}
                 if (e.oppositeWindow != null && SwingUtilities.isDescendingFrom(e.oppositeWindow, this@PopoverDialog)) {
-                    Logger.i(TAG) {"Descending..."}
+                    Logger.i(this@PopoverDialog.TAG) {"Descending..."}
                     return
                 }
 //                this@ClickAwayDialog.isVisible = false

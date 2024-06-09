@@ -63,16 +63,9 @@ class ColourSelector(
         oX = col % oWidth
         oY = col / oWidth
         colourPalette = canvas.extractCharImageWH(0, 0, zoomx, zoomy, false, colourPattern, oWidth, oHeight)
-        Util.addKeybind(ge, this, this, "Up")
-        Util.addKeybind(ge, this, this, "Down")
-        Util.addKeybind(ge, this, this, "Left")
-        Util.addKeybind(ge, this, this, "Right")
-        Util.addKeybind(ge, this, this, "Home")
-        Util.addKeybind(ge, this, this, "End")
-
-        Util.addKeybind(ge, this, this, "Enter")
-        Util.addKeybind(ge, this, this, "Enter")
-        Util.addKeybind(ge, this, this, "Escape")
+        listOf("Up","Down","Left","Right","Home","End","Enter","Enter","Escape").forEach {
+            Util.addKeybind(ge, this@ColourSelector, this@ColourSelector, it)
+        }
 
         if (selectorMode == CHAR) {
             dialog.addKeyListener(object : KeyAdapter() {
@@ -92,6 +85,7 @@ class ColourSelector(
     }
 
     override fun keyAction(actionName: String?, e: ActionEvent?) {
+        Logger.i(TAG) { "Key Action Pressed $actionName, $e"}
         when (actionName) {
             "Up" -> operationCursorMove(0, -1)
             "Down" -> operationCursorMove(0, 1)
@@ -250,11 +244,14 @@ class ColourSelector(
             colourSelectorDialog.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
             colourSelectorDialog.isResizable = false
             colourSelectorDialog.isUndecorated = true
+            colourSelectorDialog.isFocusable = true
             val ge = editor.globalEditor
             val cs = ColourSelector(ge, col, colourSelectorDialog, listener, editor.canvas, selectorMode)
             Logger.i(TAG) { "Requesting focus for color selector" }
             // FIXME(jakeouellette): The color selector is busted.
-            cs.requestFocusInWindow()
+            cs.isFocusable = true
+            colourSelectorDialog.requestFocusInWindow()
+
             colourSelectorDialog.contentPane.add(cs)
             colourSelectorDialog.pack()
             colourSelectorDialog.setLocationRelativeTo(relativeTo)
