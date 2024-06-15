@@ -4,7 +4,7 @@ import zedit2.components.WorldEditor
 
 internal fun WorldEditor.operationBlockStart() {
     operationCancel()
-    setBlockStart(cursorX, cursorY)
+    setBlockStart(cursorPos)
 
     afterUpdate()
 }

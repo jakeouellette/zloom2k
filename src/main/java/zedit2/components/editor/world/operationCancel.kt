@@ -3,6 +3,8 @@ package zedit2.components.editor.world
 import zedit2.components.GlobalEditor
 import zedit2.components.WorldEditor
 import zedit2.components.WorldEditor.Companion.SHOW_NOTHING
+import zedit2.model.spatial.Dim
+import zedit2.model.spatial.Pos
 
 
 internal fun WorldEditor.operationCancel(): Boolean {
@@ -17,17 +19,17 @@ internal fun WorldEditor.operationCancel(): Boolean {
         return true
     }
     if (GlobalEditor.isBlockBuffer()) {
-        setBlockBuffer(0, 0, null, false)
+        setBlockBuffer(Dim(0, 0), null, false)
         afterUpdate()
         return true
     }
-    if (blockStartX != -1) {
-        setBlockStart(-1, -1)
+    if (blockStartPos.isPositive) {
+        setBlockStart(Pos(-1, -1))
         afterUpdate()
         return true
     }
-    if (moveBlockW != 0) {
-        setMoveBlock(0, 0)
+    if (moveBlockDim.w != 0) {
+        setMoveBlock(Dim(0, 0))
         afterUpdate()
         return true
     }

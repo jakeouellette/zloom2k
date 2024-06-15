@@ -4,6 +4,7 @@ import zedit2.model.Tile
 import zedit2.util.ZType
 import zedit2.util.CP437.toUnicode
 import zedit2.model.Board
+import zedit2.model.spatial.Pos
 import java.awt.Component
 import java.awt.Dialog
 import java.awt.event.*
@@ -12,8 +13,7 @@ import javax.swing.event.ListSelectionEvent
 import javax.swing.table.AbstractTableModel
 
 class StatSelector(
-    boardXOffset: Int,
-    boardYOffset: Int,
+    boardPosOffset: Pos,
     currentBoard: Int,
     imageRetriever: ImageRetriever,
     board: Board,
@@ -88,12 +88,11 @@ case COL_UCO:
             override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
                 val stat =
                     board.getStat(rowIndex) ?: throw RuntimeException("expected board to have stat at row $rowIndex")
-                val x = stat.x - 1
-                val y = stat.y - 1
-                val tile = if (x >= 0 && y >= 0 && x < board.width && y < board.height) {
-                    board.getTile(x, y, false)
+                val pos = stat.pos - 1
+                val tile = if (pos.inside(0,0,board.width-1, board.height-1)) {
+                    board.getTile(pos, false)
                 } else {
-                    Tile(-1, -1, board.getStatsAt(x, y))
+                    Tile(-1, -1, board.getStatsAt(pos))
                 }
 
                 when (columnIndex) {
@@ -119,8 +118,8 @@ case COL_UCO:
                         return ImageIcon(imageRetriever.extractCharImage(0, col, 1, 1, false, "_#_"))
                     }
 
-                    COL_X -> return x + 1
-                    COL_Y -> return y + 1
+                    COL_X -> return pos.x + 1
+                    COL_Y -> return pos.y + 1
                     COL_NAME -> {
                         run {
                             val codeLen = stat.codeLength
@@ -234,13 +233,11 @@ case COL_UCO:
             val indicateY = IntArray(rows.size)
             for (i in rows.indices) {
                 val row = table.convertRowIndexToModel(rows[i])
-                var x = board.getStat(row)!!.x - 1
-                var y = board.getStat(row)!!.y - 1
-                if (x >= 0 && y >= 0 && x < board.width && y < board.height) {
-                    x += boardXOffset
-                    y += boardYOffset
-                    indicateX[i] = x
-                    indicateY[i] = y
+                var pos = board.getStat(row)!!.pos - 1
+                if (pos.inside(0, 0, board.width-1, board.height-1)) {
+                    pos += boardPosOffset
+                    indicateX[i] = pos.x
+                    indicateY[i] = pos.y
                 } else {
                     indicateX[i] = -1
                     indicateY[i] = -1

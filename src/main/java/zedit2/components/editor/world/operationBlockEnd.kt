@@ -14,10 +14,8 @@ import kotlin.math.min
 
 
 internal fun WorldEditor.operationBlockEnd() {
-    val savedBlockstartx = blockStartX
-    val savedBlockstarty = blockStartY
-    val savedCursorx = cursorX
-    val savedCursory = cursorY
+    val savedBlockstart = blockStartPos
+    val savedCursorPos = cursorPos
     val lastSelectionModeConfiguration = this.selectionModeConfiguration
     if (lastSelectionModeConfiguration != null) {
         operateOnMenuItem(lastSelectionModeConfiguration.description)
@@ -27,7 +25,7 @@ internal fun WorldEditor.operationBlockEnd() {
     popupMenu.addPopupMenuListener(this)
     val menuItems = SelectionModeConfiguration.entries.map { it.description }
     val listener = ActionListener { e: ActionEvent ->
-        if (blockStartX != savedBlockstartx || blockStartY != savedBlockstarty || cursorX != savedCursorx || cursorY != savedCursory) return@ActionListener
+        if (blockStartPos != savedBlockstart || cursorPos != savedCursorPos) return@ActionListener
         val menuItem = (e.source as JMenuItem).text
         operateOnMenuItem(menuItem)
     }

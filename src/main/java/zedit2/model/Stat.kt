@@ -2,6 +2,7 @@ package zedit2.model
 
 import zedit2.util.CP437.toUnicode
 import zedit2.components.Util
+import zedit2.model.spatial.Pos
 import java.util.*
 
 class Stat(szzt: Boolean = false,
@@ -126,7 +127,7 @@ class Stat(szzt: Boolean = false,
         Util.setInt16(worldData, offset + 21, ip)
         Util.setInt16(worldData, offset + 23, codeLength)
         System.arraycopy(padding, 0, worldData, offset + 25, padding.size)
-        offset = offset + 25 + padding.size
+        offset += 25 + padding.size
         if (codeLength > 0) {
             System.arraycopy(code, 0, worldData, offset, codeLength)
             offset += codeLength
@@ -138,7 +139,12 @@ class Stat(szzt: Boolean = false,
     val statSize: Int
         get() = 25 + padding.size + code.size
 
-
+    var pos : Pos
+        get() = Pos(x, y)
+        set(xy : Pos) {
+            this.x = xy.x
+            this.y = xy.y
+        }
 
     /*
         original zedit padding bytes:

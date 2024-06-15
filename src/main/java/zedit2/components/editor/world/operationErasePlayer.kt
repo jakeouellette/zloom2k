@@ -4,11 +4,10 @@ import zedit2.components.WorldEditor
 
 
 internal fun WorldEditor.operationErasePlayer() {
-    val x = boardXOffset + currentBoard!!.getStat(0)!!.x - 1
-    val y = boardYOffset + currentBoard!!.getStat(0)!!.y - 1
+    val xy = boardPosOffset + currentBoard!!.getStat(0)!!.pos - 1
 
     erasePlayer(currentBoard)
-    addRedraw(x, y, x, y)
+    addRedraw(xy,xy)
 
     afterModification()
 }

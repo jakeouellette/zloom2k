@@ -1,5 +1,6 @@
 package zedit2.model
 
+import zedit2.model.spatial.Pos
 import zedit2.util.SZZTType
 import zedit2.util.ZZTType
 
@@ -29,13 +30,13 @@ class BufferBoard(override val isSuperZZT: Boolean, override var width: Int, ove
             throw UnsupportedOperationException("Invalid for buffer boards")
         }
 
-    public override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, x: Int, y: Int) {
+    public override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, posI: Int, xy: Pos) {
         if (!isSuperZZT) {
-            cols!![pos] = ZZTType.getColour(this, x, y).toByte()
-            chars!![pos] = ZZTType.getChar(this, x, y).toByte()
+            cols!![posI] = ZZTType.getColour(this, xy).toByte()
+            chars!![posI] = ZZTType.getChar(this, xy).toByte()
         } else {
-            cols!![pos] = SZZTType.getColour(this, x, y).toByte()
-            chars!![pos] = SZZTType.getChar(this, x, y).toByte()
+            cols!![posI] = SZZTType.getColour(this, xy).toByte()
+            chars!![posI] = SZZTType.getChar(this, xy).toByte()
         }
     }
 

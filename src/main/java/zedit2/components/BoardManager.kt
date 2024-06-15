@@ -446,10 +446,9 @@ class BoardManager @JvmOverloads constructor(
             // Check passages. We can only check passages that currently exist, so hopefully there's no stat muckery
             for (statIdx in 0 until board.statCount) {
                 val stat = board.getStat(statIdx)
-                val x = stat!!.x - 1
-                val y = stat.y - 1
-                if (x >= 0 && y >= 0 && x < board.width && y < board.height) {
-                    val tid = board.getTileId(x, y)
+                val pos = stat!!.pos - 1
+                if (pos.inside(0, 0, board.width-1, board.height -1)) {
+                    val tid = board.getTileId(pos)
 
                     // Passages are the same in ZZT and SuperZZT
                     if (tid == ZType.PASSAGE) {
@@ -466,8 +465,7 @@ class BoardManager @JvmOverloads constructor(
                                     1,
                                     String.format(
                                         " has a passage at %d,%d pointing to a board being deleted. It will now point to the title screen.",
-                                        x + 1,
-                                        y + 1
+                                        pos + 1
                                     )
                                 )
                                 stat.p3 = 0

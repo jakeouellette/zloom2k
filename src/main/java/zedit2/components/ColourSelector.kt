@@ -1,6 +1,7 @@
 package zedit2.components
 
 import zedit2.event.KeyActionReceiver
+import zedit2.model.spatial.Dim
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
 import java.awt.*
@@ -62,7 +63,7 @@ class ColourSelector(
         }
         oX = col % oWidth
         oY = col / oWidth
-        colourPalette = canvas.extractCharImageWH(0, 0, zoomx, zoomy, false, colourPattern, oWidth, oHeight)
+        colourPalette = canvas.extractCharImageWH(0, 0, zoomx, zoomy, false, colourPattern, Dim(oWidth, oHeight))
         listOf("Up","Down","Left","Right","Home","End","Enter","Enter","Escape").forEach {
             Util.addKeybind(ge, this@ColourSelector, this@ColourSelector, it)
         }
