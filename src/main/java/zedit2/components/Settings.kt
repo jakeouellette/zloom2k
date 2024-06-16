@@ -9,6 +9,7 @@ import zedit2.model.ElementListModel.Companion.transferHandler
 import zedit2.model.Board
 import zedit2.model.ElementListModel
 import zedit2.model.WorldData
+import zedit2.model.spatial.Pos
 import zedit2.util.LimitDocFilter
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
@@ -1266,17 +1267,17 @@ class Settings(private val onMenuCreateRequested: ()-> Unit,
                 cp.add(darkPanel)
             } else {
                 val cxPanel = JPanel(BorderLayout())
-                val cxSpinner = JSpinner(SpinnerNumberModel(currentBoard.cameraX, -32768, 32767, 1))
+                val cxSpinner = JSpinner(SpinnerNumberModel(currentBoard.cameraPos.x, -32768, 32767, 1))
                 cxPanel.add(JLabel("Camera X:    "), BorderLayout.WEST)
                 cxPanel.add(cxSpinner, BorderLayout.EAST)
-                cxSpinner.addChangeListener { e: ChangeEvent? -> currentBoard.cameraX = (cxSpinner.value as Int) }
+                cxSpinner.addChangeListener { e: ChangeEvent? -> currentBoard.cameraPos = Pos((cxSpinner.value as Int), currentBoard.cameraPos.y) }
                 cp.add(cxPanel)
 
                 val cyPanel = JPanel(BorderLayout())
-                val cySpinner = JSpinner(SpinnerNumberModel(currentBoard.cameraY, -32768, 32767, 1))
+                val cySpinner = JSpinner(SpinnerNumberModel(currentBoard.cameraPos.y, -32768, 32767, 1))
                 cyPanel.add(JLabel("Camera Y:    "), BorderLayout.WEST)
                 cyPanel.add(cySpinner, BorderLayout.EAST)
-                cySpinner.addChangeListener { e: ChangeEvent? -> currentBoard.cameraY = (cySpinner.value as Int) }
+                cySpinner.addChangeListener { e: ChangeEvent? -> currentBoard.cameraPos = Pos(currentBoard.cameraPos.x, cySpinner.value as Int) }
                 cp.add(cyPanel)
             }
 

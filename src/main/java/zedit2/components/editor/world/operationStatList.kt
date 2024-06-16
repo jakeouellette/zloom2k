@@ -94,5 +94,5 @@ internal fun WorldEditor.operationStatList() {
         downStroke,
         this.frameForRelativePositioning,
         this.worldData.isSuperZZT,
-        { x, y -> this.canvas.setIndicate(x, y) })
+        { xys -> this.canvas.setIndicate(xys) })
 }

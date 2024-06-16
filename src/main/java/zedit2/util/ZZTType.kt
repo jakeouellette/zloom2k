@@ -91,8 +91,8 @@ object ZZTType : ZType() {
                 // For lines, the char depends on surrounding tiles
                 var lch = 15
                 if ((xy.y == 0) || isLineOrEdge(board.getTileId(xy + Pos.UP ))) lch -= 8
-                if ((xy.y == board.height - 1) || isLineOrEdge(board.getTileId(xy + Pos.DOWN))) lch -= 4
-                if ((xy.x == board.width - 1) || isLineOrEdge(board.getTileId(xy + Pos.RIGHT))) lch -= 2
+                if ((xy.y == board.dim.h - 1) || isLineOrEdge(board.getTileId(xy + Pos.DOWN))) lch -= 4
+                if ((xy.x == board.dim.w - 1) || isLineOrEdge(board.getTileId(xy + Pos.RIGHT))) lch -= 2
                 if ((xy.x == 0) || isLineOrEdge(board.getTileId(xy + Pos.LEFT))) lch -= 1
                 return linechars[lch]
             }

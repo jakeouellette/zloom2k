@@ -43,7 +43,7 @@ class TileEditor(
     advanced: Boolean,
     selected: Int,
     editExempt: Boolean,
-    private val onIndicateSet : (IntArray?, IntArray?) -> Unit,
+    private val onIndicateSet : (Array<Pos>?) -> Unit,
     val getKeystroke : (stroke : String) -> KeyStroke
 ) {
     private val editExempt: Boolean
@@ -83,7 +83,7 @@ class TileEditor(
         tilePos = xy
         if (inputTile == null) {
             if (stats != null) {
-                if (xy.inside(0, 0, board.width -1, board.height -1)) {
+                if (xy.inside(board.dim)) {
                     tile = board.getTile(xy, false)
                 } else {
                     tile = Tile(-1, -1, stats)

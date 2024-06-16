@@ -112,12 +112,9 @@ class ZZTBoard : Board {
         }
 
 
-    override var cameraX: Int
-        get() = 0
+    override var cameraPos: Pos
+        get() = Pos(0,0)
         set(x) {}
-    override var cameraY: Int
-        get() = 0
-        set(y) {}
 
     override val currentSize: Int
         /**

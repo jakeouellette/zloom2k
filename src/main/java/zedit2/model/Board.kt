@@ -581,8 +581,9 @@ abstract class Board {
 
     fun drawToCanvas(canvas: DosCanvas, offset : Pos, pos : Pos, pos2 : Pos, showing: Int) {
         finalisationCheck()
-        val arrSize = dim.arrSize
+
         val wh = (pos2 - pos + 1).dim
+        val arrSize = wh.arrSize
         //System.out.printf("Draw %d x %d\n", width, height);
         val cols = ByteArray(arrSize)
         val chars = ByteArray(arrSize)

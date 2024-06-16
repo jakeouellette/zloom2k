@@ -6,14 +6,18 @@ import zedit2.components.Util
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
 import java.awt.Dimension
+import java.awt.Point
 import kotlin.math.abs
 import kotlin.math.max
 
 data class Pos(val x: Int, val y: Int) {
+    constructor(pt: Point) : this(pt.x, pt.y)
 
     init {
         if ((x > 0 && y < 0) || (x < 0 && y > 0)) {
-            Logger.w(TAG) {"Warn: Should not have one negative value, $x, $y"}
+            // This is known to happen currently due to the scroll selection logic.
+//            Logger.w(TAG) {"Warn: Should not have one negative value, $x, $y"}
+//            RuntimeException("out").printStackTrace()
         }
     }
 

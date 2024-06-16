@@ -4,6 +4,7 @@ import zedit2.event.OnBoardUpdatedCallback
 import zedit2.model.Board
 import zedit2.model.CompatWarning
 import zedit2.model.WorldData
+import zedit2.model.spatial.Pos
 import zedit2.util.CP437
 import zedit2.util.ZType
 import java.awt.BorderLayout
@@ -134,8 +135,8 @@ class BoardManager @JvmOverloads constructor(
                     COL_EXITN, COL_EXITS, COL_EXITE, COL_EXITW -> return board.getExit(columnToExit(columnIndex))
                     else -> {
                         if (columnIndex == colDark) return board.isDark
-                        if (columnIndex == colCameraX) return board.cameraX
-                        if (columnIndex == colCameraY) return board.cameraY
+                        if (columnIndex == colCameraX) return board.cameraPos.x
+                        if (columnIndex == colCameraY) return board.cameraPos.y
                         if (columnIndex == colRestart) return board.isRestartOnZap()
                         // TODO(jakeouellette): this might not be okay. (Was previously returning a null)
                         throw RuntimeException("Unexpected column, did not map to any value.")
@@ -181,8 +182,8 @@ class BoardManager @JvmOverloads constructor(
 
                     else -> {
                         if (columnIndex == colDark) board.isDark = (value as Boolean)
-                        if (columnIndex == colCameraX) board.cameraX = (value as Int)
-                        if (columnIndex == colCameraY) board.cameraY = (value as Int)
+                        if (columnIndex == colCameraX) board.cameraPos = Pos((value as Int), board.cameraPos.y)
+                        if (columnIndex == colCameraY) board.cameraPos = Pos(board.cameraPos.x, (value as Int))
                         if (columnIndex == colRestart) board.setRestartOnZap((value as Boolean))
                     }
                 }
@@ -447,7 +448,7 @@ class BoardManager @JvmOverloads constructor(
             for (statIdx in 0 until board.statCount) {
                 val stat = board.getStat(statIdx)
                 val pos = stat!!.pos - 1
-                if (pos.inside(0, 0, board.width-1, board.height -1)) {
+                if (pos.inside(board.dim)) {
                     val tid = board.getTileId(pos)
 
                     // Passages are the same in ZZT and SuperZZT

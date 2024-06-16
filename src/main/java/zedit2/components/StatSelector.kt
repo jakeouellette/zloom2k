@@ -23,7 +23,7 @@ class StatSelector(
     downKeybind: KeyStroke?,
     frameForRelativePositioning: Component,
     isSuperZZT: Boolean,
-    onIndicateSet: (IntArray?, IntArray?) -> Unit
+    onIndicateSet: (Array<Pos>?) -> Unit
 ) {
     /*
 case COL_IMAGE:
@@ -59,7 +59,7 @@ case COL_UCO:
         dialog.setIconImage(imageRetriever.extractCharImage(240, 0x1F, 2, 2, false, "$"))
         dialog.addWindowListener(object : WindowAdapter() {
             override fun windowClosed(e: WindowEvent) {
-                onIndicateSet(null, null)
+                onIndicateSet(null)
             }
         })
 
@@ -89,7 +89,7 @@ case COL_UCO:
                 val stat =
                     board.getStat(rowIndex) ?: throw RuntimeException("expected board to have stat at row $rowIndex")
                 val pos = stat.pos - 1
-                val tile = if (pos.inside(0,0,board.width-1, board.height-1)) {
+                val tile = if (pos.inside(board.dim)) {
                     board.getTile(pos, false)
                 } else {
                     Tile(-1, -1, board.getStatsAt(pos))
@@ -229,21 +229,14 @@ case COL_UCO:
         })
         table.selectionModel.addListSelectionListener { e: ListSelectionEvent? ->
             val rows = table.selectedRows
-            val indicateX = IntArray(rows.size)
-            val indicateY = IntArray(rows.size)
-            for (i in rows.indices) {
+            onIndicateSet(Array(rows.size) { i ->
                 val row = table.convertRowIndexToModel(rows[i])
-                var pos = board.getStat(row)!!.pos - 1
-                if (pos.inside(0, 0, board.width-1, board.height-1)) {
-                    pos += boardPosOffset
-                    indicateX[i] = pos.x
-                    indicateY[i] = pos.y
+                if ((board.getStat(row)!!.pos - 1).inside(board.dim)) {
+                    boardPosOffset
                 } else {
-                    indicateX[i] = -1
-                    indicateY[i] = -1
+                    Pos.NEG_ONE
                 }
-            }
-            onIndicateSet(indicateX, indicateY)
+            })
         }
 
         val scroll = JScrollPane(table)

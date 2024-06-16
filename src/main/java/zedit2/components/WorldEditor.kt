@@ -216,7 +216,7 @@ class WorldEditor @JvmOverloads constructor(
         onBoardsUpdated(boards)
 
         val cb = worldData.currentBoard
-        boardDim = Dim(boards[0].width, boards[0].height)
+        boardDim = boards[0].dim
         cursorPos = boards[cb].getStat(0)!!.pos - 1
         centreView = true
 
@@ -228,7 +228,7 @@ class WorldEditor @JvmOverloads constructor(
         setCurrentBoard(newBoardIdx)
         atlases.remove(newBoardIdx)
         currentAtlas = null
-        gridDim = Dim(1, 1)
+        gridDim = Dim.ONE_BY_ONE
         cursorPos %= boardDim
         canvas.setCursor(cursorPos)
         Logger.i(TAG) { "bd: $boardDim, gd: $gridDim $dim"}
@@ -255,12 +255,12 @@ class WorldEditor @JvmOverloads constructor(
         val atlas = atlases[newBoardIdx]
         if (atlas != null) {
             val gridPos = checkNotNull(atlas.search(newBoardIdx))
-            val pos = Pos(gridPos[0],gridPos[1])
+            val pos = gridPos
             cursorPos = (cursorPos % boardDim) + (pos * boardDim)
             canvas.setCursor(cursorPos)
             setCurrentBoard(newBoardIdx)
             if (atlas != currentAtlas) {
-                gridDim = Dim(atlas.w, atlas.h)
+                gridDim = atlas.dim
                 grid = atlas.grid
                 dim = boardDim * gridDim
 
@@ -285,21 +285,21 @@ class WorldEditor @JvmOverloads constructor(
 
     internal fun invalidateCache() {
         voidsDrawn.clear()
-        redrawDim = Dim(0, 0)
+        redrawDim = Dim.EMPTY
     }
 
     internal fun addRedraw(pos : Pos, pos2 : Pos) {
         // Expand the range by 1 to handle lines
-        var pos = pos - 1
-        var pos2 = pos2 + 1
+        val expandedPos = pos - 1
+        val expandedPos2 = pos2 + 1
 
         if (!redraw) {
-            redrawPos = pos
-            redrawPos2 = pos2
+            redrawPos = expandedPos
+            redrawPos2 = expandedPos2
             redraw = true
         } else {
-            redrawPos = redrawPos.min(pos)
-            redrawPos2 = redrawPos2.max(pos2)
+            redrawPos = redrawPos.min(expandedPos)
+            redrawPos2 = redrawPos2.max(expandedPos2)
         }
     }
 
@@ -312,15 +312,15 @@ class WorldEditor @JvmOverloads constructor(
             redraw = true
         }
         canvas.setZoom(if (worldData.isSuperZZT) zoom * 2 else zoom)
-        canvas.setAtlas(currentAtlas, boardDim.w, boardDim.h, GlobalEditor.getBoolean("ATLAS_GRID", true))
+        canvas.setAtlas(currentAtlas, boardDim, GlobalEditor.getBoolean("ATLAS_GRID", true))
         if (redraw) {
             for (y in 0 until gridDim.h) {
                 for (x in 0 until gridDim.w) {
                     val boardIdx = grid[y][x]
+                    val xyPos = Pos(x,y)
                     if (boardIdx != -1) {
-                        val xyPos = Pos(x,y)
                         val pos = (xyPos * boardDim).max(redrawPos)
-                        val pos2 = ((xyPos * boardDim) + (boardDim - Dim(1, 1))).min(redrawPos)
+                        val pos2 = ((xyPos * boardDim) + (boardDim - Dim.ONE_BY_ONE)).min(redrawPos2)
 
                         if (pos2.x >= pos.x && pos2.y >= pos.y) {
                             boards[boardIdx].drawToCanvas(
@@ -331,10 +331,9 @@ class WorldEditor @JvmOverloads constructor(
                             )
                         }
                     } else {
-                        val voidPos = Pos(x, y)
-                        if (!voidsDrawn.contains(voidPos)) {
-                            canvas.drawVoid(voidPos * boardDim, boardDim)
-                            voidsDrawn.add(voidPos)
+                        if (!voidsDrawn.contains(xyPos)) {
+                            canvas.drawVoid(xyPos * boardDim, boardDim)
+                            voidsDrawn.add(xyPos)
                         }
                     }
                 }
@@ -782,7 +781,7 @@ class WorldEditor @JvmOverloads constructor(
         BoardManager(this.canvas,
             object : WindowAdapter() {
                 override fun windowClosed(e: WindowEvent) {
-                    this@WorldEditor.canvas.setIndicate(null, null)
+                    this@WorldEditor.canvas.setIndicate(null)
                 }
             },
             this.frameForRelativePositioning,
@@ -1484,8 +1483,8 @@ class WorldEditor @JvmOverloads constructor(
         // These actions activate whether textEntry is set or not
         when (actionName) {
             "Escape" -> operationEscape()
-            "Up" -> operationCursorMove(Pos.DOWN, true)
-            "Down" -> operationCursorMove(Pos.UP, true)
+            "Up" -> operationCursorMove(Pos.UP, true)
+            "Down" -> operationCursorMove(Pos.DOWN, true)
             "Left" -> operationCursorMove(Pos.LEFT, true)
             "Right" -> operationCursorMove(Pos.RIGHT, true)
             "Alt-Up" -> operationCursorMove(Pos.ALT_UP, true)
@@ -2052,7 +2051,7 @@ class WorldEditor @JvmOverloads constructor(
 
 
     internal fun erasePlayer(board: Board?) {
-        val cornerPos = Pos(board!!.width + 1,0)
+        val cornerPos = Pos(board!!.dim.w + 1,0)
 
         val stat0 = board.getStat(0)
 
@@ -2241,7 +2240,7 @@ class WorldEditor @JvmOverloads constructor(
             advanced,
             selected,
             exempt,
-            { x, y -> this.canvas.setIndicate(x, y) },
+            { xys -> this.canvas.setIndicate(xys) },
             this::getKeystroke
         )
 
@@ -2452,14 +2451,15 @@ class WorldEditor @JvmOverloads constructor(
                 canvas.getCharW(1),
                 canvas.getCharH(1))
             pos =
-                Pos(0,0).max(Pos(
-                    (canvas.getCharW(cursorPos.x) + (charDim.w - dim.w) / 2),
-                    (canvas.getCharH(cursorPos.y) + (charDim.h - dim.h) / 2)))
+               Pos(max(0,
+                    (canvas.getCharW(cursorPos.x) + (charDim.w - dim.w) / 2)),
+                   max(0,canvas.getCharH(cursorPos.y) + (charDim.h - dim.h) / 2))
             centreView = false
         } else {
             dim = Dim(canvas.getCharW(1), canvas.getCharH(1))
             pos = Pos(canvas.getCharW(cursorPos.x),canvas.getCharH(cursorPos.y))
 
+            // FIXME(jakeouellette): This math can allow a scroll to slightly below / above the view.
             // Expand this slightly
             val EXPAND_X = 4
             val EXPAND_Y = 4
@@ -2752,7 +2752,7 @@ class WorldEditor @JvmOverloads constructor(
         for (y in 0 until gridDim.h) {
             Arrays.fill(grid[y], -1)
         }
-        val atlas = Atlas(gridDim.w, gridDim.h, grid)
+        val atlas = Atlas(gridDim, grid)
         currentAtlas = atlas
         for (loc in map.keys) {
             val xy = loc - minPos

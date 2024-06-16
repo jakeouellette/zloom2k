@@ -25,7 +25,7 @@ object GlobalEditor {
     private var bufferTile = Tile(0, 15)
     private var bufferTileSzzt = false
     private var properties: Properties? = null
-    var blockBufferDim : Dim = Dim(0, 0)
+    var blockBufferDim : Dim = Dim.EMPTY
         private set
     var blockBuffer: Array<Tile>? = null
     private var blockBufferSzzt = false
@@ -83,21 +83,21 @@ object GlobalEditor {
         val result: String
         if (isBlockBuffer()) {
             // TODO(jakeouellette): Avoid BlockBuffer being null going forward.
-            result = encode(blockBufferDim.w, blockBufferDim.h, blockBuffer!!, blockBufferSzzt)
+            result = encode(blockBufferDim, blockBuffer!!, blockBufferSzzt)
         } else {
             val tiles = arrayOf(bufferTile)
-            result = encode(1, 1, tiles, bufferTileSzzt)
+            result = encode(Dim.ONE_BY_ONE, tiles, bufferTileSzzt)
         }
         return result
     }
 
     fun decodeBuffer(encodedBuffer: String?) {
         val clip = decode(encodedBuffer)
-        if (clip.w == 1 && clip.h == 1) {
+        if (clip.dim == Dim.ONE_BY_ONE) {
             bufferTile = clip.tiles[0]
             bufferTileSzzt = clip.isSzzt
         } else {
-            blockBufferDim = Dim(clip.w, clip.h)
+            blockBufferDim = clip.dim
             blockBuffer = clip.tiles
             blockBufferSzzt = clip.isSzzt
             blockBufferRepeated = false
@@ -765,7 +765,6 @@ object GlobalEditor {
 
     var timestamp: Long = 0
         private set
-    private var globalInstance: GlobalEditor? = null
 
     private const val PROPERTIES_FILE = "zedit2.cfg"
 

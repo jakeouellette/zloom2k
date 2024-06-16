@@ -3,6 +3,7 @@ package zedit2.util
 import zedit2.model.BufferBoard
 import zedit2.model.Stat
 import zedit2.model.Tile
+import zedit2.model.spatial.Dim
 import zedit2.model.spatial.Pos
 
 open class ZType {
@@ -50,7 +51,7 @@ open class ZType {
 
         fun getChar(szzt: Boolean, tile: Tile): Int {
             if (tile.id == -1) return throw UnsupportedOperationException("Id cannot be -1")
-            val board = BufferBoard(szzt, 1, 1)
+            val board = BufferBoard(szzt, Dim.ONE_BY_ONE)
             board.setTile(Pos.ZERO, tile)
             return if (!szzt) {
                 ZZTType.getChar(board, Pos.ZERO)
@@ -61,7 +62,7 @@ open class ZType {
 
         fun getColour(szzt: Boolean, tile: Tile): Int {
             if (tile.id == -1) return 15
-            val board = BufferBoard(szzt, 1, 1)
+            val board = BufferBoard(szzt, Dim.ONE_BY_ONE)
             board.setTile(Pos.ZERO, tile)
             return if (!szzt) {
                 ZZTType.getColour(board, Pos.ZERO)
