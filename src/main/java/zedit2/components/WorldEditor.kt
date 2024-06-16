@@ -2074,10 +2074,10 @@ class WorldEditor @JvmOverloads constructor(
         */
     }
 
-    override fun onBoardUpdated(newWorldData: WorldData, newBoardList: List<Board>, newCurrentBoardIdx: Int) {
-        this.worldData = newWorldData
-        this.replaceBoardList(newBoardList)
-        this.changeBoard(newCurrentBoardIdx)
+    override fun onBoardUpdated(worldData: WorldData, boardList: ArrayList<Board>, currentBoard: Int) {
+        this.worldData = worldData
+        this.replaceBoardList(boardList)
+        this.changeBoard(currentBoard)
     }
 
     // TODO(jakeouellette): Make this behave a bit more reactive
@@ -2631,11 +2631,11 @@ class WorldEditor @JvmOverloads constructor(
     val boardPosOffset: Pos
         get() = cursorPos / boardDim * boardDim
 
-    fun replaceBoardList(newBoardList: List<Board>) {
+    fun replaceBoardList(newBoardList: ArrayList<Board>) {
         atlases.clear()
         currentAtlas = null
         // TODO(jakeouellette): Update board selector
-        onBoardsUpdated(boards)
+        onBoardsUpdated(newBoardList)
     }
 
     fun mouseMotion(e: MouseEvent, heldDown: Int) {
