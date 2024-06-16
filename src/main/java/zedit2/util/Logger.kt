@@ -2,7 +2,12 @@ package zedit2.util
 
 object Logger {
     fun i(tag: String, line:() -> String) {
-        System.out.println("[$tag] ${line()}")
+        val line = line()
+        // FIXME(jakeouellette): Temporarily don't log focus events
+        if (line.lowercase().contains("focus")) {
+            return
+        }
+        System.out.println("[$tag] ${line}")
     }
 
     fun e(tag: String, e: Exception) {
@@ -11,7 +16,11 @@ object Logger {
     }
 
     fun e(tag: String, line: () -> String) {
-        System.err.println("[$tag] ${line()}")
+        System.err.println("[$tag] ERR: ${line()}")
+    }
+
+    fun w(tag: String, line: () -> String) {
+        System.err.println("[$tag] WARN: ${line()}")
     }
 
     val Any.TAG: String

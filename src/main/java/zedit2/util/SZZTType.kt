@@ -4,6 +4,7 @@ import zedit2.components.GlobalEditor
 import zedit2.model.Tile
 import zedit2.model.Board
 import zedit2.model.Stat
+import zedit2.model.spatial.Pos
 
 object SZZTType : ZType() {
     private val charcodes = intArrayOf(
@@ -133,8 +134,8 @@ object SZZTType : ZType() {
         return false
     }
 
-    private fun getFirstStat(board: Board, x: Int, y: Int): Stat? {
-        val stats = board.getStatsAt(x, y)
+    private fun getFirstStat(board: Board, xy : Pos): Stat? {
+        val stats = board.getStatsAt(xy)
         if (stats.isEmpty()) return null
         return stats[0]
     }
@@ -146,24 +147,24 @@ object SZZTType : ZType() {
     }
 
     @JvmStatic
-    fun getChar(board: Board, x: Int, y: Int): Int {
-        val id = board.getTileId(x, y)
+    fun getChar(board: Board, xy: Pos): Int {
+        val id = board.getTileId(xy)
 
         when (id) {
             DUPLICATOR -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharcodes(id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharcodes(id)
                 return duplicatorFrames[lastStat.p1]
             }
 
             BOMB -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharcodes(id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharcodes(id)
                 var bombChar = (48 + lastStat.p1) and 0xFF
                 if (bombChar == 48 || bombChar == 49) bombChar = 11
                 return bombChar
             }
 
             TRANSPORTER -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharcodes(id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharcodes(id)
                 val xs = lastStat.stepX
                 val ys = lastStat.stepY
                 if (xs < 0 && ys == 0) return 40 // '('
@@ -176,12 +177,12 @@ object SZZTType : ZType() {
             }
 
             OBJECT -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharcodes(id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharcodes(id)
                 return lastStat.p1
             }
 
             PUSHER -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharcodes(id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharcodes(id)
                 val xs = lastStat.stepX
                 val ys = lastStat.stepY
                 if (xs < 0 && ys == 0) return 17
@@ -193,26 +194,26 @@ object SZZTType : ZType() {
             LINE -> {
                 // For lines, the char depends on surrounding tiles
                 var lch = 15
-                if ((y == 0) || isLineOrEdge(board.getTileId(x, y - 1))) lch -= 8
-                if ((y == board.height - 1) || isLineOrEdge(board.getTileId(x, y + 1))) lch -= 4
-                if ((x == board.width - 1) || isLineOrEdge(board.getTileId(x + 1, y))) lch -= 2
-                if ((x == 0) || isLineOrEdge(board.getTileId(x - 1, y))) lch -= 1
+                if ((xy.y == 0) || isLineOrEdge(board.getTileId(xy + Pos.UP))) lch -= 8
+                if ((xy.y == board.dim.h - 1) || isLineOrEdge(board.getTileId(xy + Pos.DOWN))) lch -= 4
+                if ((xy.x == board.dim.w - 1) || isLineOrEdge(board.getTileId(xy + Pos.RIGHT))) lch -= 2
+                if ((xy.x == 0) || isLineOrEdge(board.getTileId(xy + Pos.LEFT))) lch -= 1
                 return linechars[lch]
             }
 
             WEB -> {
                 // For webs, the char depends on surrounding tiles
                 var lch = 15
-                if ((y == 0) || isWebOrEdge(board.getTile(x, y - 1, false))) lch -= 8
-                if ((y == board.height - 1) || isWebOrEdge(board.getTile(x, y + 1, false))) lch -= 4
-                if ((x == board.width - 1) || isWebOrEdge(board.getTile(x + 1, y, false))) lch -= 2
-                if ((x == 0) || isWebOrEdge(board.getTile(x - 1, y, false))) lch -= 1
+                if ((xy.y == 0) || isWebOrEdge(board.getTile(xy + Pos.UP, false))) lch -= 8
+                if ((xy.y == board.dim.h - 1) || isWebOrEdge(board.getTile(xy + Pos.DOWN, false))) lch -= 4
+                if ((xy.x == board.dim.w - 1) || isWebOrEdge(board.getTile(xy + Pos.RIGHT, false))) lch -= 2
+                if ((xy.x == 0) || isWebOrEdge(board.getTile(xy + Pos.LEFT, false))) lch -= 1
                 return webchars[lch]
             }
 
             BLUETEXT, GREENTEXT, CYANTEXT, REDTEXT, PURPLETEXT, BROWNTEXT, BLACKTEXT, BLACKBTEXT, BLUEBTEXT, GREENBTEXT, CYANBTEXT, REDBTEXT, PURPLEBTEXT, BROWNBTEXT, GREYBTEXT, GREYTEXT -> {
                 // For text kinds, the char is the colour
-                return board.getTileCol(x, y)
+                return board.getTileCol(xy)
             }
 
             INVISIBLE -> {
@@ -234,8 +235,8 @@ object SZZTType : ZType() {
     }
 
     @JvmStatic
-    fun getColour(board: Board, x: Int, y: Int): Int {
-        val id = board.getTileId(x, y)
+    fun getColour(board: Board, xy: Pos): Int {
+        val id = board.getTileId(xy)
 
         when (id) {
             EMPTY -> {
@@ -245,7 +246,7 @@ object SZZTType : ZType() {
 
             PLAYER -> {
                 // With stats, the player is c1F
-                if (!board.getStatsAt(x, y).isEmpty()) {
+                if (!board.getStatsAt(xy).isEmpty()) {
                     return 0x1F
                 }
             }
@@ -258,7 +259,7 @@ object SZZTType : ZType() {
             else -> {}
         }
         // Otherwise, use the given colour
-        return board.getTileCol(x, y)
+        return board.getTileCol(xy)
     }
 
     @JvmStatic

@@ -7,6 +7,8 @@ import zedit2.components.Util.readPascalString
 import zedit2.components.Util.setInt16
 import zedit2.components.Util.setInt8
 import zedit2.components.Util.writePascalString
+import zedit2.model.spatial.Dim
+import zedit2.model.spatial.Pos
 import zedit2.util.ZZTType.getChar
 import zedit2.util.ZZTType.getColour
 import zedit2.util.ZType
@@ -60,7 +62,7 @@ class ZZTBoard : Board {
         playerStat.cycle = 1
         playerStat.isPlayer = true
         val player = Tile(ZType.PLAYER, 0x1F, playerStat)
-        setTile(29, 11, player)
+        setTile(Pos(29, 11), player)
     }
 
     override fun write(warning: CompatWarning?, worldData: ByteArray, boardOffset: Int) {
@@ -110,12 +112,9 @@ class ZZTBoard : Board {
         }
 
 
-    override var cameraX: Int
-        get() = 0
+    override var cameraPos: Pos
+        get() = Pos(0,0)
         set(x) {}
-    override var cameraY: Int
-        get() = 0
-        set(y) {}
 
     override val currentSize: Int
         /**
@@ -129,9 +128,9 @@ class ZZTBoard : Board {
             return size
         }
 
-    override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, x: Int, y: Int) {
-        cols!![pos] = getColour(this, x, y).toByte()
-        chars!![pos] = getChar(this, x, y).toByte()
+    override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, xy : Pos) {
+        cols!![pos] = getColour(this, xy).toByte()
+        chars!![pos] = getChar(this, xy).toByte()
     }
 
     override fun isEqualTo(other: Board): Boolean {
@@ -143,8 +142,6 @@ class ZZTBoard : Board {
         return message.contentEquals(zztOther.message)
     }
 
-    override val width: Int = 60
-        get() = field
-    override val height: Int = 25
+    override val dim: Dim = Dim(60, 25)
         get() = field
 }

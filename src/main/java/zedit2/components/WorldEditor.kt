@@ -24,6 +24,8 @@ import zedit2.event.TileEditorCallback
 import zedit2.model.*
 import zedit2.model.SZZTWorldData.Companion.createWorld
 import zedit2.model.WorldData.Companion.loadWorld
+import zedit2.model.spatial.Dim
+import zedit2.model.spatial.Pos
 import zedit2.util.*
 import zedit2.util.CP437.toBytes
 import zedit2.util.CP437.toUnicode
@@ -72,26 +74,18 @@ class WorldEditor @JvmOverloads constructor(
     lateinit var lastFocusedElement : Component
     internal var undoHandler: UndoHandler = UndoHandler(this)
     internal var selectionModeConfiguration : SelectionModeConfiguration? = null
-    internal var cursorX = 0
-    internal var cursorY = 0
+    internal var cursorPos = Pos.ZERO
     private var centreView = false
-    internal var blockStartX = -1
-    internal var blockStartY = -1
-    internal var moveBlockW = 0
-    private var moveBlockH = 0
-    internal var moveBlockX = 0
-    internal var moveBlockY = 0
-    internal var boardW = 0
-    internal var boardH = 0
+    internal var blockStartPos = Pos.NEG_ONE
+    // TODO(jakeouellettE): Should these be negative, or 0
+    internal var moveBlockDim = Dim(0, 0)
+    internal var moveBlockPos = Pos.ZERO
+    internal var boardDim = Dim(0, 0)
     internal val atlases = HashMap<Int, Atlas>()
     internal var currentAtlas: Atlas? = null
-    internal var gridW = 0
-    internal var gridH = 0
+    internal var gridDim = Dim(0, 0)
     internal lateinit var grid: Array<IntArray>
-    var width: Int = 0
-        private set
-    var height: Int = 0
-        private set
+    var dim : Dim = Dim(0,0)
     internal var drawing = false
         set(value) {
             field = value
@@ -114,14 +108,11 @@ class WorldEditor @JvmOverloads constructor(
     internal var textEntryX = 0
     internal var fancyFillDialog = false
 
-    private val voidsDrawn = HashSet<ArrayList<Int>>()
+    private val voidsDrawn = HashSet<Pos>()
     private var redraw = false
-    private var redraw_x1 = 0
-    private var redraw_x2 = 0
-    private var redraw_y1 = 0
-    private var redraw_y2 = 0
-    private var redraw_width = 0
-    private var redraw_height = 0
+    private var redrawPos = Pos.ZERO
+    private var redrawPos2 = Pos.ZERO
+    private var redrawDim = Dim(0, 0)
     private val deleteOnClose = HashSet<File>()
 
     lateinit var canvas: DosCanvas
@@ -143,14 +134,10 @@ class WorldEditor @JvmOverloads constructor(
 
     private val blinkingImageIcons = ArrayList<BlinkingImageIcon>()
 
-    private var mouseScreenX = 0
-    private var mouseScreenY = 0
-    private var mousePosX = 0
-    private var mousePosY = 0
-    private var mouseX = 0
-    private var mouseY = 0
-    private var oldMousePosX = -1
-    private var oldMousePosY = -1
+    private var mouseScreenPos = Pos.ZERO
+    private var mousePosPos = Pos.ZERO
+    private var mousePos = Pos.ZERO
+    private var oldMousePos = Pos.NEG_ONE
     private val fmenus = HashMap<Int, JMenu>()
     private var recentFilesMenu: JMenu? = null
 
@@ -229,10 +216,8 @@ class WorldEditor @JvmOverloads constructor(
         onBoardsUpdated(boards)
 
         val cb = worldData.currentBoard
-        boardW = boards[0].width
-        boardH = boards[0].height
-        cursorX = boards[cb].getStat(0)!!.x - 1
-        cursorY = boards[cb].getStat(0)!!.y - 1
+        boardDim = boards[0].dim
+        cursorPos = boards[cb].getStat(0)!!.pos - 1
         centreView = true
 
         updateMenu()
@@ -243,13 +228,12 @@ class WorldEditor @JvmOverloads constructor(
         setCurrentBoard(newBoardIdx)
         atlases.remove(newBoardIdx)
         currentAtlas = null
-        gridW = 1
-        gridH = 1
-        cursorX %= boardW
-        cursorY %= boardH
-        canvas.setCursor(cursorX, cursorY)
-        width = boardW * gridW
-        height = boardH * gridH
+        gridDim = Dim.ONE_BY_ONE
+        cursorPos %= boardDim
+        canvas.setCursor(cursorPos)
+        Logger.i(TAG) { "bd: $boardDim, gd: $gridDim $dim"}
+        dim = boardDim * gridDim
+        Logger.i(TAG) { "bd: $boardDim, gd: $gridDim $dim"}
         grid = Array(1) { IntArray(1) }
         grid[0][0] = newBoardIdx
         invalidateCache()
@@ -271,18 +255,14 @@ class WorldEditor @JvmOverloads constructor(
         val atlas = atlases[newBoardIdx]
         if (atlas != null) {
             val gridPos = checkNotNull(atlas.search(newBoardIdx))
-            val x = gridPos[0]
-            val y = gridPos[1]
-            cursorX = (cursorX % boardW) + x * boardW
-            cursorY = (cursorY % boardH) + y * boardH
-            canvas.setCursor(cursorX, cursorY)
+            val pos = gridPos
+            cursorPos = (cursorPos % boardDim) + (pos * boardDim)
+            canvas.setCursor(cursorPos)
             setCurrentBoard(newBoardIdx)
             if (atlas != currentAtlas) {
-                gridW = atlas.w
-                gridH = atlas.h
+                gridDim = atlas.dim
                 grid = atlas.grid
-                width = boardW * gridW
-                height = boardH * gridH
+                dim = boardDim * gridDim
 
                 currentAtlas = atlas
                 invalidateCache()
@@ -291,10 +271,10 @@ class WorldEditor @JvmOverloads constructor(
             }
 
             val rect = Rectangle(
-                canvas.getCharW(x * boardW),
-                canvas.getCharH(y * boardH),
-                canvas.getCharW(boardW),
-                canvas.getCharH(boardH)
+                canvas.getCharW(pos.x * boardDim.w),
+                canvas.getCharH(pos.y * boardDim.h),
+                canvas.getCharW(boardDim.w),
+                canvas.getCharH(boardDim.h)
             )
             canvas.scrollRectToVisible(rect)
         } else {
@@ -305,71 +285,55 @@ class WorldEditor @JvmOverloads constructor(
 
     internal fun invalidateCache() {
         voidsDrawn.clear()
-        redraw_width = 0
-        redraw_height = 0
+        redrawDim = Dim.EMPTY
     }
 
-    internal fun addRedraw(x1: Int, y1: Int, x2: Int, y2: Int) {
+    internal fun addRedraw(pos : Pos, pos2 : Pos) {
         // Expand the range by 1 to handle lines
-        var x1 = x1
-        var y1 = y1
-        var x2 = x2
-        var y2 = y2
-        x1--
-        y1--
-        x2++
-        y2++
+        val expandedPos = pos - 1
+        val expandedPos2 = pos2 + 1
 
         if (!redraw) {
-            redraw_x1 = x1
-            redraw_y1 = y1
-            redraw_x2 = x2
-            redraw_y2 = y2
+            redrawPos = expandedPos
+            redrawPos2 = expandedPos2
             redraw = true
         } else {
-            redraw_x1 = min(redraw_x1.toDouble(), x1.toDouble()).toInt()
-            redraw_y1 = min(redraw_y1.toDouble(), y1.toDouble()).toInt()
-            redraw_x2 = max(redraw_x2.toDouble(), x2.toDouble()).toInt()
-            redraw_y2 = max(redraw_y2.toDouble(), y2.toDouble()).toInt()
+            redrawPos = redrawPos.min(expandedPos)
+            redrawPos2 = redrawPos2.max(expandedPos2)
         }
     }
 
     private fun drawBoard() {
-        if (width != redraw_width || height != redraw_height) {
-            canvas.setDimensions(width, height)
-            redraw_width = width
-            redraw_height = height
-            redraw_x1 = 0
-            redraw_y1 = 0
-            redraw_x2 = width - 1
-            redraw_y2 = height - 1
+        if (dim != redrawDim) {
+            canvas.setDimensions(dim)
+            redrawDim = dim
+            redrawPos = Pos.ZERO
+            redrawPos2 = (dim.asPos - 1)
             redraw = true
         }
-        canvas.setZoom(if (worldData.isSuperZZT) zoom * 2 else zoom, zoom)
-        canvas.setAtlas(currentAtlas, boardW, boardH, GlobalEditor.getBoolean("ATLAS_GRID", true))
+        canvas.setZoom(if (worldData.isSuperZZT) zoom * 2 else zoom)
+        canvas.setAtlas(currentAtlas, boardDim, GlobalEditor.getBoolean("ATLAS_GRID", true))
         if (redraw) {
-            for (y in 0 until gridH) {
-                for (x in 0 until gridW) {
+            for (y in 0 until gridDim.h) {
+                for (x in 0 until gridDim.w) {
                     val boardIdx = grid[y][x]
+                    val xyPos = Pos(x,y)
                     if (boardIdx != -1) {
-                        val x1 = max((x * boardW).toDouble(), redraw_x1.toDouble()).toInt()
-                        val x2 = min((x * boardW + (boardW - 1)).toDouble(), redraw_x2.toDouble())
-                            .toInt()
-                        val y1 = max((y * boardH).toDouble(), redraw_y1.toDouble()).toInt()
-                        val y2 = min((y * boardH + (boardH - 1)).toDouble(), redraw_y2.toDouble())
-                            .toInt()
-                        if (x2 >= x1 && y2 >= y1) {
+                        val pos = (xyPos * boardDim).max(redrawPos)
+                        val pos2 = ((xyPos * boardDim) + (boardDim - Dim.ONE_BY_ONE)).min(redrawPos2)
+
+                        if (pos2.x >= pos.x && pos2.y >= pos.y) {
                             boards[boardIdx].drawToCanvas(
-                                canvas, x * boardW, y * boardH,
-                                x1 - x * boardW, y1 - y * boardH, x2 - x * boardW, y2 - y * boardH,
+                                canvas, xyPos * boardDim,
+                                pos - (xyPos * boardDim),
+                                pos2 - (xyPos * boardDim),
                                 currentlyShowing
                             )
                         }
                     } else {
-                        val voidCoord = pair(x, y)
-                        if (!voidsDrawn.contains(voidCoord)) {
-                            canvas.drawVoid(x * boardW, y * boardH, boardW, boardH)
-                            voidsDrawn.add(voidCoord)
+                        if (!voidsDrawn.contains(xyPos)) {
+                            canvas.drawVoid(xyPos * boardDim, boardDim)
+                            voidsDrawn.add(xyPos)
                         }
                     }
                 }
@@ -426,7 +390,7 @@ class WorldEditor @JvmOverloads constructor(
                         }
                     }
                 }
-                canvas = DosCanvas(this@WorldEditor, zoom)
+                canvas = DosCanvas(this@WorldEditor, zoom,zoom)
                 canvas.isRequestFocusEnabled = true
                 Logger.i(TAG) {"Requesting Focus."}
                 canvas.requestFocusInWindow()
@@ -512,8 +476,7 @@ class WorldEditor @JvmOverloads constructor(
                         val onCodeSaved = { e: ActionEvent ->
                             // TODO(jakeouellette): I dunno why it is always stats[0]
                             CodeEditorFactory.create(
-                                -1,
-                                -1,
+                                Pos.NEG_ONE,
                                 true,
                                 frameThis,
                                 this@WorldEditor,
@@ -818,7 +781,7 @@ class WorldEditor @JvmOverloads constructor(
         BoardManager(this.canvas,
             object : WindowAdapter() {
                 override fun windowClosed(e: WindowEvent) {
-                    this@WorldEditor.canvas.setIndicate(null, null)
+                    this@WorldEditor.canvas.setIndicate(null)
                 }
             },
             this.frameForRelativePositioning,
@@ -1062,8 +1025,8 @@ class WorldEditor @JvmOverloads constructor(
             m.add()
             m.add("Enter text", "F2") { e: ActionEvent? -> operationToggleText() }
             m.add("Toggle drawing", "Tab") { e: ActionEvent? -> operationToggleDrawing() }
-            m.add("Flood fill", "F") { e: ActionEvent? -> operationFloodfill(cursorX, cursorY, false) }
-            m.add("Gradient fill", "Alt-F") { e: ActionEvent? -> operationFloodfill(cursorX, cursorY, true) }
+            m.add("Flood fill", "F") { e: ActionEvent? -> operationFloodfill(cursorPos, false) }
+            m.add("Gradient fill", "Alt-F") { e: ActionEvent? -> operationFloodfill(cursorPos, true) }
             m.add()
             for (f in 3..10) {
                 val fMenuName = getFMenuName(f)
@@ -1261,7 +1224,10 @@ class WorldEditor @JvmOverloads constructor(
                 menuItem.addActionListener { e: ActionEvent? -> setBufferToElement(element, editOnPlace) }
 
                 val col = ZType.getColour(szzt, tile)
-                val img = canvas.extractCharImageWH(chr, col, if (szzt) 2 else 1, 1, false, "____\$____", 3, 3)
+                // TODO(jakeouellette): SZZT doubled one of the zooms here.
+                // I removed it, but restore it a different way.
+                // if (szzt) 2 else 1
+                val img = canvas.extractCharImageWH(chr, col, 1, 1,false, "____\$____", Dim(3, 3))
                 val side = 20
                 val img2 = BufferedImage(side, side, BufferedImage.TYPE_INT_ARGB)
                 val g = img2.graphics
@@ -1370,10 +1336,10 @@ class WorldEditor @JvmOverloads constructor(
 
     internal fun elementPlaceAtCursor(tile: Tile) {
         bufferTile = tile
-        val board = getBoardAt(cursorX, cursorY)
+        val board = getBoardAt(cursorPos)
 
         if (board != null) {
-            putTileAt(cursorX, cursorY, tile, PUT_DEFAULT)
+            putTileAt(cursorPos, tile, PUT_DEFAULT)
             afterModification()
         } else {
             afterUpdate()
@@ -1517,14 +1483,14 @@ class WorldEditor @JvmOverloads constructor(
         // These actions activate whether textEntry is set or not
         when (actionName) {
             "Escape" -> operationEscape()
-            "Up" -> operationCursorMove(0, -1, true)
-            "Down" -> operationCursorMove(0, 1, true)
-            "Left" -> operationCursorMove(-1, 0, true)
-            "Right" -> operationCursorMove(1, 0, true)
-            "Alt-Up" -> operationCursorMove(0, -10, true)
-            "Alt-Down" -> operationCursorMove(0, 10, true)
-            "Alt-Left" -> operationCursorMove(-10, 0, true)
-            "Alt-Right" -> operationCursorMove(10, 0, true)
+            "Up" -> operationCursorMove(Pos.UP, true)
+            "Down" -> operationCursorMove(Pos.DOWN, true)
+            "Left" -> operationCursorMove(Pos.LEFT, true)
+            "Right" -> operationCursorMove(Pos.RIGHT, true)
+            "Alt-Up" -> operationCursorMove(Pos.ALT_UP, true)
+            "Alt-Down" -> operationCursorMove(Pos.ALT_DOWN, true)
+            "Alt-Left" -> operationCursorMove(Pos.ALT_LEFT, true)
+            "Alt-Right" -> operationCursorMove(Pos.ALT_RIGHT, true)
             "Shift-Up" -> operationExitJump(0)
             "Shift-Down" -> operationExitJump(1)
             "Shift-Left" -> operationExitJump(2)
@@ -1534,8 +1500,8 @@ class WorldEditor @JvmOverloads constructor(
             "Ctrl-Shift-Left" -> operationExitCreate(2)
             "Ctrl-Shift-Right" -> operationExitCreate(3)
             "Tab" -> operationToggleDrawing()
-            "Home" -> operationCursorMove(-999999999, -999999999, false)
-            "End" -> operationCursorMove(999999999, 999999999, false)
+            "Home" -> operationCursorMove(Pos.HOME, false)
+            "End" -> operationCursorMove(Pos.END, false)
             "Insert" -> operationBufferGrab()
             "Ctrl-=" -> operationZoomIn(false)
             "Ctrl--" -> operationZoomOut(false)
@@ -1572,7 +1538,7 @@ class WorldEditor @JvmOverloads constructor(
                 "B" -> operationFocusOnBoardSelector()
                 "C" -> operationColour()
                 "D" -> operationDeleteBoard()
-                "F" -> operationFloodfill(cursorX, cursorY, false)
+                "F" -> operationFloodfill(cursorPos, false)
                 "G" -> world(frame, boards, worldData, canvas)
                 "I" -> board(frame, currentBoard, worldData)
                 "L" -> menuOpenWorld()
@@ -1587,7 +1553,7 @@ class WorldEditor @JvmOverloads constructor(
                 "Ctrl-S" -> menuSave()
                 "Ctrl-V" -> operationPasteImage()
                 "Alt-B" -> operationBlockStart()
-                "Alt-F" -> operationFloodfill(cursorX, cursorY, true)
+                "Alt-F" -> operationFloodfill(cursorPos, true)
                 "Alt-I" -> menuImportBoard()
                 "Alt-M" -> operationGrabAndModify(false, false)
                 "Alt-S" -> operationStatList()
@@ -1671,14 +1637,11 @@ class WorldEditor @JvmOverloads constructor(
             zoom = newZoom
         }
 
-        val centreOnX: Int
-        val centreOnY: Int
+        val centreOnPos: Pos
         if (mouse) {
-            centreOnX = mouseX
-            centreOnY = mouseY
+            centreOnPos = mousePos
         } else {
-            centreOnX = cursorX
-            centreOnY = cursorY
+            centreOnPos = cursorPos
         }
 
         invalidateCache()
@@ -1687,62 +1650,57 @@ class WorldEditor @JvmOverloads constructor(
         if (frame.extendedState == Frame.NORMAL) {
             frame.pack()
         }
-        centreOn(centreOnX, centreOnY)
+        centreOn(centreOnPos)
         canvas.recheckMouse()
     }
 
-    private fun centreOn(x: Int, y: Int) {
-        var xPos = canvas.getCharW(x)
-        var yPos = canvas.getCharH(y)
-        var xSize = canvas.getCharW(1)
-        var ySize = canvas.getCharH(1)
-        val xAdd = canvas.visibleRect.width / 2
-        val yAdd = canvas.visibleRect.height / 2
+    private fun centreOn(pos: Pos) {
+        var xyPos = Pos(
+            canvas.getCharW(pos.x),
+            canvas.getCharH(pos.y))
+        var xySize = Pos(
+            canvas.getCharW(1),
+            canvas.getCharH(1))
+        val xyAdd = Pos(
+            canvas.visibleRect.width / 2,
+            canvas.visibleRect.height / 2)
 
-        xSize += xAdd * 2
-        ySize += yAdd * 2
-        xPos -= xAdd
-        yPos -= yAdd
+        xySize += xyAdd * 2
+        xyPos -= xyAdd
 
-        canvas.scrollRectToVisible(Rectangle(xPos, yPos, xSize, ySize))
+        canvas.scrollRectToVisible(Rectangle(xyPos.x, xyPos.y, xySize.x, xySize.y))
     }
 
-    internal fun setBlockStart(x: Int, y: Int) {
-        blockStartX = x
-        blockStartY = y
-        canvas.setSelectionBlock(blockStartX, blockStartY)
+    internal fun setBlockStart(pos: Pos) {
+        blockStartPos = pos
+        canvas.setSelectionBlock(blockStartPos)
     }
 
-    internal fun setBlockBuffer(w: Int, h: Int, ar: Array<Tile>?, r: Boolean) {
-        GlobalEditor.setBlockBuffer(w, h, ar, r, worldData.isSuperZZT)
+    internal fun setBlockBuffer(dim : Dim, ar: Array<Tile>?, r: Boolean) {
+        GlobalEditor.setBlockBuffer(dim, ar, r, worldData.isSuperZZT)
         canvas.repaint()
     }
 
-    private val blockX1: Int
-        get() = min(cursorX.toDouble(), blockStartX.toDouble()).toInt()
-    private val blockY1: Int
-        get() = min(cursorY.toDouble(), blockStartY.toDouble()).toInt()
-    private val blockX2: Int
-        get() = max(cursorX.toDouble(), blockStartX.toDouble()).toInt()
-    private val blockY2: Int
-        get() = max(cursorY.toDouble(), blockStartY.toDouble()).toInt()
+    private val blockPos: Pos
+        get() = cursorPos.min(blockStartPos)
+    private val blockPos2: Pos
+        get() = cursorPos.max(blockStartPos)
 
     private fun afterBlockOperation(modified: Boolean) {
-        Logger.i(TAG) { "block operation $cursorX $cursorY $blockStartX $blockStartY"}
-        cursorX = min(blockStartX, cursorX)
-        cursorY = min(blockStartY, cursorY)
-        canvas.setCursor(cursorX, cursorY)
-        setBlockStart(-1, -1)
+        Logger.i(TAG) { "block operation $cursorPos $blockStartPos"}
+        cursorPos = cursorPos.min(blockStartPos)
+        canvas.setCursor(cursorPos)
+        setBlockStart(Pos.NEG_ONE)
         if (modified) afterModification()
         else afterUpdate()
     }
 
     internal fun blockClear() {
         val tile = Tile(0, 0)
-        addRedraw(blockX1, blockY1, blockX2, blockY2)
-        for (y in blockY1..blockY2) {
-            for (x in blockX1..blockX2) {
-                putTileAt(x, y, tile, PUT_REPLACE_BOTH)
+        addRedraw(blockPos, blockPos2)
+        for (y in blockPos.y..blockPos2.y) {
+            for (x in blockPos.x..blockPos2.x) {
+                putTileAt(Pos(x,y), tile, PUT_REPLACE_BOTH)
             }
         }
 
@@ -1751,79 +1709,69 @@ class WorldEditor @JvmOverloads constructor(
 
     internal fun blockPaint() {
         val paintCol = getTileColour(bufferTile!!)
-        addRedraw(blockX1, blockY1, blockX2, blockY2)
-        for (y in blockY1..blockY2) {
-            for (x in blockX1..blockX2) {
-                val tile = checkNotNull(getTileAt(x, y, false))
+        addRedraw(blockPos, blockPos2)
+        for (y in blockPos.y..blockPos2.y) {
+            for (x in blockPos.x..blockPos2.x) {
+                val tile = checkNotNull(getTileAt(Pos(x,y), false))
                 paintTile(tile, paintCol)
-                putTileAt(x, y, tile, PUT_REPLACE_BOTH)
+                putTileAt(Pos(x,y), tile, PUT_REPLACE_BOTH)
             }
         }
         afterBlockOperation(true)
     }
 
     internal fun blockCopy(repeated: Boolean) {
-        Logger.i(TAG) { "blockCopy, $blockX1, $blockX2"}
-        val w = blockX2 + 1 - blockX1
-        val h = blockY2 + 1 - blockY1
-        val blockBuffer = arrayOfNulls<Tile>(w * h)
-        for (y in 0 until h) {
-            for (x in 0 until w) {
-                val xPos = x + blockX1
-                val yPos = y + blockY1
-                val idx = y * w + x
-                blockBuffer[idx] = getTileAt(xPos, yPos, true)
+        Logger.i(TAG) { "blockCopy, $blockPos, $blockPos2"}
+        val dim = (blockPos2 + 1 - blockPos).dim
+        val blockBuffer = arrayOfNulls<Tile>(dim.w * dim.h)
+        for (y in 0 until dim.h) {
+            for (x in 0 until dim.w) {
+                val pos = Pos(x,y) + blockPos
+                val idx = pos.arrayPos(dim.w)
+                blockBuffer[idx] = getTileAt(pos, true)
             }
         }
         // TODO(jakeouellette): Cleanup null check cast.
-        setBlockBuffer(w, h, blockBuffer.map { tile: Tile? -> tile!! }.toTypedArray(), repeated)
+        setBlockBuffer(dim, blockBuffer.map { tile: Tile? -> tile!! }.toTypedArray(), repeated)
         afterBlockOperation(false)
     }
 
-    internal fun setMoveBlock(w: Int, h: Int) {
-        Logger.i(TAG) { "setMoveBlock $w $h $moveBlockW, $moveBlockH"}
-        moveBlockW = w
-        moveBlockH = h
-        canvas.setPlacingBlock(w, h)
+    internal fun setMoveBlock(dim : Dim) {
+        Logger.i(TAG) { "setMoveBlock [w, h, mbw, mbh, mbx, mby] : $dim $moveBlockDim, $moveBlockPos"}
+        moveBlockDim = dim
+        canvas.setPlacingBlock(dim)
     }
 
     internal fun blockMove() {
-        moveBlockX = blockX1
-        moveBlockY = blockY1
-        val w = blockX2 + 1 - blockX1
-        val h = blockY2 + 1 - blockY1
-        setMoveBlock(w, h)
+        moveBlockPos = blockPos
+        val dim = (blockPos2 + 1 - blockPos).dim
+        setMoveBlock(dim)
         afterBlockOperation(false)
     }
 
     internal fun blockFinishMove() {
         // Move from moveBlockX, moveBlockY, moveBlockW, moveBlockH, cursorX, cursorY
-        Logger.i(TAG) { "blockMove! $blockX1 $blockX2"}
-        Logger.i(TAG) { "moveBlockX! $blockX1 $blockX2"}
-        val blockMap = LinkedHashMap<ArrayList<Board?>, LinkedHashMap<ArrayList<Int>?, ArrayList<Int>?>>()
-        addRedraw(cursorX, cursorY, cursorX + moveBlockW - 1, cursorY + moveBlockH - 1)
-        addRedraw(moveBlockX, moveBlockY, moveBlockX + moveBlockW - 1, moveBlockY + moveBlockH - 1)
-        for (vy in 0 until moveBlockH) {
-            for (vx in 0 until moveBlockW) {
+        Logger.i(TAG) { "blockMove! $blockPos $blockPos2"}
+        val blockMap = LinkedHashMap<ArrayList<Board?>, LinkedHashMap<Pos?, Pos?>>()
+        addRedraw(cursorPos, cursorPos + moveBlockDim - 1)
+        addRedraw(moveBlockPos, moveBlockPos + moveBlockDim - 1)
+        for (vy in 0 until moveBlockDim.h) {
+            for (vx in 0 until moveBlockDim.w) {
                 // The move order depends on the relationship between the two blocks, to avoid double moving
-                val x = if (moveBlockX >= cursorX) vx else moveBlockW - 1 - vx
-                val y = if (moveBlockY >= cursorY) vy else moveBlockH - 1 - vy
-                val xFrom = x + moveBlockX
-                val yFrom = y + moveBlockY
-                val xTo = x + cursorX
-                val yTo = y + cursorY
-                if (xFrom < width && yFrom < height) {
-                    if (xTo < width && yTo < height) {
+                val pos = Pos(
+                    if (moveBlockPos.x >= cursorPos.x) vx else moveBlockDim.w - 1 - vx,
+                    if (moveBlockPos.y >= cursorPos.y) vy else moveBlockDim.h - 1 - vy)
+                val xyFrom = pos + moveBlockPos
+                val xyTo = pos + cursorPos
+                if (xyFrom.lt(dim)) {
+                    if (xyTo.lt(dim)) {
                         val boardKey = ArrayList<Board?>(2)
-                        boardKey.add(getBoardAt(xFrom, yFrom))
-                        boardKey.add(getBoardAt(xTo, yTo))
-                        val from = pair(xFrom, yFrom)
-                        val to = pair(xTo, yTo)
-
+                        boardKey.add(getBoardAt(xyFrom))
+                        boardKey.add(getBoardAt(xyTo))
                         if (!blockMap.containsKey(boardKey)) {
                             blockMap[boardKey] = LinkedHashMap()
                         }
-                        blockMap[boardKey]!![from] = to
+                        blockMap[boardKey]!![xyFrom] = xyTo
                     }
                 }
             }
@@ -1831,26 +1779,25 @@ class WorldEditor @JvmOverloads constructor(
 
         blockTileMove(blockMap, false)
 
-        setMoveBlock(0, 0)
+        setMoveBlock(Dim(0, 0))
         afterBlockOperation(true)
     }
 
     internal fun blockFlip(horizontal: Boolean) {
-        val hx = (blockX1 + blockX2) / 2
-        val hy = (blockY1 + blockY2) / 2
-        val blockMap = LinkedHashMap<ArrayList<Board?>, LinkedHashMap<ArrayList<Int>?, ArrayList<Int>?>>()
-        addRedraw(blockX1, blockY1, blockX2, blockY2)
-        for (y in blockY1..blockY2) {
-            for (x in blockX1..blockX2) {
-                if ((horizontal && x <= hx) || (!horizontal && y <= hy)) {
-                    val xTo = if (horizontal) blockX2 - (x - blockX1) else x
-                    val yTo = if (!horizontal) blockY2 - (y - blockY1) else y
+        val hxy = (blockPos + blockPos2) / 2
+        val blockMap = LinkedHashMap<ArrayList<Board?>, LinkedHashMap<Pos?, Pos?>>()
+        addRedraw(blockPos, blockPos2)
+        for (y in blockPos.y..blockPos2.y) {
+            for (x in blockPos.x..blockPos2.x) {
+                val xy = Pos(x,y)
+                if ((horizontal && x <= hxy.x) || (!horizontal && y <= hxy.y)) {
+                    val xyTo = if (horizontal) blockPos2 - (xy - blockPos) else xy
 
                     val boardKey = ArrayList<Board?>(2)
-                    boardKey.add(getBoardAt(x, y))
-                    boardKey.add(getBoardAt(xTo, yTo))
-                    val from = pair(x, y)
-                    val to = pair(xTo, yTo)
+                    boardKey.add(getBoardAt(xy))
+                    boardKey.add(getBoardAt(xyTo))
+                    val from = xy
+                    val to = xyTo
 
                     if (!blockMap.containsKey(boardKey)) {
                         blockMap[boardKey] = LinkedHashMap()
@@ -1865,7 +1812,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun blockTileMove(
-        blockMap: LinkedHashMap<ArrayList<Board?>, LinkedHashMap<ArrayList<Int>?, ArrayList<Int>?>>,
+        blockMap: LinkedHashMap<ArrayList<Board?>, LinkedHashMap<Pos?, Pos?>>,
         swap: Boolean
     ) {
         val blankTile = Tile(0, 0)
@@ -1876,18 +1823,16 @@ class WorldEditor @JvmOverloads constructor(
             if (fromBoard == null || toBoard == null) continue
 
             val firstFrom = tileMoves.keys.iterator().next()
-            val fromBoardXOffset = firstFrom!![0] / boardW * boardW
-            val fromBoardYOffset = firstFrom[1] / boardH * boardH
+            val fromBoardXYOffset = firstFrom!! / boardDim
 
             if (fromBoard === toBoard) {
                 if (!swap) {
                     // If stat0 is being overwritten and isn't being moved itself, don't move it
-                    val stat0x = toBoard.getStat(0)!!.x - 1 + fromBoardXOffset
-                    val stat0y = toBoard.getStat(0)!!.y - 1 + fromBoardYOffset
-                    if (!tileMoves.containsKey(pair(stat0x, stat0y))) {
+                    val stat0xy = toBoard.getStat(0)!!.pos - 1 + fromBoardXYOffset
+                    if (!tileMoves.containsKey(stat0xy)) {
                         for (from in tileMoves.keys) {
                             val to = tileMoves[from]
-                            if (to!![0] == stat0x && to[1] == stat0y) {
+                            if (to!! == stat0xy) {
                                 tileMoves.remove(from)
                                 break
                             }
@@ -1895,7 +1840,7 @@ class WorldEditor @JvmOverloads constructor(
                     }
                 }
 
-                val reverseTileMoves = HashMap<ArrayList<Int>?, ArrayList<Int>?>()
+                val reverseTileMoves = HashMap<Pos?, Pos?>()
                 for (from in tileMoves.keys) {
                     val to = tileMoves[from]
                     reverseTileMoves[to] = from
@@ -1905,12 +1850,11 @@ class WorldEditor @JvmOverloads constructor(
                 val deleteStats = ArrayList<Int>()
                 for (i in 0 until toBoard.statCount) {
                     val stat = toBoard.getStat(i)
-                    var from: ArrayList<Int>? = pair(stat!!.x - 1 + fromBoardXOffset, stat.y - 1 + fromBoardYOffset)
+                    var from: Pos? = stat!!.pos - 1 + fromBoardXYOffset
                     var to = tileMoves[from]
                     if (to != null) {
                         //System.out.printf("Stat %d moving from %d,%d to %d,%d\n", i, stat.getX(), stat.getY(), to.get(0) % boardW + 1, to.get(1) % boardH + 1);
-                        stat.x = to[0] % boardW + 1
-                        stat.y = to[1] % boardH + 1
+                        stat.pos = to % boardDim + 1
                         continue
                     }
                     to = from
@@ -1918,8 +1862,7 @@ class WorldEditor @JvmOverloads constructor(
                     if (from != null) {
                         if (swap) {
                             //System.out.printf("Stat %d moving from %d,%d to %d,%d !\n", i, stat.getX(), stat.getY(), from.get(0) % boardW + 1, from.get(1) % boardH + 1);
-                            stat.x = from[0] % boardW + 1
-                            stat.y = from[1] % boardH + 1
+                            stat.pos = from % boardDim + 1
                         } else {
                             if (i != 0) deleteStats.add(i)
                         }
@@ -1928,23 +1871,23 @@ class WorldEditor @JvmOverloads constructor(
 
                 toBoard.directDeleteStats(deleteStats)
 
-                val changingTiles = HashMap<ArrayList<Int>?, ArrayList<Int>>()
+                val changingTiles = HashMap<Pos?, Pos>()
                 for (from in tileMoves.keys) {
                     val to = tileMoves[from]
-                    val id = toBoard.getTileId(from!![0] % boardW, from[1] % boardH)
-                    val col = toBoard.getTileCol(from[0] % boardW, from[1] % boardH)
-                    changingTiles[to] = pair(id, col)
+                    val id = toBoard.getTileId(from!! % boardDim)
+                    val col = toBoard.getTileCol(from % boardDim)
+                    changingTiles[to] = Pos(id, col)
                     if (swap) {
-                        val tid = toBoard.getTileId(to!![0] % boardW, to[1] % boardH)
-                        val tcol = toBoard.getTileCol(to[0] % boardW, to[1] % boardH)
-                        changingTiles[from] = pair(tid, tcol)
+                        val tid = toBoard.getTileId(to!! % boardDim)
+                        val tcol = toBoard.getTileCol(to!! % boardDim)
+                        changingTiles[from] = Pos(tid, tcol)
                     } else {
-                        toBoard.setTileRaw(from[0] % boardW, from[1] % boardH, blankTile.id, blankTile.col)
+                        toBoard.setTileRaw(from % boardDim, blankTile.id, blankTile.col)
                     }
                 }
                 for (to in changingTiles.keys) {
                     val tile = changingTiles[to]!!
-                    toBoard.setTileRaw(to!![0] % boardW, to[1] % boardH, tile[0], tile[1])
+                    toBoard.setTileRaw(to!! % boardDim, tile.x, tile.y)
                 }
                 toBoard.finaliseStats()
 
@@ -1954,34 +1897,32 @@ class WorldEditor @JvmOverloads constructor(
 
                 for (from in tileMoves.keys) {
                     val to = tileMoves[from]
-                    val tile = getTileAt(from!![0], from[1], true)
+                    val tile = getTileAt(from!!, true)
                     if (swap) {
-                        val otherTile = getTileAt(to!![0], to[1], true)
-                        putTileAt(from[0], from[1], otherTile, PUT_REPLACE_BOTH)
+                        val otherTile = getTileAt(to!!, true)
+                        putTileAt(from, otherTile, PUT_REPLACE_BOTH)
                     } else {
-                        putTileAt(from[0], from[1], blankTile, PUT_REPLACE_BOTH)
+                        putTileAt(from, blankTile, PUT_REPLACE_BOTH)
                     }
-                    putTileAt(to!![0], to[1], tile, PUT_REPLACE_BOTH)
+                    putTileAt(to!!, tile, PUT_REPLACE_BOTH)
                 }
             }
         }
     }
 
     internal fun blockPaste() {
-        val w = GlobalEditor.blockBufferW
-        val h = GlobalEditor.blockBufferH
+        val dim = GlobalEditor.blockBufferDim
         val blockBuffer = GlobalEditor.getBlockBuffer(worldData.isSuperZZT)
-        addRedraw(cursorX, cursorY, cursorX + w - 1, cursorY + h - 1)
+        addRedraw(cursorPos, cursorPos + dim - 1)
 
         // Find the player
         var px = -1
         var py = -1
-        for (y in 0 until h) {
-            for (x in 0 until w) {
-                val xPos = x + cursorX
-                val yPos = y + cursorY
-                if (xPos < width && yPos < height) {
-                    val idx = y * w + x
+        for (y in 0 until dim.h) {
+            for (x in 0 until dim.w) {
+                val xyPos = Pos(x,y) + cursorPos
+                if (xyPos.lt(dim)) {
+                    val idx = xyPos.arrayPos(dim.w)
                     val t = blockBuffer[idx]
                     val st: List<Stat> = t.stats
                     if (!st.isEmpty()) {
@@ -1990,29 +1931,28 @@ class WorldEditor @JvmOverloads constructor(
                             // then place
                             px = x
                             py = y
-                            putTileAt(xPos, yPos, blockBuffer[idx], PUT_REPLACE_BOTH)
+                            putTileAt(xyPos, blockBuffer[idx], PUT_REPLACE_BOTH)
                         }
                     }
                 }
             }
         }
 
-        for (y in 0 until h) {
-            for (x in 0 until w) {
+        for (y in 0 until dim.h) {
+            for (x in 0 until dim.w) {
                 if (x == px && y == py) {
                     continue  // We have already placed the player
                 }
-                val xPos = x + cursorX
-                val yPos = y + cursorY
-                if (xPos < width && yPos < height) {
-                    val idx = y * w + x
-                    putTileAt(xPos, yPos, blockBuffer[idx], PUT_REPLACE_BOTH)
+                val xyPos = Pos(x, y) + cursorPos
+                if (xyPos.lt(dim)) {
+                    val idx = xyPos.arrayPos(dim.w)
+                    putTileAt(xyPos, blockBuffer[idx], PUT_REPLACE_BOTH)
                 }
             }
         }
 
         if (!GlobalEditor.blockBufferRepeated) {
-            setBlockBuffer(0, 0, null, false)
+            setBlockBuffer(Dim(0, 0), null, false)
         }
         afterBlockOperation(true)
     }
@@ -2111,23 +2051,20 @@ class WorldEditor @JvmOverloads constructor(
 
 
     internal fun erasePlayer(board: Board?) {
-        val cornerX = board!!.width + 1
-        val cornerY = 0
+        val cornerPos = Pos(board!!.dim.w + 1,0)
 
         val stat0 = board.getStat(0)
 
         // If the player is already in the corner, do nothing
-        if (stat0!!.x == cornerX && stat0.y == cornerY) return
+        if (stat0!!.pos == cornerPos) return
 
-        val oldStat0x = stat0.x - 1
-        val oldStat0y = stat0.y - 1
+        val oldStat0 = stat0.pos - 1
 
         // Replace player with under tile
         val under = Tile(stat0.uid, stat0.uco)
-        stat0.x = cornerX
-        stat0.y = cornerY
+        stat0.pos = cornerPos
 
-        board.setTile(oldStat0x, oldStat0y, under)
+        board.setTile(oldStat0, under)
 
         /*
         // Fix uid/uco
@@ -2175,46 +2112,40 @@ class WorldEditor @JvmOverloads constructor(
 
     private fun mouseDraw() {
         val dirty = HashSet<Board>()
-        if (oldMousePosX == -1) {
-            mousePlot(mouseX, mouseY, dirty)
+        // TODO(jakeouellette): change to .isPositive
+        if (oldMousePos.x == -1) {
+            mousePlot(mousePos, dirty)
         } else {
-            var cx = -1
-            var cy = -1
-            val dx = mousePosX - oldMousePosX
-            val dy = mousePosY - oldMousePosY
-            val dist = max(abs(dx.toDouble()), abs(dy.toDouble())).toInt()
+            var cxy = Pos.NEG_ONE
+            val dxy = mousePos - oldMousePos
+            val dist = dxy.distInt()
             if (dist == 0) return
-            val plotSet = HashSet<ArrayList<Int>>()
+            val plotSet = HashSet<Pos>()
             //int cw = canvas.getCharW(), ch = canvas.getCharH();
             for (i in 0..dist) {
-                val x = dx * i / dist + oldMousePosX
-                val y = dy * i / dist + oldMousePosY
-                val ncx = canvas.toCharX(x)
-                val ncy = canvas.toCharY(y)
-                if (ncx != cx || ncy != cy) {
-                    cx = ncx
-                    cy = ncy
-                    plotSet.add(pair(cx, cy))
+                val xy = dxy * i / dist + oldMousePos
+                val ncxy = canvas.toChar(xy)
+                if (ncxy != cxy) {
+                    cxy = ncxy
+                    plotSet.add(cxy)
                 }
             }
             for (plot in plotSet) {
-                mousePlot(plot[0], plot[1], dirty)
+                mousePlot(plot, dirty)
             }
         }
         for (board in dirty) {
             board.finaliseStats()
         }
         afterModification()
-        canvas.setCursor(cursorX, cursorY)
+        canvas.setCursor(cursorPos)
     }
 
     private fun mouseMove(): Boolean {
-        val x = mouseX
-        val y = mouseY
-        if (x >= 0 && y >= 0 && x < width && y < height) {
-            cursorX = x
-            cursorY = y
-            canvas.setCursor(cursorX, cursorY)
+        val pos = mousePos
+        if (pos.inside(dim)) {
+            cursorPos = pos
+            canvas.setCursor(cursorPos)
             afterUpdate()
             return true
         }
@@ -2223,7 +2154,7 @@ class WorldEditor @JvmOverloads constructor(
 
     private fun mouseGrab() {
         if (mouseMove()) {
-            bufferTile = getTileAt(cursorX, cursorY, true)
+            bufferTile = getTileAt(cursorPos, true)
             afterUpdate()
         }
     }
@@ -2236,12 +2167,11 @@ class WorldEditor @JvmOverloads constructor(
         return canvas.toCharY(y)
     }
 
-    private fun mousePlot(x: Int, y: Int, dirty: HashSet<Board>) {
-        if (x >= 0 && y >= 0 && x < width && y < height) {
-            cursorX = x
-            cursorY = y
-            canvas.setCursor(cursorX, cursorY)
-            val board = putTileDeferred(cursorX, cursorY, bufferTile, PUT_DEFAULT)
+    private fun mousePlot(xy: Pos, dirty: HashSet<Board>) {
+        if (xy.inside(dim)) {
+            cursorPos = xy
+            canvas.setCursor(cursorPos)
+            val board = putTileDeferred(cursorPos, bufferTile, PUT_DEFAULT)
             if (board != null) dirty.add(board)
         }
     }
@@ -2275,8 +2205,7 @@ class WorldEditor @JvmOverloads constructor(
     ) =
         createTileEditor(
             board = currentBoard,
-            x = -1,
-            y = -1,
+            pos = Pos(x = -1, y = -1),
             stats = null,
             tile = tile,
             advanced = advanced,
@@ -2290,16 +2219,14 @@ class WorldEditor @JvmOverloads constructor(
         advanced: Boolean,
         exempt: Boolean,
         board: Board?,
-        x: Int,
-        y: Int,
+        pos : Pos,
         stats: List<Stat>? = null,
         tile: Tile? = null,
         selected: Int = -1,
     ) =
         TileEditor(
             this,
-            this.boardXOffset,
-            this.boardYOffset,
+            this.boardPosOffset,
             this.boardIdx,
             this.worldData.isSuperZZT,
             this.boards,
@@ -2309,21 +2236,20 @@ class WorldEditor @JvmOverloads constructor(
             tile,
             stats,
             callback,
-            x,
-            y,
+            pos,
             advanced,
             selected,
             exempt,
-            { x, y -> this.canvas.setIndicate(x, y) },
+            { xys -> this.canvas.setIndicate(xys) },
             this::getKeystroke
         )
 
 
-    internal fun setStats(board: Board, bx: Int, by: Int, x: Int, y: Int, stats: List<Stat>) {
+    internal fun setStats(board: Board, boardPos : Pos, xy: Pos, stats: List<Stat>) {
         // If any stats move, invalidate the entire board
         var invalidateAll = false
 
-        val destStats = board.getStatsAt(x, y)
+        val destStats = board.getStatsAt(xy)
         val statsToDelete = ArrayList<Int>()
         val statsAdded = BooleanArray(stats.size)
         var mustFinalise = false
@@ -2334,7 +2260,7 @@ class WorldEditor @JvmOverloads constructor(
             for (i in stats.indices) {
                 val stat = stats[i]
                 if (stat.statId == destStat.statId && stat.statId != -1) {
-                    if (stat.x != destStat.x || stat.y != destStat.y) {
+                    if (stat.pos != destStat.pos) {
                         replacementStatMoved = true
                     }
                     replacementStat = stat
@@ -2359,7 +2285,7 @@ class WorldEditor @JvmOverloads constructor(
         for (i in stats.indices) {
             if (!statsAdded[i]) {
                 val stat = stats[i]
-                if (stat.x != x + 1 || stat.y != y + 1) invalidateAll = true
+                if (stat.pos != (xy + 1)) invalidateAll = true
                 board.directAddStat(stat)
                 mustFinalise = true
             }
@@ -2371,17 +2297,16 @@ class WorldEditor @JvmOverloads constructor(
             board.finaliseStats()
         }
         if (invalidateAll) {
-            addRedraw(bx + 1, by + 1, bx + boardW - 2, by + boardH - 2)
+            addRedraw(boardPos + 1, boardPos + boardDim - 2)
         }
     }
 
-    internal fun getBoardAt(x: Int, y: Int): Board? {
-        if (x < 0 || y < 0 || x >= width || y >= height) {
+    internal fun getBoardAt(pos: Pos): Board? {
+        if (pos.outside(dim)) {
             throw IndexOutOfBoundsException("Attempted to getBoardAt() coordinate off map")
         }
-        val gridX = x / boardW
-        val gridY = y / boardH
-        val boardIdx = grid[gridY][gridX]
+        val gridPos = pos / boardDim
+        val boardIdx = grid[gridPos.y][gridPos.x]
         if (boardIdx == -1) return null
         return boards[boardIdx]
     }
@@ -2390,8 +2315,8 @@ class WorldEditor @JvmOverloads constructor(
      *
      * @param putMode PUT_DEFAULT or PUT_PUSH_DOWN or PUT_REPLACE_BOTH
      */
-    internal fun putTileAt(x: Int, y: Int, tile: Tile?, putMode: Int) {
-        val board = putTileDeferred(x, y, tile, putMode)
+    internal fun putTileAt(pos : Pos, tile: Tile?, putMode: Int) {
+        val board = putTileDeferred(pos, tile, putMode)
         board?.finaliseStats()
     }
 
@@ -2399,15 +2324,15 @@ class WorldEditor @JvmOverloads constructor(
      *
      * @param putMode PUT_DEFAULT or PUT_PUSH_DOWN or PUT_REPLACE_BOTH
      */
-    internal fun putTileDeferred(x: Int, y: Int, tile: Tile?, putMode: Int): Board? {
+    internal fun putTileDeferred(pos : Pos, tile: Tile?, putMode: Int): Board? {
         var putMode = putMode
-        val board = getBoardAt(x, y)
-        var currentTile = getTileAt(x, y, false)
+        val board = getBoardAt(pos)
+        var currentTile = getTileAt(pos, false)
         if (board != null && currentTile != null && tile != null) {
             val placingTile = tile.clone()
             // First, we will not allow putTileAt to erase stat 0
             val currentTileStats: List<Stat> = currentTile.stats
-            if (currentTileStats.size > 0) {
+            if (currentTileStats.isNotEmpty()) {
                 if (currentTileStats[0].statId == 0) {
                     return board
                 }
@@ -2442,24 +2367,25 @@ class WorldEditor @JvmOverloads constructor(
                 }
             }
             // Are we placing stat 0?
-            if (!placingTile.stats.isEmpty()) {
+            if (placingTile.stats.isNotEmpty()) {
                 if (placingTile.stats[0].statId == 0 ||
                     placingTile.stats[0].isPlayer
                 ) {
                     // Find the stat 0 on this board
                     val stat0 = board.getStat(0)
-                    val oldStat0x = stat0!!.x - 1
-                    val oldStat0y = stat0.y - 1
+                    val oldStat0pos = Pos(stat0!!.x - 1,stat0.y - 1)
                     // If stat 0 isn't on the board, nevermind!
-                    if (oldStat0x >= 0 && oldStat0x < boardW && oldStat0y >= 0 && oldStat0y < boardH) {
+
+                    if (oldStat0pos.inside(0, 0, boardDim.w-1, boardDim.h-1)) {
                         // See what other stats are there
-                        val oldStat0TileStats = board.getStatsAt(oldStat0x, oldStat0y)
+                        val oldStat0TileStats = board.getStatsAt(oldStat0pos)
                         if (oldStat0TileStats.size == 1) {
                             // Once we move stat0 there will be no other stats, so erase this
-                            board.setTileRaw(oldStat0x, oldStat0y, stat0.uid, stat0.uco)
-                            val bx = x / boardW * boardW
-                            val by = y / boardH * boardH
-                            addRedraw(oldStat0x + bx, oldStat0y + by, oldStat0x + bx, oldStat0y + by)
+                            board.setTileRaw(oldStat0pos, stat0.uid, stat0.uco)
+                            // TODO(jakeouellette): Not sure I understood the math here.
+                            val bPos = pos / boardDim * boardDim
+                            val redrawPos = oldStat0pos + bPos
+                            addRedraw(redrawPos, redrawPos)
                         } // Otherwise there are stats left, so leave the tile alone
                     }
                     // Fix uid/uco
@@ -2467,27 +2393,25 @@ class WorldEditor @JvmOverloads constructor(
                     stat0.uco = placingTile.stats[0].uco
                     // Place the tile here, but without stat0
                     placingTile.stats.removeAt(0)
-                    addRedraw(x, y, x, y)
-                    board.setTileDirect(x % boardW, y % boardH, placingTile)
+                    addRedraw(pos, pos)
+                    board.setTileDirect(pos % boardDim, placingTile)
                     // Then move stat0 to the cursor
-                    stat0.x = x % boardW + 1
-                    stat0.y = y % boardH + 1
+                    stat0.pos = pos % boardDim + 1
 
                     return board
                 }
             }
-            addRedraw(x, y, x, y)
-            board.setTileDirect(x % boardW, y % boardH, placingTile)
+            addRedraw(pos, pos)
+            board.setTileDirect(pos % boardDim, placingTile)
         }
         return board
     }
 
     private fun updateCurrentBoard() {
-        cursorX = clamp(cursorX, 0, width - 1)
-        cursorY = clamp(cursorY, 0, height - 1)
-        val gridX = cursorX / boardW
-        val gridY = cursorY / boardH
-        setCurrentBoard(grid[gridY][gridX])
+        cursorPos = cursorPos.clamp(0, dim.asPos - 1)
+        val gridPos = cursorPos / boardDim
+
+        setCurrentBoard(grid[gridPos.y][gridPos.x])
         val worldName = if (path == null) "new world" else path!!.name
         val boardInfo = if (currentBoard != null) {
             "Board #" + boardIdx + " :: " + toUnicode(currentBoard!!.getName())
@@ -2497,14 +2421,14 @@ class WorldEditor @JvmOverloads constructor(
         frame.title = "zloom2 [" + worldName + "] :: " + boardInfo + (if (isDirty) "*" else "")
     }
 
-    internal fun getTileAt(x: Int, y: Int, copy: Boolean): Tile? {
-        if (x < 0 || y < 0 || x >= width || y >= height) {
-            throw IndexOutOfBoundsException("Attempted to read coordinate off map")
+    internal fun getTileAt(pos : Pos, copy: Boolean): Tile? {
+        Logger.i(TAG) {"pos: $pos, dim: $dim"}
+        if (pos.outside(dim)) {
+            throw IndexOutOfBoundsException("Attempted to read coordinate off map, pos: $pos, dim: $dim")
         }
-        val boardX = x % boardW
-        val boardY = y % boardH
-        val board = getBoardAt(x, y)
-        return board?.getTile(boardX, boardY, copy)
+        val boardPos = pos % boardDim
+        val board = getBoardAt(pos)
+        return board?.getTile(boardPos, copy)
     }
 
     internal fun afterModification() {
@@ -2514,35 +2438,35 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun scrollToCursor() {
-        var w: Int
-        var h: Int
-        var x: Int
-        var y: Int
+        var dim : Dim
+        var pos : Pos
         if (centreView) {
             canvas.revalidate()
             val visibleRect = canvas.visibleRect
-            w = clamp(visibleRect.width, 0, canvas.getCharW(width))
-            h = clamp(visibleRect.height, 0, canvas.getCharH(height))
-            val charW = canvas.getCharW(1)
-            val charH = canvas.getCharH(1)
-            x = max(0.0, (canvas.getCharW(cursorX) + (charW - w) / 2).toDouble()).toInt()
-            y = max(0.0, (canvas.getCharH(cursorY) + (charH - h) / 2).toDouble()).toInt()
+
+            // TODO(jakeouellette): Convert to convienence
+            dim = Dim(clamp(visibleRect.width, 0, canvas.getCharW(this@WorldEditor.dim.w)),
+                clamp(visibleRect.height, 0, canvas.getCharH(this@WorldEditor.dim.h)))
+            val charDim = Dim(
+                canvas.getCharW(1),
+                canvas.getCharH(1))
+            pos =
+               Pos(max(0,
+                    (canvas.getCharW(cursorPos.x) + (charDim.w - dim.w) / 2)),
+                   max(0,canvas.getCharH(cursorPos.y) + (charDim.h - dim.h) / 2))
             centreView = false
         } else {
-            w = canvas.getCharW(1)
-            h = canvas.getCharH(1)
-            x = canvas.getCharW(cursorX)
-            y = canvas.getCharH(cursorY)
+            dim = Dim(canvas.getCharW(1), canvas.getCharH(1))
+            pos = Pos(canvas.getCharW(cursorPos.x),canvas.getCharH(cursorPos.y))
 
+            // FIXME(jakeouellette): This math can allow a scroll to slightly below / above the view.
             // Expand this slightly
             val EXPAND_X = 4
             val EXPAND_Y = 4
-            x -= canvas.getCharW(EXPAND_X)
-            y -= canvas.getCharH(EXPAND_Y)
-            w += canvas.getCharW(EXPAND_X * 2)
-            h += canvas.getCharH(EXPAND_Y * 2)
+            pos -= Pos(canvas.getCharW(EXPAND_X), canvas.getCharH(EXPAND_Y))
+            dim += Dim(canvas.getCharW(EXPAND_X * 2), canvas.getCharH(EXPAND_Y * 2))
         }
-        val rect = Rectangle(x, y, w, h)
+        val rect = Rectangle(pos.x, pos.y, dim.w, dim.h)
         canvas.scrollRectToVisible(rect)
     }
 
@@ -2557,8 +2481,7 @@ class WorldEditor @JvmOverloads constructor(
 
         updateCurrentBoard()
         scrollToCursor()
-        val boardX = cursorX % boardW
-        val boardY = cursorY % boardH
+        val boardPos = cursorPos % boardDim
 
         var s = ""
         if (currentBoard != null) {
@@ -2577,7 +2500,7 @@ class WorldEditor @JvmOverloads constructor(
     
     """.trimIndent(),
                 currentBoard!!.statCount - 1, if (!worldData.isSuperZZT) 150 else 128,
-                boardX + 1, boardY + 1, currentBoard!!.currentSize
+                boardPos.x + 1, boardPos.y + 1, currentBoard!!.currentSize
             )
         }
 
@@ -2590,8 +2513,8 @@ class WorldEditor @JvmOverloads constructor(
         bufferPane.removeAll()
         bufferPaneContents = bufferPane
         blinkingImageIcons.clear()
-        val cursorTile = getTileAt(cursorX, cursorY, false)
-        addCursorTileInfoDisplay("Cursor", cursorTile, boardX, boardY, cursorX, cursorY)
+        val cursorTile = getTileAt(cursorPos, false)
+        addCursorTileInfoDisplay("Cursor", cursorTile, boardPos, cursorPos)
         brushesPane.onBufferTileUpdated(bufferTile)
         bufferPane.repaint()
     }
@@ -2605,7 +2528,7 @@ class WorldEditor @JvmOverloads constructor(
             return EditType.TEXT_ENTRY
         } else if (drawing) {
             return EditType.DRAWING
-        } else if (GlobalEditor.isBlockBuffer() || moveBlockW != 0) {
+        } else if (GlobalEditor.isBlockBuffer() || moveBlockDim.w != 0) {
             return EditType.SELECTING
         }
 
@@ -2616,7 +2539,8 @@ class WorldEditor @JvmOverloads constructor(
         val enter = keyStrokeString(getKeyStroke(globalEditor, "Enter"))
         val brushMode = getBrushMode()
         if (brushMode == EditType.TEXT_ENTRY) editingModePane.display(Color.YELLOW, "Type to place text")
-        else if (blockStartX != -1) editingModePane.display(
+        // TODO(jakeouellette): Replace to .isPositive
+        else if (blockStartPos.x != -1) editingModePane.display(
             arrayOf(Color(0, 127, 255), Color.CYAN),
             "$enter on other corner"
         )
@@ -2658,10 +2582,8 @@ class WorldEditor @JvmOverloads constructor(
     private fun addCursorTileInfoDisplay(
         title: String,
         cursorTile: Tile?,
-        boardX: Int,
-        boardY: Int,
-        cursorX: Int,
-        cursorY: Int
+        boardPos : Pos,
+        cursorPos : Pos
     ) {
         val cb = this.currentBoard
         if (cursorTile == null || cb == null) return
@@ -2679,7 +2601,7 @@ class WorldEditor @JvmOverloads constructor(
 
             editButton.addActionListener {
                 CodeEditorFactory.create(
-                    -1, -1, true, frame, this@WorldEditor,
+                    Pos.NEG_ONE, true, frame, this@WorldEditor,
                     IconFactory.getIcon(worldData.isSuperZZT, cursorTile, this@WorldEditor), cb, cursorTile.stats[0]
                 ) { e ->
                     if (e!!.actionCommand == "update") {
@@ -2692,7 +2614,7 @@ class WorldEditor @JvmOverloads constructor(
                         mutableStats.addAll(cursorTile.stats)
                         mutableStats.set(0, cloneOfFirst)
 
-                        setStats(board, boardX, boardY, cursorX, cursorY, mutableStats)
+                        setStats(board, boardPos, cursorPos, mutableStats)
                         // TODO(jakeouellette): Decide if this is needed
                         // (e.source as StatSelector).dataChanged()
                         afterModification()
@@ -2713,11 +2635,8 @@ class WorldEditor @JvmOverloads constructor(
             return size
         }
 
-    val boardXOffset: Int
-        get() = cursorX / boardW * boardW
-
-    val boardYOffset: Int
-        get() = cursorY / boardH * boardH
+    val boardPosOffset: Pos
+        get() = cursorPos / boardDim * boardDim
 
     fun replaceBoardList(newBoardList: List<Board>) {
         atlases.clear()
@@ -2728,32 +2647,31 @@ class WorldEditor @JvmOverloads constructor(
 
     fun mouseMotion(e: MouseEvent, heldDown: Int) {
         mouseState = heldDown
-        mousePosX = e.x
-        mousePosY = e.y
-        mouseX = mouseCharX(mousePosX)
-        mouseY = mouseCharY(mousePosY)
+        // TODO(jakeouellette): "pospos" was done to avoid
+        // a name collision, rename it.
+        mousePosPos = Pos(e.x, e.y)
+        mousePos = Pos(mouseCharX(mousePosPos.x), mouseCharY(mousePosPos.y))
 
         // Translate into local space
-        mouseScreenX = e.xOnScreen - frame.locationOnScreen.x
-        mouseScreenY = e.yOnScreen - frame.locationOnScreen.y
+        mouseScreenPos = Pos(
+            e.xOnScreen - frame.locationOnScreen.x,
+            e.yOnScreen - frame.locationOnScreen.y
+        )
         if (heldDown == 1) {
             mouseDraw()
-            oldMousePosX = mousePosX
-            oldMousePosY = mousePosY
+            oldMousePos = Pos(mousePosPos.x, mousePosPos.y)
         } else {
             if (heldDown == 2) mouseGrab()
             else if (heldDown == 3) mouseMove()
-            oldMousePosX = -1
-            oldMousePosY = -1
+            oldMousePos = Pos.NEG_ONE
         }
 
         undoHandler.afterUpdate()
     }
 
     private fun removeAtlas() {
-        val x = cursorX / boardW
-        val y = cursorY / boardH
-        var changeTo = grid[y][x]
+        val pos = cursorPos / boardDim
+        var changeTo = grid[pos.y][pos.x]
         if (changeTo == -1) {
             for (row in grid) {
                 for (brd in row) {
@@ -2786,18 +2704,18 @@ class WorldEditor @JvmOverloads constructor(
 
         val boardsSeen = HashSet<Board?>()
         boardsSeen.add(currentBoard)
-        val map = HashMap<ArrayList<Int>, Board?>()
-        map[pair(0, 0)] = currentBoard
+        val map = HashMap<Pos, Board?>()
+        map[Pos(0, 0)] = currentBoard
         val stack = ArrayDeque<Any?>()
+        // TODO(jakeouellette): Can this stack be, instead, of pos?
         stack.add(0)
         stack.add(0)
         stack.add(currentBoard)
         while (true) {
             // Board exits go NORTH, SOUTH, WEST, EAST
-            val dir = arrayOf(intArrayOf(0, -1), intArrayOf(0, 1), intArrayOf(-1, 0), intArrayOf(1, 0))
+            val dir = arrayOf(Pos.UP, Pos.DOWN,Pos.LEFT, Pos.RIGHT)
             if (stack.isEmpty()) break
-            val x = stack.pop() as Int
-            val y = stack.pop() as Int
+            val pos = Pos(stack.pop() as Int, stack.pop() as Int)
             val board = stack.pop() as Board
 
             for (exit in 0..3) {
@@ -2805,13 +2723,12 @@ class WorldEditor @JvmOverloads constructor(
                 if (dest > 0 && dest < boards.size) {
                     val destBoard = boards[dest]
                     if (!boardsSeen.contains(destBoard)) {
-                        val dx = x + dir[exit][0]
-                        val dy = y + dir[exit][1]
-                        if (!map.containsKey(pair(dx, dy))) {
-                            map[pair(dx, dy)] = destBoard
+                        val dxy = pos + dir[exit]
+                        if (!map.containsKey(dxy)) {
+                            map[dxy] = destBoard
                             boardsSeen.add(destBoard)
-                            stack.add(dx)
-                            stack.add(dy)
+                            stack.add(dxy.x)
+                            stack.add(dxy.y)
                             stack.add(destBoard)
                         }
                     }
@@ -2819,52 +2736,42 @@ class WorldEditor @JvmOverloads constructor(
             }
         }
 
-        var minX = 0
-        var minY = 0
-        var maxX = 0
-        var maxY = 0
+        var minPos = Pos.ZERO
+        var maxPos = Pos.ZERO
         for (loc in map.keys) {
-            val x = loc[0]
-            val y = loc[1]
-            minX = min(minX.toDouble(), x.toDouble()).toInt()
-            minY = min(minY.toDouble(), y.toDouble()).toInt()
-            maxX = max(maxX.toDouble(), x.toDouble()).toInt()
-            maxY = max(maxY.toDouble(), y.toDouble()).toInt()
+            minPos = minPos.min(loc)
+            maxPos = maxPos.max(loc)
             //System.out.printf("%d,%d: %s\n", loc.get(0), loc.get(1), CP437.INSTANCE.toUnicode(map.get(loc).getName()));
         }
-        gridW = maxX - minX + 1
-        gridH = maxY - minY + 1
-        grid = Array(gridH) { IntArray(gridW) }
+        gridDim = (maxPos - minPos + 1).dim
+        grid = Array(gridDim.h) { IntArray(gridDim.w) }
         val boardIdLookup = HashMap<Board?, Int>()
         for (i in boards.indices) {
             boardIdLookup[boards[i]] = i
         }
-        for (y in 0 until gridH) {
+        for (y in 0 until gridDim.h) {
             Arrays.fill(grid[y], -1)
         }
-        val atlas = Atlas(gridW, gridH, grid)
+        val atlas = Atlas(gridDim, grid)
         currentAtlas = atlas
         for (loc in map.keys) {
-            val x = loc[0] - minX
-            val y = loc[1] - minY
+            val xy = loc - minPos
             val board = map[loc]
             val boardIdx = boardIdLookup[board]!!
-            grid[y][x] = boardIdx
+            grid[xy.y][xy.x] = boardIdx
             atlases[boardIdx] = atlas
         }
-        cursorX = (cursorX % boardW) + boardW * -minX
-        cursorY = (cursorY % boardH) + boardH * -minY
-        width = boardW * gridW
-        height = boardH * gridH
-        canvas.setCursor(cursorX, cursorY)
+        cursorPos = (cursorPos % boardDim) + boardDim * -minPos
+        dim = boardDim * gridDim
+        canvas.setCursor(cursorPos)
         invalidateCache()
         afterModification()
         canvas.revalidate()
         val rect = Rectangle(
-            canvas.getCharW(-minX * boardW),
-            canvas.getCharH(-minY * boardH),
-            canvas.getCharW(boardW),
-            canvas.getCharH(boardH)
+            canvas.getCharW(-minPos.x * boardDim.w),
+            canvas.getCharH(-minPos.y * boardDim.h),
+            canvas.getCharW(boardDim.w),
+            canvas.getCharH(boardDim.h)
         )
         canvas.scrollRectToVisible(rect)
         undoHandler.resetUndoList()
@@ -2873,11 +2780,11 @@ class WorldEditor @JvmOverloads constructor(
     private fun atlasRemoveBoard() {
         if (currentBoard == null) return
         if (currentAtlas == null) return
-        atlases.remove(grid[cursorY / boardH][cursorX / boardW])
-        grid[cursorY / boardH][cursorX / boardW] = -1
+        atlases.remove(grid[cursorPos.y / boardDim.h][cursorPos.x / boardDim.w])
+        grid[cursorPos.y / boardDim.h][cursorPos.x / boardDim.w] = -1
         var notEmpty = false
-        for (y in 0 until gridH) {
-            for (x in 0 until gridW) {
+        for (y in 0 until gridDim.h) {
+            for (x in 0 until gridDim.w) {
                 if (grid[y][x] != -1) notEmpty = true
             }
         }
@@ -2895,11 +2802,15 @@ class WorldEditor @JvmOverloads constructor(
             val ch = e.keyChar
             if (ch.code < 256) {
                 if (ch == '\n') {
-                    cursorX = textEntryX
-                    cursorY = clamp(cursorY + 1, 0, height - 1)
+                    // TODO(jakeouellette): Convert to convienence
+                    cursorPos = Pos(
+                        textEntryX,
+                        clamp(cursorPos.y + 1, 0, this@WorldEditor.dim.h - 1))
                 } else {
                     if (ch.code == 8) { // bksp
-                        cursorX = clamp(cursorX - 1, 0, width - 1)
+                        cursorPos = Pos(
+                            clamp(cursorPos.x - 1, 0, this@WorldEditor.dim.w - 1),
+                            cursorPos.y)
                     }
                     var col = ch.code
                     if (ch.code == 8 || ch.code == 127) { // bksp or del
@@ -2908,15 +2819,18 @@ class WorldEditor @JvmOverloads constructor(
 
                     val id = (getTileColour(bufferTile!!) % 128) + 128
                     val textTile = Tile(id, col)
-                    putTileAt(cursorX, cursorY, textTile, PUT_DEFAULT)
+                    putTileAt(cursorPos, textTile, PUT_DEFAULT)
 
                     if (ch.code != 8 && ch.code != 127) { // not bksp or del
-                        cursorX = clamp(cursorX + 1, 0, width - 1)
+                        // TODO(jakeouellette): Convert to convienence
+                        cursorPos = Pos(
+                            clamp(cursorPos.x + 1, 0, this@WorldEditor.dim.w - 1),
+                            cursorPos.y)
                     }
 
                     afterModification()
                 }
-                canvas.setCursor(cursorX, cursorY)
+                canvas.setCursor(cursorPos)
             }
         }
     }

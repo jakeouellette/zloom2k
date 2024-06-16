@@ -11,9 +11,8 @@ import java.awt.event.ActionEvent
 import javax.swing.KeyStroke
 
 internal fun WorldEditor.operationStatList() {
-    val board = getBoardAt(cursorX, cursorY)
-    val boardX = cursorX / boardW * boardW
-    val boardY = cursorY / boardH * boardH
+    val board = getBoardAt(cursorPos)
+    val boardXY = cursorPos / boardDim * boardDim
     if (board == null) return
     val contextOptions = arrayOf(
         "Modify",
@@ -42,8 +41,7 @@ internal fun WorldEditor.operationStatList() {
     }
 
     StatSelector(
-        this.boardXOffset,
-        this.boardYOffset,
+        this.boardPosOffset,
         this.boardIdx,
         this.canvas,
         board,
@@ -53,18 +51,17 @@ internal fun WorldEditor.operationStatList() {
             val stat = board.getStat(value)
             when (option) {
                 0, 1 -> {
-                    val x = stat!!.x - 1
-                    val y = stat.y - 1
+                    val pos = stat!!.pos - 1
 
                     createTileEditor(
                         board = board,
-                        x = x,
-                        y = y,
+                        pos = pos,
                         callback = { resultTile: Tile ->
-                            setStats(board, boardX, boardY, x, y, resultTile.stats)
+                            setStats(board, boardXY, pos, resultTile.stats)
                             if (resultTile.id != -1) {
-                                addRedraw(x + boardX, y + boardY, x + boardX, y + boardY)
-                                board.setTileRaw(x, y, resultTile.id, resultTile.col)
+                                val newPos = pos + boardXY
+                                addRedraw(newPos, newPos)
+                                board.setTileRaw(pos, resultTile.id, resultTile.col)
                             }
                             (e.source as StatSelector).dataChanged()
                             afterModification()
@@ -73,7 +70,7 @@ internal fun WorldEditor.operationStatList() {
                         exempt = false,
                         selected = value,
                         tile = null,
-                        stats = board.getStatsAt(x, y)
+                        stats = board.getStatsAt(pos)
                     )
                 }
 
@@ -97,5 +94,5 @@ internal fun WorldEditor.operationStatList() {
         downStroke,
         this.frameForRelativePositioning,
         this.worldData.isSuperZZT,
-        { x, y -> this.canvas.setIndicate(x, y) })
+        { xys -> this.canvas.setIndicate(xys) })
 }

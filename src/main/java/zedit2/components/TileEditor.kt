@@ -11,6 +11,7 @@ import zedit2.model.Board
 import zedit2.model.IconFactory
 import zedit2.model.Stat
 import zedit2.model.Tile
+import zedit2.model.spatial.Pos
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
 import zedit2.util.SZZTType
@@ -28,8 +29,7 @@ import javax.swing.event.ListSelectionListener
 
 class TileEditor(
     editor: WorldEditor,
-    private val boardXOffset: Int,
-    private val boardYOffset: Int,
+    private val boardPosOffset: Pos,
     val currentBoard: Int,
     val isSuperZZT: Boolean,
     private val boards : List<Board>,
@@ -39,12 +39,11 @@ class TileEditor(
     inputTile: Tile?,
     stats: List<Stat>?,
     callback: TileEditorCallback,
-    x: Int,
-    y: Int,
+    xy: Pos,
     advanced: Boolean,
     selected: Int,
     editExempt: Boolean,
-    private val onIndicateSet : (IntArray?, IntArray?) -> Unit,
+    private val onIndicateSet : (Array<Pos>?) -> Unit,
     val getKeystroke : (stroke : String) -> KeyStroke
 ) {
     private val editExempt: Boolean
@@ -57,8 +56,7 @@ class TileEditor(
     private val callback: TileEditorCallback
     private var tileEditorFrame: JDialog? = null
     private var statList: JList<String?>? = null
-    private val tileX: Int
-    private val tileY: Int
+    private val tilePos : Pos
     private val board: Board
     private var currentStat: Stat? = null
     private var otherEditorPanel: JPanel? = null
@@ -82,12 +80,11 @@ class TileEditor(
         this.board = board
         this.selected = selected
         this.editExempt = editExempt
-        tileX = x
-        tileY = y
+        tilePos = xy
         if (inputTile == null) {
             if (stats != null) {
-                if (x >= 0 && y >= 0 && x < board.width && y < board.height) {
-                    tile = board.getTile(x, y, false)
+                if (xy.inside(board.dim)) {
+                    tile = board.getTile(xy, false)
                 } else {
                     tile = Tile(-1, -1, stats)
                 }
@@ -422,7 +419,7 @@ class TileEditor(
         createColourSelector(editor, currentStat!!.p1, relativeFrame(), { e: ActionEvent ->
             currentStat!!.p1 = e.actionCommand.toInt()
             // If this is a buffer object, don't open the code editor
-            if (tileX == -1 && tileY == -1 && !editExempt) {
+            if (!tilePos.isPositive && !editExempt) {
                 callback.callback(tile)
                 return@createColourSelector
             }
@@ -438,7 +435,7 @@ class TileEditor(
 
     private fun editorScroll() {
         // If this is a buffer object, don't open the editor
-        if (tileX == -1 && tileY == -1 && !editExempt) return
+        if (!tilePos.isPositive && !editExempt) return
         codeEditor(currentStat) { e: ActionEvent ->
             val source = e.source as CodeEditor
             currentStat!!.code = source.code
@@ -670,12 +667,10 @@ class TileEditor(
     private fun addStat(statList: JList<String?>, statListListener: ListSelectionListener, copyFrom: Stat?) {
         val t : Tile = tile!!
         val newStat = copyFrom?.clone() ?: Stat(szzt)
-        if (tileX != -1) {
-            newStat.x = tileX + 1
-            newStat.y = tileY + 1
+        if (tilePos.isPositive) {
+            newStat.pos = tilePos + 1
         } else {
-            newStat.x = -1
-            newStat.y = -1
+            newStat.pos = Pos(-1, -1)
         }
         newStat.statId = -1
         t.addStat(newStat)
@@ -870,7 +865,7 @@ class TileEditor(
             upd()
         }
         if (stat.codeLength >= 0) {
-            if (tileX == -1 && tileY == -1) {
+            if (!tilePos.isPositive) {
                 codeButton = JButton("View code (" + stat.codeLength + ")")
                 codeButton.toolTipText = "View the code attached to this buffer stat (read-only)"
             } else {
@@ -891,7 +886,7 @@ class TileEditor(
                     )
                 }
                 if (confirm == JOptionPane.OK_OPTION) {
-                    StatSelector(boardXOffset, boardYOffset,currentBoard,imageRetriever, board, { e1: ActionEvent ->
+                    StatSelector(boardPosOffset,currentBoard,imageRetriever, board, { e1: ActionEvent ->
                         (e1.source as StatSelector).close()
                         val value = getStatIdx(e1.actionCommand)
                         if (value != stat.statId) {
@@ -918,7 +913,7 @@ class TileEditor(
     }
 
     private fun codeEditor(stat: Stat?, listener: ActionListener) {
-        CodeEditorFactory.create(tileX, tileY, editExempt, relativeFrame(), editor, icon, board, stat, listener)
+        CodeEditorFactory.create(tilePos, editExempt, relativeFrame(), editor, icon, board, stat, listener)
     }
 
     private val icon: Image
@@ -1011,7 +1006,7 @@ class TileEditor(
             val spinPanelSel = JPanel(BorderLayout())
             val spinPanelSearch = JButton("\uD83D\uDD0D")
             spinPanelSearch.addActionListener { e: ActionEvent? ->
-                StatSelector(boardXOffset, boardYOffset, currentBoard, imageRetriever, board, { e1: ActionEvent ->
+                StatSelector(boardPosOffset, currentBoard, imageRetriever, board, { e1: ActionEvent ->
                     (e1.source as StatSelector).close()
                     val value = getStatIdx(e1.actionCommand)
                     spinner.value = value

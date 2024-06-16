@@ -13,20 +13,20 @@ fun WorldEditor.operationAddBoard(): Int {
         var addedToAtlas = false
 
         if (currentAtlas != null) {
-            val gridX = cursorX / boardW
-            val gridY = cursorY / boardH
-            if (grid[gridY][gridX] == -1) {
+            // TODO(jakeouellette): Update this with more Pos / Dim idiom
+            val gridPos = cursorPos / boardDim
+            if (grid[gridPos.y][gridPos.x] == -1) {
                 addedToAtlas = true
-                grid[gridY][gridX] = newBoardIdx
+                grid[gridPos.y][gridPos.x] = newBoardIdx
                 atlases[newBoardIdx] = currentAtlas!!
 
                 val dirs = arrayOf(intArrayOf(0, -1), intArrayOf(0, 1), intArrayOf(-1, 0), intArrayOf(1, 0))
                 val dirReverse = intArrayOf(1, 0, 3, 2)
 
                 for (exit in 0..3) {
-                    val bx = gridX + dirs[exit][0]
-                    val by = gridY + dirs[exit][1]
-                    if (bx >= 0 && by >= 0 && bx < gridW && by < gridH) {
+                    val bx = gridPos.x + dirs[exit][0]
+                    val by = gridPos.y + dirs[exit][1]
+                    if (bx >= 0 && by >= 0 && bx < gridDim.w && by < gridDim.h) {
                         val boardAtIdx = grid[by][bx]
                         if (boardAtIdx != -1) {
                             val revExit = dirReverse[exit]

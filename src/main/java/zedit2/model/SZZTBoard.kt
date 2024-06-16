@@ -4,6 +4,8 @@ import zedit2.util.SZZTType
 import zedit2.util.ZType
 import zedit2.util.CP437.toBytes
 import zedit2.components.Util
+import zedit2.model.spatial.Dim
+import zedit2.model.spatial.Pos
 
 class SZZTBoard : Board {
 
@@ -25,8 +27,9 @@ class SZZTBoard : Board {
 
         setPlayerX(Util.getInt8(worldData, boardPropertiesOffset + 6))
         setPlayerY(Util.getInt8(worldData, boardPropertiesOffset + 7))
-        cameraX = Util.getInt16(worldData, boardPropertiesOffset + 8)
-        cameraY = Util.getInt16(worldData, boardPropertiesOffset + 10)
+        cameraPos = Pos(
+            Util.getInt16(worldData, boardPropertiesOffset + 8),
+            Util.getInt16(worldData, boardPropertiesOffset + 10))
         setTimeLimit(Util.getInt16(worldData, boardPropertiesOffset + 12).toShort().toInt())
         setStats(worldData, boardPropertiesOffset + 28, 0)
 
@@ -43,7 +46,7 @@ class SZZTBoard : Board {
         playerStat.cycle = 1
         playerStat.isPlayer = true
         val player = Tile(ZType.PLAYER, 0x1F, playerStat)
-        setTile(48, 40, player)
+        setTile(Pos(48, 40), player)
     }
 
     override fun write(warning: CompatWarning?, worldData: ByteArray, boardOffset: Int) {
@@ -62,8 +65,8 @@ class SZZTBoard : Board {
         Util.setInt8(worldData, boardPropertiesOffset + 5, if (isRestartOnZap()) 1 else 0)
         Util.setInt8(worldData, boardPropertiesOffset + 6, getPlayerX())
         Util.setInt8(worldData, boardPropertiesOffset + 7, getPlayerY())
-        Util.setInt16(worldData, boardPropertiesOffset + 8, cameraX)
-        Util.setInt16(worldData, boardPropertiesOffset + 10, cameraY)
+        Util.setInt16(worldData, boardPropertiesOffset + 8, cameraPos.x)
+        Util.setInt16(worldData, boardPropertiesOffset + 10, cameraPos.y)
         Util.setInt16(worldData, boardPropertiesOffset + 12, getTimeLimit())
         writeStats(warning!!, worldData, boardPropertiesOffset + 28)
     }
@@ -71,8 +74,7 @@ class SZZTBoard : Board {
     override fun clone(): Board {
         val other = SZZTBoard()
         cloneInto(other)
-        other.cameraX = cameraX
-        other.cameraY = cameraY
+        other.cameraPos = cameraPos
         return other
     }
 
@@ -86,28 +88,15 @@ class SZZTBoard : Board {
         get() = ByteArray(0)
         set(message) {}
 
-    override var cameraX: Int = 0
+    override var cameraPos: Pos = Pos(0, 0)
         get() = field
         set(value) {
             field = value
             setDirty()
         }
 
-    override var cameraY:Int = 0
-        get() = field
-        set(value) {
-            field = value
-            setDirty()
-        }
-
-    // TODO(jakeouellette): I don't set Dirty on these.
-    override var width: Int = 0
-        get() = field
-        set(value) {
-            field = value
-        }
-
-    override var height:Int = 0
+    // FIXME(jakeouellette): I don't set Dirty on these, do I need to?
+    override var dim: Dim = Dim(0,0)
         get() = field
         set(value) {
             field = value
@@ -122,9 +111,9 @@ class SZZTBoard : Board {
             return size
         }
 
-    override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, x: Int, y: Int) {
-        cols!![pos] = SZZTType.getColour(this, x, y).toByte()
-        chars!![pos] = SZZTType.getChar(this, x, y).toByte()
+    override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, xy : Pos) {
+        cols!![pos] = SZZTType.getColour(this, xy).toByte()
+        chars!![pos] = SZZTType.getChar(this, xy).toByte()
     }
 
     override fun isEqualTo(other: Board): Boolean {
@@ -132,8 +121,8 @@ class SZZTBoard : Board {
         if (!super.isEqualTo(other)) return false
 
         val szztOther = other
-        if (cameraX != szztOther.cameraX) return false
-        return cameraY == szztOther.cameraY
+        if (cameraPos != szztOther.cameraPos) return false
+        return cameraPos == szztOther.cameraPos
     }
 
     companion object {

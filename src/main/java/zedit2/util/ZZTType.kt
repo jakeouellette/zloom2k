@@ -4,6 +4,7 @@ import zedit2.components.GlobalEditor.getBoolean
 import zedit2.model.Board
 import zedit2.model.Stat
 import zedit2.model.Tile
+import zedit2.model.spatial.Pos
 
 object ZZTType : ZType() {
     private val charcodes = intArrayOf(
@@ -29,8 +30,8 @@ object ZZTType : ZType() {
         return (id == LINE) || (id == BOARDEDGE)
     }
 
-    private fun getFirstStat(board: Board, x: Int, y: Int): Stat? {
-        val stats = board.getStatsAt(x, y)
+    private fun getFirstStat(board: Board, xy : Pos): Stat? {
+        val stats = board.getStatsAt(xy)
         if (stats.isEmpty()) return null
         return stats[0]
     }
@@ -42,24 +43,24 @@ object ZZTType : ZType() {
     }
 
     @JvmStatic
-    fun getChar(board: Board, x: Int, y: Int): Int {
-        val id = board.getTileId(x, y)
+    fun getChar(board: Board, xy: Pos): Int {
+        val id = board.getTileId(xy)
 
         when (id) {
             DUPLICATOR -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharCodes(board, x, y, id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharCodes(board, xy, id)
                 return duplicatorFrames[lastStat.p1]
             }
 
             BOMB -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharCodes(board, x, y, id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharCodes(board, xy, id)
                 var bombChar = (48 + lastStat.p1) and 0xFF
                 if (bombChar == 48 || bombChar == 49) bombChar = 11
                 return bombChar
             }
 
             TRANSPORTER -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharCodes(board, x, y, id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharCodes(board, xy, id)
                 val xs = lastStat.stepX
                 val ys = lastStat.stepY
                 if (xs < 0 && ys == 0) return 40 // '('
@@ -72,12 +73,12 @@ object ZZTType : ZType() {
             }
 
             OBJECT -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharCodes(board, x, y, id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharCodes(board, xy, id)
                 return lastStat.p1
             }
 
             PUSHER -> {
-                val lastStat = getFirstStat(board, x, y) ?: return checkCharCodes(board, x, y, id)
+                val lastStat = getFirstStat(board, xy) ?: return checkCharCodes(board, xy, id)
                 val xs = lastStat.stepX
                 val ys = lastStat.stepY
                 if (xs < 0 && ys == 0) return 17
@@ -89,10 +90,10 @@ object ZZTType : ZType() {
             LINE -> {
                 // For lines, the char depends on surrounding tiles
                 var lch = 15
-                if ((y == 0) || isLineOrEdge(board.getTileId(x, y - 1))) lch -= 8
-                if ((y == board.height - 1) || isLineOrEdge(board.getTileId(x, y + 1))) lch -= 4
-                if ((x == board.width - 1) || isLineOrEdge(board.getTileId(x + 1, y))) lch -= 2
-                if ((x == 0) || isLineOrEdge(board.getTileId(x - 1, y))) lch -= 1
+                if ((xy.y == 0) || isLineOrEdge(board.getTileId(xy + Pos.UP ))) lch -= 8
+                if ((xy.y == board.dim.h - 1) || isLineOrEdge(board.getTileId(xy + Pos.DOWN))) lch -= 4
+                if ((xy.x == board.dim.w - 1) || isLineOrEdge(board.getTileId(xy + Pos.RIGHT))) lch -= 2
+                if ((xy.x == 0) || isLineOrEdge(board.getTileId(xy + Pos.LEFT))) lch -= 1
                 return linechars[lch]
             }
 
@@ -103,19 +104,19 @@ object ZZTType : ZType() {
                     32
                 }
             }
-            else -> return checkCharCodes(board, x, y, id)
+            else -> return checkCharCodes(board, xy, id)
         }
     }
 
-    fun checkCharCodes(board : Board, x: Int, y:Int, id: Int) : Int {
+    fun checkCharCodes(board : Board, xy: Pos, id: Int) : Int {
         // Otherwise, check in the charcodes list
         if (id < charcodes.size) return charcodes[id]
         // Otherwise, return the char as color
-        return board.getTileCol(x, y)
+        return board.getTileCol(xy)
     }
     @JvmStatic
-    fun getColour(board: Board, x: Int, y: Int): Int {
-        val id = board.getTileId(x, y)
+    fun getColour(board: Board, xy: Pos): Int {
+        val id = board.getTileId(xy)
 
         if (id >= 128) {
             return id - 128
@@ -128,7 +129,7 @@ object ZZTType : ZType() {
 
             PLAYER -> {
                 // With stats, the player is c1F
-                if (!board.getStatsAt(x, y).isEmpty()) {
+                if (!board.getStatsAt(xy).isEmpty()) {
                     return 0x1F
                 }
             }
@@ -141,7 +142,7 @@ object ZZTType : ZType() {
             else -> {}
         }
         // Otherwise, use the given colour
-        return board.getTileCol(x, y)
+        return board.getTileCol(xy)
     }
 
     @JvmStatic

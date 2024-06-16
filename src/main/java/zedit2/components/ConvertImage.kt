@@ -4,6 +4,7 @@ import zedit2.event.Converter
 import zedit2.event.ConverterCallback
 import zedit2.model.Stat
 import zedit2.model.Tile
+import zedit2.model.spatial.Dim
 import zedit2.util.ZType
 import java.awt.*
 import java.awt.event.*
@@ -41,8 +42,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
 
     private var checkingValue = 0
 
-    private var bufferW = 0
-    private var bufferH = 0
+    private var bufferDim = Dim(0,0)
     private var buffer: Array<Tile?>? = null
 
     private val ditherOnly = HashSet(mutableListOf("Empty", "Water", "Floor", "Solid", "Normal", "Breakable"))
@@ -157,17 +157,18 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
 
         var defaultCharW = max(1.0, ((w + 4) / 8).toDouble()).toInt()
         var defaultCharH = max(1.0, ((h + 7) / 14).toDouble()).toInt()
-        if (defaultCharW > editor.width) {
-            defaultCharW = editor.width
-            defaultCharH = max(1.0, ((h * 8 * editor.width / w + 7) / 14).toDouble()).toInt()
+        // TODO(jakeouellette): Clean up this comparison slightly
+        if (defaultCharW > editor.dim.w) {
+            defaultCharW = editor.dim.w
+            defaultCharH = max(1.0, ((h * 8 * editor.dim.w / w + 7) / 14).toDouble()).toInt()
         }
-        if (defaultCharH > editor.height) {
-            defaultCharH = editor.height
-            defaultCharW = max(1.0, ((w * 14 * editor.height / h + 4) / 8).toDouble()).toInt()
+        if (defaultCharH > editor.dim.h) {
+            defaultCharH = editor.dim.h
+            defaultCharW = max(1.0, ((w * 14 * editor.dim.h / h + 4) / 8).toDouble()).toInt()
         }
 
-        sizeW = addSpinner(optionsBox, "Output Width:", SpinnerNumberModel(defaultCharW, 1, editor.width, 1))
-        sizeH = addSpinner(optionsBox, "Output Height:", SpinnerNumberModel(defaultCharH, 1, editor.height, 1))
+        sizeW = addSpinner(optionsBox, "Output Width:", SpinnerNumberModel(defaultCharW, 1, editor.dim.w, 1))
+        sizeH = addSpinner(optionsBox, "Output Height:", SpinnerNumberModel(defaultCharH, 1, editor.dim.h, 1))
         objCount = addSpinner(optionsBox, "Max Stats:", SpinnerNumberModel(0, 0, 32767, 1))
 
         objCount!!.value = GlobalEditor.getInt("CONVERT_MAXSTATS", 0)
@@ -200,7 +201,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
             val nonNullTiles : Array<Tile> = buffer!!.map { tile : Tile? ->
                 tile ?: throw RuntimeException("Tile uninitialized past initialization phase, unexpected.")
             }.toTypedArray()
-            GlobalEditor.setBlockBuffer(bufferW, bufferH, nonNullTiles!!, false, szzt)
+            GlobalEditor.setBlockBuffer(bufferDim, nonNullTiles!!, false, szzt)
             GlobalEditor.setInt("CONVERT_MACROW", macroW!!.value as Int)
             GlobalEditor.setInt("CONVERT_MACROH", macroH!!.value as Int)
             GlobalEditor.setInt("CONVERT_MAXSTATS", objCount!!.value as Int)
@@ -360,8 +361,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
             override fun finished(checkVal: Int) {
                 if (checkVal != checkingValue) return
                 //System.out.println("finished called from: " + Thread.currentThread());
-                bufferW = outw
-                bufferH = outh
+                bufferDim = Dim(outw, outh)
                 buffer = output
                 ok.isEnabled = true
                 SwingUtilities.invokeLater { updatePreview(outw, outh, outputChr, outputVcol, outputImage) }

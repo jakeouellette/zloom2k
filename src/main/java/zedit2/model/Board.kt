@@ -5,6 +5,8 @@ import zedit2.components.DosCanvas
 import zedit2.components.GlobalEditor
 import zedit2.components.Util
 import zedit2.components.WorldEditor
+import zedit2.model.spatial.Dim
+import zedit2.model.spatial.Pos
 import zedit2.util.CP437
 import zedit2.util.ZType
 import java.io.File
@@ -21,8 +23,7 @@ abstract class Board {
     private var shots = 0
     private var exits = IntArray(4)
     private var restartOnZap = false
-    private var playerX = 0
-    private var playerY = 0
+    private var playerPos = Pos(0, 0)
     private var timeLimit = 0
     private var stats = ArrayList<Stat>()
     private var rleSizeSaved = 0
@@ -34,18 +35,15 @@ abstract class Board {
         private set
 
     abstract val isSuperZZT: Boolean
-    abstract val width: Int
-    abstract val height: Int
+    abstract val dim : Dim
     abstract var isDark: Boolean
     abstract var message: ByteArray
-    abstract var cameraX: Int
-    abstract var cameraY: Int
+    abstract var cameraPos : Pos
 
     protected fun initialise() {
-        val w = width
-        val h = height
-        bid = IntArray(w * h)
-        bco = IntArray(w * h)
+        val d = dim
+        bid = IntArray(d.arrSize)
+        bco = IntArray(d.arrSize)
     }
 
     @Throws(WorldCorruptedException::class)
@@ -53,12 +51,11 @@ abstract class Board {
         var dataOffset = dataOffset
         initialise()
 
-        val w = width
-        val h = height
+        val d = dim
 
         var pos = 0
         try {
-            while (pos < w * h) {
+            while (pos < d.arrSize) {
                 var len = Util.getInt8(worldData, dataOffset)
                 if (len == 0) len = 256
                 for (i in 0 until len) {
@@ -76,15 +73,14 @@ abstract class Board {
     }
 
     protected fun encodeRLE(worldData: ByteArray, dataOffset: Int): Int {
-        val w = width
-        val h = height
+        val d = dim
         var runPos = dataOffset
         // Write our initial run (0, 0, 0)
         Util.setInt8(worldData, runPos + 0, 0)
         Util.setInt8(worldData, runPos + 1, 0)
         Util.setInt8(worldData, runPos + 2, 0)
 
-        for (i in 0 until w * h) {
+        for (i in 0 until d.arrSize) {
             val currBid = bid[i] and 0xFF
             val currBco = bco[i] and 0xFF
 
@@ -117,14 +113,13 @@ abstract class Board {
     protected val rLESize: Int
         get() {
             if (rleSizeSaved == 0) {
-                val w = width
-                val h = height
+                val d = dim
                 var runs = 0
                 var runBid = -1
                 var runBco = -1
                 var runLen = 0
 
-                for (i in 0 until w * h) {
+                for (i in 0 until d.arrSize) {
                     val currBid = bid[i] and 0xFF
                     val currBco = bco[i] and 0xFF
                     if (currBid == runBid && currBco == runBco && runLen < 255) {
@@ -191,20 +186,20 @@ abstract class Board {
     }
 
     fun getPlayerX(): Int {
-        return playerX
+        return playerPos.x
     }
 
     fun setPlayerX(x: Int) {
-        this.playerX = x
+        this.playerPos = Pos(x, playerPos.y)
         setDirty()
     }
 
     fun getPlayerY(): Int {
-        return playerY
+        return playerPos.y
     }
 
     fun setPlayerY(y: Int) {
-        this.playerY = y
+        this.playerPos = Pos(playerPos.x, y)
         setDirty()
     }
 
@@ -260,28 +255,29 @@ abstract class Board {
         }
     }
 
-    protected abstract fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, x: Int, y: Int)
+    protected abstract fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, xy: Pos)
 
-    fun getTileCol(x: Int, y: Int): Int {
-        return bco[y * width + x] and 0xFF
+    fun getTileCol(pos : Pos): Int {
+        return bco[pos.arrayPos(dim.w)] and 0xFF
     }
 
-    fun getTileId(x: Int, y: Int): Int {
-        return bid[y * width + x] and 0xFF
+    fun getTileId(pos : Pos): Int {
+        return bid[pos.arrayPos(dim.w)] and 0xFF
     }
 
-    fun getStatsAt(x: Int, y: Int): List<Stat> {
+    fun getStatsAt(pos : Pos): List<Stat> {
         val tileStats = ArrayList<Stat>()
         for (stat in stats) {
-            if (stat!!.x == x + 1 && stat.y == y + 1) {
+            // TODO(jakeouellette): Why is this pos + 1? Can we make this simpler?
+            if (stat!!.pos == (pos + 1)) {
                 tileStats.add(stat.clone())
             }
         }
         return tileStats
     }
 
-    fun getTile(x: Int, y: Int, copy: Boolean): Tile {
-        val tile = Tile(getTileId(x, y), getTileCol(x, y), getStatsAt(x, y))
+    fun getTile(pos : Pos, copy: Boolean): Tile {
+        val tile = Tile(getTileId(pos), getTileCol(pos), getStatsAt(pos))
         if (copy) {
             for (stat in tile.stats) {
                 val visited = HashSet<Stat?>()
@@ -315,13 +311,13 @@ abstract class Board {
         return tile
     }
 
-    fun setTile(x: Int, y: Int, tile: Tile) {
-        setTileDirect(x, y, tile)
+    fun setTile(pos : Pos, tile: Tile) {
+        setTileDirect(pos, tile)
         finaliseStats()
     }
 
-    fun setTileDirect(x: Int, y: Int, tile: Tile) {
-        val pos = y * width + x
+    fun setTileDirect(xy : Pos, tile: Tile) {
+        val pos = xy.arrayPos(dim.w)
         bid[pos] = tile.id.toByte().toInt()
         bco[pos] = tile.col.toByte().toInt()
         dirtyRLE()
@@ -340,7 +336,7 @@ abstract class Board {
         val statsToDelete = ArrayList<Int>()
         for (i in stats.indices) {
             val stat = stats[i]
-            if (stat!!.x == x + 1 && stat.y == y + 1) {
+            if (stat.pos == xy + 1) {
                 val newStat = statsInTile[stat.statId]
                 if (newStat != null) {
                     statsInTile.remove(stat.statId)
@@ -356,8 +352,7 @@ abstract class Board {
 
         for (stat in statsToPut) {
             val newStat = stat!!.clone()
-            newStat.x = x + 1
-            newStat.y = y + 1
+            newStat.pos = xy + 1
             newStat.statId = -1
             stats.add(newStat)
         }
@@ -421,8 +416,8 @@ abstract class Board {
     /**
      * Sets a tile without affecting stats
      */
-    fun setTileRaw(x: Int, y: Int, id: Int, col: Int) {
-        val pos = y * width + x
+    fun setTileRaw(tilePos : Pos, id: Int, col: Int) {
+        val pos = tilePos.arrayPos(dim.w)
         if (bid[pos] != id.toByte().toInt() || bco[pos] != col.toByte().toInt()) {
             bid[pos] = id.toByte().toInt()
             bco[pos] = col.toByte().toInt()
@@ -584,49 +579,50 @@ abstract class Board {
         dirtyStats()
     }
 
-    fun drawToCanvas(canvas: DosCanvas, offsetX: Int, offsetY: Int, x1: Int, y1: Int, x2: Int, y2: Int, showing: Int) {
+    fun drawToCanvas(canvas: DosCanvas, offset : Pos, pos : Pos, pos2 : Pos, showing: Int) {
         finalisationCheck()
 
-        val width = x2 - x1 + 1
-        val height = y2 - y1 + 1
+        val wh = (pos2 - pos + 1).dim
+        val arrSize = wh.arrSize
         //System.out.printf("Draw %d x %d\n", width, height);
-        val cols = ByteArray(width * height)
-        val chars = ByteArray(width * height)
+        val cols = ByteArray(arrSize)
+        val chars = ByteArray(arrSize)
         var show: ByteArray? = null
         if (showing != WorldEditor.SHOW_NOTHING) {
-            show = ByteArray(width * height)
+            show = ByteArray(arrSize)
 
             if (showing == WorldEditor.SHOW_STATS) {
                 for (stat in stats) {
-                    val x = stat!!.x - 1 - x1
-                    val y = stat.y - 1 - y1
-                    if (x >= 0 && y >= 0 && x < width && y < height) {
-                        show[y * width + x] = showing.toByte()
+                    val xy = stat!!.pos - 1 - pos
+                    if (xy.inside(wh)) {
+                        show[xy.arrayPos(wh.w)] = showing.toByte()
                     }
                 }
             }
         }
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                val pos = y * width + x
-                drawCharacter(cols, chars, pos, x + x1, y + y1)
+        for (y in 0 until wh.h) {
+            for (x in 0 until wh.w) {
+                val xy = Pos(x, y)
+
+                val posI = xy.arrayPos(wh.w)
+                drawCharacter(cols, chars, posI, xy + pos)
                 if (showing != WorldEditor.SHOW_NOTHING) {
-                    val bpos = (y + y1) * this.width + x + x1
+                    val bpos = (xy + pos).arrayPos(this.dim.w)
                     val id = bid[bpos]
                     when (showing) {
                         WorldEditor.SHOW_EMPTIES, WorldEditor.SHOW_EMPTEXTS -> if (id == ZType.EMPTY) {
-                            show!![pos] = showing.toByte()
-                            cols[pos] = bco[bpos].toByte()
+                            show!![posI] = showing.toByte()
+                            cols[posI] = bco[bpos].toByte()
                         }
 
-                        WorldEditor.SHOW_FAKES -> if (id == ZType.FAKE) show!![pos] = showing.toByte()
-                        WorldEditor.SHOW_INVISIBLES -> if (id == ZType.INVISIBLE) show!![pos] = showing.toByte()
-                        WorldEditor.SHOW_OBJECTS -> if (id == ZType.OBJECT) show!![pos] = showing.toByte()
+                        WorldEditor.SHOW_FAKES -> if (id == ZType.FAKE) show!![posI] = showing.toByte()
+                        WorldEditor.SHOW_INVISIBLES -> if (id == ZType.INVISIBLE) show!![posI] = showing.toByte()
+                        WorldEditor.SHOW_OBJECTS -> if (id == ZType.OBJECT) show!![posI] = showing.toByte()
                     }
                 }
             }
         }
-        canvas.setData(width, height, cols, chars, offsetX + x1, offsetY + y1, showing, show)
+        canvas.setData(wh, cols, chars, offset + pos, showing, show)
     }
 
     fun setDirty() {
@@ -654,14 +650,12 @@ abstract class Board {
         other.shots = shots
         other.exits = exits.clone()
         other.restartOnZap = restartOnZap
-        other.playerX = playerX
-        other.playerY = playerY
+        other.playerPos = playerPos
         other.timeLimit = timeLimit
 
         other.isDark = isDark
         other.message = message
-        other.cameraX = cameraX
-        other.cameraY = cameraY
+        other.cameraPos = cameraPos
 
         other.stats = ArrayList()
         for (stat in stats) other.stats.add(stat!!.clone())
@@ -761,8 +755,7 @@ abstract class Board {
         if (!name.contentEquals(other.name)) return false
         if (!exits.contentEquals(other.exits)) return false
         if (restartOnZap != other.restartOnZap) return false
-        if (playerX != other.playerX) return false
-        if (playerY != other.playerY) return false
+        if (playerPos != other.playerPos) return false
         if (timeLimit != other.timeLimit) return false
         if (stats.size != other.stats.size) return false
         for (i in stats.indices) {

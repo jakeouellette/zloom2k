@@ -4,6 +4,8 @@ import zedit2.components.BufferManager
 import zedit2.components.BufferManager.Companion.getBufferDataString
 import zedit2.components.DosCanvas
 import zedit2.components.GlobalEditor
+import zedit2.model.spatial.Dim
+import zedit2.model.spatial.Pos
 import java.awt.Color
 import java.awt.Component
 import java.awt.image.BufferedImage
@@ -223,13 +225,13 @@ class BufferModel(private val manager: BufferManager,
         fun getClipImage(canvas: DosCanvas, value: String?): BufferedImage? {
             if (value != null) {
                 val clip = Clip.decode(value)
-                val w = clip.w
-                val h = clip.h
+                val dim = clip.dim
                 val tiles = clip.tiles
-                val bb = BufferBoard(clip.isSzzt, w, h)
-                for (y in 0 until h) {
-                    for (x in 0 until w) {
-                        bb.setTile(x, y, tiles[y * w + x])
+                val bb = BufferBoard(clip.isSzzt, dim)
+                for (y in 0 until dim.h) {
+                    for (x in 0 until dim.w) {
+                        val xy = Pos(x,y)
+                        bb.setTile(xy, tiles[xy.arrayPos(dim.w)])
                     }
                 }
                 val chars = ByteArray(1)
@@ -237,9 +239,10 @@ class BufferModel(private val manager: BufferManager,
                 val gfx = StringBuilder()
                 //canvas.extractCharImage()
                 var recCol = 0
-                for (y in 0 until h) {
-                    for (x in 0 until w) {
-                        bb.drawCharacter(cols, chars, 0, x, y)
+                for (y in 0 until dim.h) {
+                    for (x in 0 until dim.w) {
+                        val xy = Pos(x,y)
+                        bb.drawCharacter(cols, chars, 0, xy)
                         var c = ((chars[0].toInt() and 0xFF) shl 8) or (cols[0].toInt() and 0xFF)
                         if (chars[0].toInt() == 0) {
                             recCol = cols[0].toInt() and 0xFF
@@ -250,7 +253,7 @@ class BufferModel(private val manager: BufferManager,
                 }
                 return canvas.extractCharImageWH(
                     0, recCol,
-                    1, 1, false, gfx.toString(), w, h
+                    1, 1, false, gfx.toString(), dim
                 )
             } else {
                 return null

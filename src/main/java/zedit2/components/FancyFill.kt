@@ -145,8 +145,8 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
         for (i in 0..bufMax) {
             val encodedBuffer = GlobalEditor.getString(String.format("%sBUF_%d", editor.prefix(), i)) ?: continue
             val clip = decode(encodedBuffer)
-            if (clip.h != 1) continue
-            if (clip.w == 1) continue
+            if (clip.dim.h != 1) continue
+            if (clip.dim.w == 1) continue
             grads.add(encodedBuffer)
         }
 

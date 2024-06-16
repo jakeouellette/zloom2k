@@ -4,6 +4,7 @@ import zedit2.util.CP437.registerFont
 import zedit2.model.Clip.Companion.decode
 import zedit2.model.Clip.Companion.encode
 import zedit2.model.Tile
+import zedit2.model.spatial.Dim
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
 import zedit2.util.Writer
@@ -24,9 +25,7 @@ object GlobalEditor {
     private var bufferTile = Tile(0, 15)
     private var bufferTileSzzt = false
     private var properties: Properties? = null
-    var blockBufferW: Int = 0
-        private set
-    var blockBufferH: Int = 0
+    var blockBufferDim : Dim = Dim.EMPTY
         private set
     var blockBuffer: Array<Tile>? = null
     private var blockBufferSzzt = false
@@ -71,10 +70,9 @@ object GlobalEditor {
         clearBufferSelected()
     }
 
-    fun setBlockBuffer(w: Int, h: Int, data: Array<Tile>?, repeated: Boolean, szzt: Boolean) {
-        Logger.i(TAG) { "Set Block Buffer: $w $h $blockBufferW, $blockBufferH"}
-        blockBufferW = w
-        blockBufferH = h
+    fun setBlockBuffer(dim : Dim, data: Array<Tile>?, repeated: Boolean, szzt: Boolean) {
+        Logger.i(TAG) { "Set Block Buffer: $dim $blockBufferDim"}
+        blockBufferDim = dim
         blockBuffer = data
         blockBufferRepeated = repeated
         blockBufferSzzt = szzt
@@ -85,26 +83,25 @@ object GlobalEditor {
         val result: String
         if (isBlockBuffer()) {
             // TODO(jakeouellette): Avoid BlockBuffer being null going forward.
-            result = encode(blockBufferW, blockBufferH, blockBuffer!!, blockBufferSzzt)
+            result = encode(blockBufferDim, blockBuffer!!, blockBufferSzzt)
         } else {
             val tiles = arrayOf(bufferTile)
-            result = encode(1, 1, tiles, bufferTileSzzt)
+            result = encode(Dim.ONE_BY_ONE, tiles, bufferTileSzzt)
         }
         return result
     }
 
     fun decodeBuffer(encodedBuffer: String?) {
         val clip = decode(encodedBuffer)
-        if (clip.w == 1 && clip.h == 1) {
+        if (clip.dim == Dim.ONE_BY_ONE) {
             bufferTile = clip.tiles[0]
             bufferTileSzzt = clip.isSzzt
         } else {
-            blockBufferW = clip.w
-            blockBufferH = clip.h
+            blockBufferDim = clip.dim
             blockBuffer = clip.tiles
             blockBufferSzzt = clip.isSzzt
             blockBufferRepeated = false
-            Logger.i(TAG) { "decodeBufferr: $blockBufferW, $blockBufferH"}
+            Logger.i(TAG) { "decodeBufferr: $blockBufferDim"}
         }
         clearBufferSelected()
     }
@@ -124,7 +121,7 @@ object GlobalEditor {
     }
 
     fun isBlockBuffer(): Boolean {
-        return blockBufferW != 0
+        return blockBufferDim.w != 0
     }
 
     private fun writeOutProperties() {
@@ -768,7 +765,6 @@ object GlobalEditor {
 
     var timestamp: Long = 0
         private set
-    private var globalInstance: GlobalEditor? = null
 
     private const val PROPERTIES_FILE = "zedit2.cfg"
 

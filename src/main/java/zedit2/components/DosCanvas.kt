@@ -5,6 +5,10 @@ import zedit2.components.editor.world.operationBlockStart
 import zedit2.components.editor.world.operationGrabAndModify
 import zedit2.util.Data
 import zedit2.model.Atlas
+import zedit2.model.spatial.Dim
+import zedit2.model.spatial.Pos
+import zedit2.model.spatial.Rec
+import zedit2.model.spatial.SpatialUtil
 import zedit2.util.ImageExtractors
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
@@ -20,9 +24,9 @@ import javax.swing.JPanel
 import javax.swing.SwingUtilities
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 
-class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JPanel(), MouseListener, FocusListener,
+class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, private var zoomy: Double) : JPanel(),
+    MouseListener, FocusListener,
     MouseMotionListener, MouseWheelListener, ImageRetriever {
     lateinit var charset: ByteArray
         private set
@@ -31,32 +35,24 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
 
     private lateinit var palette: IntArray
     private var charBuffer: BufferedImage? = null
-    private var width = 0
-    private var height = 0
+    private var dim: Dim = Dim(0, 0)
     private val boardBuffers = arrayOfNulls<BufferedImage>(2)
 
     private var chars: ByteArray? = null
     private var cols: ByteArray? = null
-    private var zoomy: Double
     private var blink = true
     private var blinkState = false
     private var mouseState = 0
 
-    private var cursorX = 0
-    private var cursorY = 0
-    private var indicateX: IntArray? = null
-    private var indicateY: IntArray? = null
-    private var mouseCursorX = -1
-    private var mouseCursorY = -1
-    private var blockStartX = -1
-    private var blockStartY = -1
-    private var placingBlockW = 0
-    private var placingBlockH = 0
+    private var cursorPos = Pos(0, 0)
+    private var indicatePos: Array<Pos>? = null
+    private var mouseCursorPos = Pos(-1, -1)
+    private var blockStartPos = Pos(-1, -1)
+    private var placingBlockDim = Dim(0, 0)
     private var drawing = false
     private var textEntry = false
 
-    private var boardW = 0
-    private var boardH = 0
+    private var boardDim = Dim(0, 0)
     private var atlas: Atlas? = null
 
     private val globalEditor: GlobalEditor = editor.globalEditor
@@ -66,8 +62,6 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     private var show: ByteArray? = null
 
     init {
-        this.zoomy = zoomx
-
         initialiseBuffers()
 
         addMouseListener(this)
@@ -119,7 +113,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         zoomx: Int,
         zoomy: Int,
         blinkingTime: Boolean,
-        pattern: String, w: Int, h: Int
+        pattern: String, dim: Dim,
     ): BufferedImage =
         ImageExtractors.extractCharImageWH(
             chr,
@@ -128,8 +122,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
             zoomy,
             blinkingTime,
             pattern,
-            w,
-            h,
+            dim,
             blink,
             palette = palette,
             charBuffer = charBuffer
@@ -148,34 +141,35 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     }
 
     private fun generateCharBuffer() {
-        val w = CHAR_W * CHAR_COUNT
-        val h = CHAR_H * PALETTE_SIZE
-        charBuffer = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+        val dim = Dim(CHAR_W * CHAR_COUNT, CHAR_H * PALETTE_SIZE)
+        charBuffer = BufferedImage(dim.w, dim.h, BufferedImage.TYPE_INT_ARGB)
         val raster = charBuffer!!.raster
-        val ar = IntArray(w * h)
+        val ar = IntArray(dim.arrSize)
 
         for (col in 0 until PALETTE_SIZE) {
             for (chr in 0 until CHAR_COUNT) {
                 for (y in 0 until CHAR_H) {
                     for (x in 0 until CHAR_W) {
-                        val px = chr * CHAR_W + x
-                        val py = col * CHAR_H + y
-                        val p = py * w + px
+                        val pxy = Pos(
+                            chr * CHAR_W + x,
+                            col * CHAR_H + y
+                        )
+                        val pI = pxy.arrayPos(dim.w)
 
                         // Is this pixel set in this char?
                         val charRow = charset[chr * CHAR_H + y]
                         val charMask = (128 shr x).toByte()
                         if ((charRow.toInt() and charMask.toInt()) != 0) {
-                            ar[p] = palette[col]
+                            ar[pI] = palette[col]
                         } else {
-                            ar[p] = TRANSPARENT
+                            ar[pI] = TRANSPARENT
                         }
                     }
                 }
             }
         }
 
-        raster.setDataElements(0, 0, w, h, ar)
+        raster.setDataElements(0, 0, dim.w, dim.h, ar)
     }
 
     @Throws(IOException::class)
@@ -222,103 +216,97 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     }
 
     override fun getPreferredSize(): Dimension {
-        var w = width
-        var h = height
-        if (w == 0 || h == 0) {
-            w = 60
-            h = 25
+        var d = dim
+        if (d.w == 0 || d.h == 0) {
+            d = Dim(60, 25)
         }
 
-        return Dimension(
-            Math.round(w * CHAR_W * zoomx).toInt(),
-            Math.round(h * CHAR_H * zoomy).toInt()
-        )
+        return d.tile(zoomx, zoomy).asDimension
     }
 
-    fun setDimensions(w: Int, h: Int) {
-        if (width != w || height != h) {
-            width = w
-            height = h
+    fun setDimensions(d: Dim) {
+        if (dim != d) {
+            dim = d
             fullRefresh()
         }
     }
 
     private fun fullRefresh() {
-        this.cols = ByteArray(width * height)
-        this.chars = ByteArray(width * height)
-        this.show = ByteArray(width * height)
+        this.cols = ByteArray(dim.arrSize)
+        this.chars = ByteArray(dim.arrSize)
+        this.show = ByteArray(dim.arrSize)
 
         val env = GraphicsEnvironment.getLocalGraphicsEnvironment()
         val device = env.defaultScreenDevice
         val config = device.defaultConfiguration
 
         for (i in 0..1) {
-            boardBuffers[i] = config.createCompatibleImage(width * CHAR_W, height * CHAR_H)
+            boardBuffers[i] = config.createCompatibleImage(dim.w * CHAR_W, dim.h * CHAR_H)
             //boardBuffers[i] = new BufferedImage(w * CHAR_W, h * CHAR_H, BufferedImage.TYPE_INT_RGB);
         }
     }
 
-    fun setZoom(zoomx: Double, zoomy: Double) {
-        this.zoomx = zoomx
-        this.zoomy = zoomy
+    fun setZoom(zoom: Double) {
+        this.zoomx = zoom
+        this.zoomy = zoom
     }
 
     fun setData(
-        w: Int,
-        h: Int,
+        dim: Dim,
         cols: ByteArray,
         chars: ByteArray,
-        offsetX: Int,
-        offsetY: Int,
+        offset: Pos,
         showing: Int,
         show: ByteArray?
     ) {
         val redrawAll = false
-        setData(w, h, cols, chars, offsetX, offsetY, redrawAll, show)
+        setData(dim, cols, chars, offset, redrawAll, show)
     }
 
     fun setData(
-        w: Int,
-        h: Int,
+        dim: Dim,
         cols: ByteArray,
         chars: ByteArray,
-        offsetX: Int,
-        offsetY: Int,
+        offset: Pos,
         redrawAll: Boolean,
         show: ByteArray?
     ) {
-        if (cols.size != w * h) throw RuntimeException("Dimensions do not match colour array size")
-        if (chars.size != w * h) throw RuntimeException("Dimensions do not match char array size")
+        if (cols.size != dim.arrSize) {
+            throw RuntimeException("Dimensions do not match colour array size ${cols.size} ${dim.arrSize}")
+        }
+        if (chars.size != dim.arrSize) {
+            throw RuntimeException("Dimensions do not match char array size ${chars.size} ${dim.arrSize}")
+        }
 
         val boardBufferGraphics = arrayOfNulls<Graphics>(2)
         for (i in 0..1) {
             boardBufferGraphics[i] = boardBuffers[i]!!.graphics
         }
-        for (dy in 0 until h) {
-            for (dx in 0 until w) {
-                val dpos = dy * w + dx
-                val x = dx + offsetX
-                val y = dy + offsetY
-                val pos = y * width + x
+        for (dy in 0 until dim.h) {
+            for (dx in 0 until dim.w) {
+                val dxy = Pos(dx, dy)
+                val dxyPos = dxy.arrayPos(dim.w)
+                val xy = dxy + offset
+                val xyPos = xy.arrayPos(this@DosCanvas.dim.w)
                 var tshow = if (show != null) {
-                    show[dpos]
+                    show[dxyPos]
                 } else {
                     0
                 }
-                if ((redrawAll || this.cols!![pos] != cols[dpos]) || this.chars!![pos] != chars[dpos] || this.show!![pos] != tshow) {
+                if ((redrawAll || this.cols!![xyPos] != cols[dxyPos]) || this.chars!![xyPos] != chars[dxyPos] || this.show!![xyPos] != tshow) {
                     // TODO(jakeouellette): Clean up this state machine.
-                    this.chars!![pos] = chars[dpos]
-                    this.cols!![pos] = cols[dpos]
-                    this.show!![pos] = tshow
-                    val chr = chars[dpos].toInt() and 0xFF
-                    val col = cols[dpos].toInt() and 0xFF
+                    this.chars!![xyPos] = chars[dxyPos]
+                    this.cols!![xyPos] = cols[dxyPos]
+                    this.show!![xyPos] = tshow
+                    val chr = chars[dxyPos].toInt() and 0xFF
+                    val col = cols[dxyPos].toInt() and 0xFF
 
                     TilePainters.drawTile(
                         boardBufferGraphics[0],
                         chr,
                         col,
-                        x,
-                        y,
+                        xy.x,
+                        xy.y,
                         1,
                         1,
                         blink,
@@ -333,8 +321,8 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
                             boardBufferGraphics[1],
                             chr,
                             col,
-                            x,
-                            y,
+                            xy.x,
+                            xy.y,
                             1,
                             1,
                             blink,
@@ -385,14 +373,9 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         )
     }
 
+    private fun tileX(x: Int) = SpatialUtil.tileX(x, zoomx)
+    private fun tileY(y: Int) = SpatialUtil.tileY(y, zoomy)
 
-    private fun tileX(x: Int): Int {
-        return Math.round(x * CHAR_W * zoomx).toInt()
-    }
-
-    private fun tileY(y: Int): Int {
-        return Math.round(y * CHAR_H * zoomy).toInt()
-    }
 
     public override fun paintComponent(g: Graphics) {
         super.paintComponent(g)
@@ -408,6 +391,8 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         }
         */
         g.color = Color(0x7F7F7F)
+        // TODO(jakeouellette): Is this supposed to be dim.w / dim.h?
+        // ( I don't think so, but leaving a note )
         g.fillRect(0, 0, getWidth(), getHeight())
 
         if (g is Graphics2D) {
@@ -442,48 +427,49 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
             val lcGood = Color(0.2f, 1.0f, 0.4f, 0.5f)
             val lcNormal = Color(1.0f, 1.0f, 1.0f)
             val lcVoid = Color(1.0f, 1.0f, 1.0f, 0.2f)
-            val gridW = atlas!!.w
-            val gridH = atlas!!.h
+            val gridDim = atlas!!.dim
             val grid = atlas!!.grid
             val boards = editor.boards
-            val boardPixelW = tileX(boardW)
-            val boardPixelH = tileY(boardH)
+            val boardPixelOff = boardDim.tile(zoomx, zoomy)
             val dirs = arrayOf(intArrayOf(0, -1), intArrayOf(0, 1), intArrayOf(-1, 0), intArrayOf(1, 0))
-            val walls_thick = arrayOf(
-                intArrayOf(0, 0, boardPixelW, 2),
-                intArrayOf(0, boardPixelH - 2, boardPixelW, 2),
-                intArrayOf(0, 0, 2, boardPixelH),
-                intArrayOf(boardPixelW - 2, 0, 2, boardPixelH)
+            // TODO(jakeouellette): Simplify math
+            val wallsThick = arrayOf(
+                intArrayOf(0, 0, boardPixelOff.w, 2),
+                intArrayOf(0, boardPixelOff.h - 2, boardPixelOff.w, 2),
+                intArrayOf(0, 0, 2, boardPixelOff.h),
+                intArrayOf(boardPixelOff.w - 2, 0, 2, boardPixelOff.h)
             )
-            val walls_thin = arrayOf(
-                intArrayOf(0, 0, boardPixelW, 1),
-                intArrayOf(0, boardPixelH - 1, boardPixelW, 1),
-                intArrayOf(0, 0, 1, boardPixelH),
-                intArrayOf(boardPixelW - 1, 0, 1, boardPixelH)
+            val wallsThin = arrayOf(
+                intArrayOf(0, 0, boardPixelOff.w, 1),
+                intArrayOf(0, boardPixelOff.h - 1, boardPixelOff.w, 1),
+                intArrayOf(0, 0, 1, boardPixelOff.h),
+                intArrayOf(boardPixelOff.w - 1, 0, 1, boardPixelOff.h)
             )
 
-            for (y in 0 until gridH) {
-                val py = tileY(y * boardH)
-                for (x in 0 until gridW) {
-                    val px = tileX(x * boardW)
+            for (y in 0 until gridDim.h) {
+                val py = tileY(y * boardDim.h)
+                for (x in 0 until gridDim.w) {
+                    val px = tileX(x * boardDim.w)
                     val boardIdx = grid[y][x]
                     if (boardIdx != -1) {
                         val board = boards[boardIdx]
 
                         for (exit in 0..3) {
                             val exitd = board.getExit(exit)
-                            val nx = x + dirs[exit][0]
-                            val ny = y + dirs[exit][1]
-                            var walls = walls_thick[exit]
+                            val nxy = Pos(
+                                x + dirs[exit][0],
+                                y + dirs[exit][1]
+                            )
+                            var walls = wallsThick[exit]
                             if (exitd == 0) {
                                 g.color = lcNormal
                             } else {
                                 g.color = lcBad
                             }
-                            if (nx >= 0 && ny >= 0 && nx < gridW && ny < gridH) {
-                                if (exitd == grid[ny][nx]) {
+                            if (nxy.inside(gridDim)) {
+                                if (exitd == grid[nxy.y][nxy.x]) {
                                     g.color = lcGood
-                                    walls = walls_thin[exit]
+                                    walls = wallsThin[exit]
                                 }
                             }
                             g.fillRect(
@@ -494,7 +480,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
                     } else {
                         g.color = lcVoid
                         for (exit in 0..3) {
-                            val walls = walls_thin[exit]
+                            val walls = wallsThin[exit]
                             g.fillRect(
                                 walls[0] + px, walls[1] + py,
                                 walls[2], walls[3]
@@ -520,64 +506,67 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
             g.color = Color.LIGHT_GRAY
         }
 
-        g.draw3DRect(tileX(cursorX) - 1, tileY(cursorY) - 1, tileX(1) + 1, tileY(1) + 1, blinkState)
 
-        if (mouseCursorX != -1 && editor.frame.isFocused) {
+        val tilePos = cursorPos.tile(zoomx, zoomy) - 1
+        val tileDim = Dim.ONE_BY_ONE.tile(zoomx, zoomy) + 1
+        g.draw3DRect(tilePos.x, tilePos.y, tileDim.w, tileDim.h, blinkState)
+
+        if (mouseCursorPos.isPositive && editor.frame.isFocused) {
             g.color = Color(0x7FFFFFFF, true)
+            val mouseTilePos = mouseCursorPos.tile(zoomx, zoomy) - 1
+            val mouseTileDim = Dim.ONE_BY_ONE.tile(zoomx, zoomy) + 1
             g.drawRect(
-                tileX(mouseCursorX) - 1, tileY(mouseCursorY) - 1,
-                tileX(1) + 1, tileY(1) + 1
+                mouseTilePos.x, mouseTilePos.y,
+                mouseTileDim.w, mouseTileDim.h
             )
         }
 
-        if (indicateX != null) {
+        val indicatePos = this.indicatePos
+        if (indicatePos != null) {
             g.color = Color(0x3399FF)
-            for (i in indicateX!!.indices) {
-                val x = indicateX!![i]
-                val y = indicateY!![i]
-                if (x == -1) continue
-                g.drawRect(tileX(x), tileY(y), tileX(1) - 1, tileY(1) - 1)
+            for (i in indicatePos.indices) {
+                val pos = indicatePos[i]
+                if (!pos.isPositive) continue
+                val indicateTilePos = pos.tile(zoomx, zoomy)
+                val indicateTileDim = Dim.ONE_BY_ONE.tile(zoomx, zoomy) - 1
+                g.drawRect(indicateTilePos.x, indicateTilePos.y, indicateTileDim.w, indicateTileDim.h)
             }
         }
 
-        if (blockStartX != -1) {
+        if (blockStartPos.isPositive) {
             g.color = Color(0x7F3399FF, true)
-            val x = min(cursorX.toDouble(), blockStartX.toDouble()).toInt()
-            val y = min(cursorY.toDouble(), blockStartY.toDouble()).toInt()
-            val w = ((max(cursorX.toDouble(), blockStartX.toDouble()) - x + 1).toInt())
-            val h = ((max(cursorY.toDouble(), blockStartY.toDouble()) - y + 1).toInt())
-            g.fillRect(tileX(x), tileY(y), tileX(w), tileY(h))
+            val rect = Rec.companion.from(blockStartPos, cursorPos)
+            val (minPos, maxPos) = rect.toPos
+            val blockStartTilePos = minPos.tile(zoomx, zoomy)
+            val blockStartTileDim = (maxPos - minPos + 1).dim.tile(zoomx, zoomy)
+            g.fillRect(blockStartTilePos.x, blockStartTilePos.y, blockStartTileDim.w, blockStartTileDim.h)
         }
 
         if (GlobalEditor.isBlockBuffer()) {
             g.color = Color(0x5FFF8133, true)
-            val x2 = min((width - 1).toDouble(), (cursorX + GlobalEditor.blockBufferW - 1).toDouble())
-                .toInt()
-            val y2 = min((height - 1).toDouble(), (cursorY + GlobalEditor.blockBufferH - 1).toDouble())
-                .toInt()
-            val w = x2 - cursorX + 1
-            val h = y2 - cursorY + 1
-            g.fillRect(tileX(cursorX), tileY(cursorY), tileX(w), tileY(h))
+            val xy2 = (dim.asPos - 1).min(cursorPos + GlobalEditor.blockBufferDim - 1)
+            val newTilePos = cursorPos.tile(zoomx, zoomy)
+            val newTileDim = (xy2 - cursorPos + 1).dim.tile(zoomx, zoomy)
+            g.fillRect(newTilePos.x, newTilePos.y, newTileDim.w, newTileDim.h)
         }
 
-        if (placingBlockW != -1) {
+        if (placingBlockDim.w != -1) {
             g.color = Color(0x5F33ff99, true)
-            val x2 = min((width - 1).toDouble(), (cursorX + placingBlockW - 1).toDouble()).toInt()
-            val y2 = min((height - 1).toDouble(), (cursorY + placingBlockH - 1).toDouble()).toInt()
-            val w = x2 - cursorX + 1
-            val h = y2 - cursorY + 1
-            g.fillRect(tileX(cursorX), tileY(cursorY), tileX(w), tileY(h))
+            val xy2 = (dim.asPos - 1).min(cursorPos + placingBlockDim - 1)
+            val newTilePos = cursorPos.tile(zoomx, zoomy)
+            val newTileDim = (xy2 - cursorPos + 1).dim.tile(zoomx, zoomy)
+            g.fillRect(newTilePos.x, newTilePos.y, newTileDim.w, newTileDim.h)
         }
         //g.drawImage(charBuffer, 0, 0, new Color(palette[7], true), null);
         //g.drawImage(charBuffer, 0, 0, 16, 14, 8, 14, 16, 28, bgColor, null);
     }
 
     private fun drawImg(g: Graphics, image: Image?) {
-        g.drawImage(image, 0, 0, tileX(width), tileY(height), 0, 0, width * CHAR_W, height * CHAR_H, null)
+        g.drawImage(image, 0, 0, tileX(dim.w), tileY(dim.h), 0, 0, dim.w * CHAR_W, dim.h * CHAR_H, null)
     }
 
     override fun mouseClicked(e: MouseEvent) {
-        Logger.i(TAG) {"Requesting Focus."}
+        Logger.i(TAG) { "Requesting Focus." }
         this.requestFocusInWindow()
         mouseMoveCommon(e)
     }
@@ -593,15 +582,37 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
 
     override fun mousePressed(e: MouseEvent) {
         mouseMoveCommon(e, getButton(e))
-        Logger.i(TAG) { "Starting new block operation $blockStartX $blockStartY"}
-        val isMovingNow = editor.moveBlockX > -1 && editor.moveBlockY > -1
-        val isSelectingNow = blockStartX > -1 && blockStartY > -1
+        Logger.i(TAG) { "Starting new block operation $blockStartPos" }
+        val isMovingNow = editor.moveBlockPos.isPositive
+        val isSelectingNow = blockStartPos.isPositive
         val isInSelectingMode = editor.editType == WorldEditor.EditType.SELECTING
         // Either, if when you click you always want a new selection,
         // or you are already selecting and selection should be refreshed
+        var triggerOperationStart = false
         if ((isInSelectingMode && !(isMovingNow || isSelectingNow)) || (isSelectingNow)) {
+            triggerOperationStart = true
             editor.operationBlockStart()
-            Logger.i(TAG) { "Beginning new block operation $blockStartX $blockStartY"}
+        }
+        val isMovingNow2 = editor.moveBlockPos.isPositive
+        val isSelectingNow2 = blockStartPos.isPositive
+        var inside = false
+        if (isInSelectingMode && isMovingNow) {
+
+            val placingBlockPos = editor.moveBlockPos + placingBlockDim
+
+            if (cursorPos.inside(
+                    editor.moveBlockPos.x,
+                    editor.moveBlockPos.y,
+                    placingBlockPos.x,
+                    placingBlockPos.y
+                )
+            ) {
+                inside = true
+            }
+        }
+        Logger.i(TAG) {
+            "MousePressed Event: IsMoving: $isMovingNow, $isMovingNow2 Selecting: $isSelectingNow, $isSelectingNow2 SelectingMode: $isInSelectingMode" +
+                    "Inside: $inside, [blockstart, moveblock, cursor]: [$blockStartPos ${editor.moveBlockPos} ${editor.moveBlockPos} $cursorPos $cursorPos]"
         }
     }
 
@@ -609,15 +620,24 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         // TODO(jakeouellette): separate this event out from operationBlockEnd:
         // Make it so that this one uses whatever is the default behavior
         // of the current selection brush
-        Logger.i(TAG) { "TODO: Trigger block operation $blockStartX $blockStartY"}
+        Logger.i(TAG) { "TODO: Trigger block operation $blockStartPos" }
+        val isMovingNow = editor.moveBlockPos.isPositive
+        val isSelectingNow = blockStartPos.isPositive
+        val isInSelectingMode = editor.editType == WorldEditor.EditType.SELECTING
+
         // TODO(jakeouellette) do this a very different way
-        if (editor.moveBlockX != -1 && editor.moveBlockY != -1) {
+        if (editor.moveBlockPos.isPositive) {
             editor.operationGrabAndModify(true, false)
         }
-        if (blockStartX != -1 && blockStartY != -1) {
+        if (blockStartPos.isPositive) {
             editor.operationBlockEnd()
         }
-
+        val isMovingNow2 = editor.moveBlockPos.isPositive
+        val isSelectingNow2 = blockStartPos.isPositive
+        Logger.i(TAG) {
+            "mouseReleased Event: IsMoving: $isMovingNow, $isMovingNow2 Selecting: $isSelectingNow, $isSelectingNow2, SelectingMode: $isInSelectingMode" +
+                    "[bsX, bsY, mbX, mbY cX, cY]: [$blockStartPos ${editor.moveBlockPos} $cursorPos]"
+        }
         mouseMoveCommon(e, 0)
     }
 
@@ -634,9 +654,8 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     }
 
     override fun mouseExited(e: MouseEvent) {
-        if (mouseCursorX != -1) {
-            mouseCursorX = -1
-            mouseCursorY = -1
+        if (mouseCursorPos.isPositive) {
+            mouseCursorPos = Pos.NEG_ONE
             repaint()
         }
     }
@@ -653,21 +672,19 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         lastMouseEvent = e
         mouseState = heldDown
         editor.mouseMotion(e, heldDown)
-        val newMouseCursorX: Int
-        val newMouseCursorY: Int
-        val mc = getMouseCoords(e.point)
-        val x = mc!!.x
-        val y = mc.y
-        if (x < 0 || y < 0 || x >= getWidth() || y >= getHeight()) {
-            newMouseCursorX = -1
-            newMouseCursorY = -1
+
+        val pos = Pos(getMouseCoords(e.point)!!)
+        // TODO(jakeouellette): Is this supposed to be dim.w / dim.h?
+        // ( I don't think so, but leaving a note )
+        val dim = Dim(getWidth(), getHeight())
+        val newMouseCursorPos = if (pos.outside(dim)) {
+            Pos.NEG_ONE
         } else {
-            newMouseCursorX = x
-            newMouseCursorY = y
+            Pos(x, y)
         }
-        if (newMouseCursorX != mouseCursorX || newMouseCursorY != mouseCursorY) {
-            mouseCursorX = newMouseCursorX
-            mouseCursorY = newMouseCursorY
+
+        if (newMouseCursorPos != mouseCursorPos) {
+            mouseCursorPos = newMouseCursorPos
             repaint()
         }
     }
@@ -677,15 +694,13 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         repaint()
     }
 
-    fun setCursor(x: Int, y: Int) {
-        cursorX = x
-        cursorY = y
+    fun setCursor(pos: Pos) {
+        cursorPos = pos
         repaint()
     }
 
-    fun setIndicate(x: IntArray?, y: IntArray?) {
-        indicateX = x
-        indicateY = y
+    fun setIndicate(xys: Array<Pos>?) {
+        indicatePos = xys
         repaint()
     }
 
@@ -696,16 +711,14 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         return String.format("#%02X%02X%02X", r, g, b)
     }
 
-    fun setSelectionBlock(blockStartX: Int, blockStartY: Int) {
-        this.blockStartX = blockStartX
-        this.blockStartY = blockStartY
+    fun setSelectionBlock(blockStartPos: Pos) {
+        this.blockStartPos = blockStartPos
         repaint()
     }
 
-    fun setPlacingBlock(w: Int, h: Int) {
-        Logger.i(TAG) { "setPlacingBlock $w $h"}
-        this.placingBlockW = w
-        this.placingBlockH = h
+    fun setPlacingBlock(dim: Dim) {
+        Logger.i(TAG) { "setPlacingBlock $dim" }
+        this.placingBlockDim = dim
         repaint()
     }
 
@@ -743,12 +756,16 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
         return (1.0 * y / CHAR_H / zoomy).toInt()
     }
 
+    fun toChar(xy: Pos): Pos {
+        return Pos(toCharX(xy.x), toCharY(xy.y))
+    }
+
     // TODO: HOT FUNCTION (4%)
-    fun drawVoid(x: Int, y: Int, w: Int, h: Int) {
+    fun drawVoid(pos: Pos, dim: Dim) {
         for (i in 0..1) {
             val graphics = boardBuffers[i]!!.graphics
             graphics.color = Color(0x7F7F7F)
-            graphics.fillRect(x * CHAR_W, y * CHAR_H, w * CHAR_W, h * CHAR_H)
+            graphics.fillRect(pos.x * CHAR_W, pos.y * CHAR_H, dim.w * CHAR_W, dim.h * CHAR_H)
         }
     }
 
@@ -779,14 +796,13 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
 
     private fun resetData() {
         if (cols != null && chars != null) {
-            setData(width, height, cols!!, chars!!, 0, 0, true, show)
+            setData(dim, cols!!, chars!!, Pos.ZERO, true, show)
         }
     }
 
-    fun setAtlas(atlas: Atlas?, boardW: Int, boardH: Int, drawAtlasLines: Boolean) {
+    fun setAtlas(atlas: Atlas?, boardDim: Dim, drawAtlasLines: Boolean) {
         this.atlas = atlas
-        this.boardW = boardW
-        this.boardH = boardH
+        this.boardDim = boardDim
         this.drawAtlasLines = drawAtlasLines
     }
 
@@ -819,10 +835,10 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double) : JP
     }
 
     override fun focusGained(e: FocusEvent?) {
-        Logger.i(this@DosCanvas.TAG) {"Focus gained, $e"}
+        Logger.i(this@DosCanvas.TAG) { "Focus gained, $e" }
     }
 
     override fun focusLost(e: FocusEvent?) {
-        Logger.i(this@DosCanvas.TAG) {"Focus lost, $e"}
+        Logger.i(this@DosCanvas.TAG) { "Focus lost, $e" }
     }
 }

@@ -1,6 +1,8 @@
 package zedit2.components
 
 import zedit2.event.KeyActionReceiver
+import zedit2.model.spatial.Dim
+import zedit2.model.spatial.Pos
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
 import java.awt.*
@@ -19,14 +21,11 @@ class ColourSelector(
     var colourPalette: Image
     var zoomx: Int = 2
     var zoomy: Int = 2
-    var borderx: Int = 8
-    var bordery: Int = 8
+    var borderPos : Pos = Pos(8,8)
     // TODO(jakeouellette): These shouldn't be necessary,
     // they override internal params.
-    var oX: Int
-    var oY: Int
-    var oWidth: Int = 0
-    var oHeight: Int = 0
+    var oPos : Pos
+    var oDim : Dim
     var dialog: JDialog
     var selectorMode: Int
     var wrap: Boolean = false
@@ -49,20 +48,17 @@ class ColourSelector(
 
         when (this.selectorMode) {
             COLOUR -> {
-                oWidth = 16
-                oHeight = 16
+                oDim = Dim(16, 16)
             }
 
             CHAR -> {
-                oWidth = 32
-                oHeight = 8
+                oDim = Dim(32, 8)
             }
 
             else -> throw RuntimeException("Invalid colour selector mode")
         }
-        oX = col % oWidth
-        oY = col / oWidth
-        colourPalette = canvas.extractCharImageWH(0, 0, zoomx, zoomy, false, colourPattern, oWidth, oHeight)
+        oPos = oDim.fromArray(col)
+        colourPalette = canvas.extractCharImageWH(0, 0, zoomx, zoomy, false, colourPattern, oDim)
         listOf("Up","Down","Left","Right","Home","End","Enter","Enter","Escape").forEach {
             Util.addKeybind(ge, this@ColourSelector, this@ColourSelector, it)
         }
@@ -73,8 +69,7 @@ class ColourSelector(
                     Logger.i(this@ColourSelector.TAG) { "Captured Key Event. $e"}
                     val c = e.keyChar.code
                     if (c >= 32 && c <= 127) {
-                        oX = c % oWidth
-                        oY = c / oWidth
+                        oPos = oDim.fromArray(c)
                         upd()
                     }
                 }
@@ -100,15 +95,14 @@ class ColourSelector(
 
     private fun operationCursorMove(xOff: Int, yOff: Int) {
         val xMin = 0
-        if (oX == 0 && xOff == -1 && wrap) {
-            oX = oWidth - 1
-            oY = (oY + oHeight - 1) % oHeight
-        } else if (oX == oWidth - 1 && xOff == 1 && wrap) {
-            oX = 0
-            oY = (oY + 1) % oHeight
+        if (oPos.x == 0 && xOff == -1 && wrap) {
+            oPos = Pos(oDim.w - 1, (oPos.y + oDim.h - 1) % oDim.h)
+        } else if (oPos.x == oDim.w - 1 && xOff == 1 && wrap) {
+            oPos = Pos(0, (oPos.y + 1) % oDim.h)
         } else {
-            oX = Util.clamp(oX + xOff, xMin, oWidth - 1)
-            oY = Util.clamp(oY + yOff, 0, oHeight - 1)
+            oPos = Pos(
+                Util.clamp(oPos.x + xOff, xMin, oDim.w - 1),
+                Util.clamp(oPos.y + yOff, 0, oDim.h - 1))
         }
         upd()
     }
@@ -133,12 +127,12 @@ class ColourSelector(
     }
 
     private val col: Int
-        get() = oY * oWidth + oX
+        get() = oPos.arrayPos(oDim.w)
 
     override fun getPreferredSize(): Dimension {
         return Dimension(
-            DosCanvas.CHAR_W * zoomx * oWidth + borderx * 2,
-            DosCanvas.CHAR_H * zoomy * oHeight + bordery * 2
+            DosCanvas.CHAR_W * zoomx * oDim.w + borderPos.x * 2,
+            DosCanvas.CHAR_H * zoomy * oDim.h + borderPos.y * 2
         )
     }
 
@@ -146,11 +140,11 @@ class ColourSelector(
         super.paintComponent(g)
         g.color = Color(0x7F7F7F)
         g.fillRect(0, 0, getWidth(), getHeight())
-        g.drawImage(colourPalette, borderx, bordery, null)
+        g.drawImage(colourPalette, borderPos.x, borderPos.y, null)
 
 
-        val cursorX = oX * DosCanvas.CHAR_W * zoomx + 8
-        val cursorY = oY * DosCanvas.CHAR_H * zoomy + 8
+        val cursorX = oPos.x * DosCanvas.CHAR_W * zoomx + 8
+        val cursorY = oPos.y * DosCanvas.CHAR_H * zoomy + 8
         val cursorW = DosCanvas.CHAR_W * zoomx
         val cursorH = DosCanvas.CHAR_H * zoomy
         g.color = Color.BLUE
@@ -190,9 +184,8 @@ class ColourSelector(
         if (mouseX < 8 || mouseY < 8) return false
         mouseX = (mouseX - 8) / zoomx / DosCanvas.CHAR_W
         mouseY = (mouseY - 8) / zoomy / DosCanvas.CHAR_H
-        if (mouseX >= oWidth || mouseY >= oHeight) return false
-        oX = mouseX
-        oY = mouseY
+        if (mouseX >= oDim.w || mouseY >= oDim.h) return false
+        oPos = Pos(mouseX, mouseY)
         upd()
         return true
     }

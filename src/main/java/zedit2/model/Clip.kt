@@ -1,24 +1,24 @@
 package zedit2.model
 
 import zedit2.components.Util
+import zedit2.model.spatial.Dim
 import java.util.*
 
-class Clip(val w:Int,
-           val h: Int,
+class Clip(val dim : Dim,
            val tiles: Array<Tile>,
            val isSzzt: Boolean) {
 
     companion object {
         @JvmStatic
-        fun encode(w: Int, h: Int, tiles: Array<Tile>, szzt: Boolean): String {
+        fun encode(dim: Dim, tiles: Array<Tile>, szzt: Boolean): String {
             // Calculate size
             var size = 9
             for (tile in tiles) {
                 size += tileSize(tile)
             }
             val data = ByteArray(size)
-            Util.setInt32(data, 0, w)
-            Util.setInt32(data, 4, h)
+            Util.setInt32(data, 0, dim.w)
+            Util.setInt32(data, 4, dim.h)
             Util.setInt8(data, 8, if (szzt) 1 else 0)
             var offset = 9
             for (tile in tiles) {
@@ -56,8 +56,7 @@ class Clip(val w:Int,
                 tiles.add(Tile(id, col, stats))
             }
             return Clip(
-                w = w,
-                h = h,
+                dim = Dim(w, h),
                 isSzzt = isSzzt,
                 tiles = tiles.toTypedArray())
         }

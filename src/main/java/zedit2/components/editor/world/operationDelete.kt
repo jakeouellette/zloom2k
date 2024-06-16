@@ -7,7 +7,7 @@ import zedit2.model.Tile
 
 
 internal fun WorldEditor.operationDelete() {
-    val tile = getTileAt(cursorX, cursorY, false)
+    val tile = getTileAt(cursorPos, false)
     val underTile = Tile(0, 0)
     checkNotNull(tile)
     val tileStats: List<Stat> = tile.stats
@@ -17,6 +17,6 @@ internal fun WorldEditor.operationDelete() {
         underTile.id = uid
         underTile.col = uco
     }
-    putTileAt(cursorX, cursorY, underTile, PUT_DEFAULT)
+    putTileAt(cursorPos, underTile, PUT_DEFAULT)
     afterModification()
 }

@@ -3,6 +3,7 @@ package zedit2.components.editor.code
 import zedit2.components.WorldEditor
 import zedit2.model.Board
 import zedit2.model.Stat
+import zedit2.model.spatial.Pos
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
 import java.awt.Component
@@ -12,8 +13,7 @@ import javax.swing.JOptionPane
 
 object CodeEditorFactory {
     fun create(
-        tileX: Int,
-        tileY: Int,
+        tilePos: Pos,
         editExempt: Boolean,
         relativeFrame: Component,
         worldEditor: WorldEditor,
@@ -25,8 +25,7 @@ object CodeEditorFactory {
                 Logger.i(TAG) { "$e, $stat" }
                 Logger.i(TAG) {
                     "Output:\n" +
-                            "$tileX\n" +
-                            "$tileY\n" +
+                            "$tilePos\n" +
                             "$editExempt\n" +
                             "$relativeFrame\n" +
                             "${board.getName()}"
@@ -77,7 +76,7 @@ object CodeEditorFactory {
             } else {
                 var readOnly = false
                 val caption: String
-                if (tileX == -1 && tileY == -1 && !editExempt) {
+                if (!tilePos.isPositive && !editExempt) {
                     // Buffer stats get a readonly code editor
                     readOnly = true
                     caption = String.format(

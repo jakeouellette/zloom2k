@@ -1,9 +1,11 @@
 package zedit2.model
 
+import zedit2.model.spatial.Dim
+import zedit2.model.spatial.Pos
 import zedit2.util.SZZTType
 import zedit2.util.ZZTType
 
-class BufferBoard(override val isSuperZZT: Boolean, override var width: Int, override var height: Int) : Board() {
+class BufferBoard(override val isSuperZZT: Boolean, override var dim : Dim) : Board() {
     init {
         initialise()
     }
@@ -16,26 +18,22 @@ class BufferBoard(override val isSuperZZT: Boolean, override var width: Int, ove
         get() = ByteArray(0)
         set(message) {}
 
-    override var cameraX: Int
-        get() = 0
-        set(x) {}
-
-    override var cameraY: Int
-        get() = 0
-        set(y) {}
+    override var cameraPos: Pos
+        get() = Pos(0, 0)
+        set(v) {}
 
     override val currentSize: Int
         get() {
             throw UnsupportedOperationException("Invalid for buffer boards")
         }
 
-    public override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, x: Int, y: Int) {
+    public override fun drawCharacter(cols: ByteArray?, chars: ByteArray?, posI: Int, xy: Pos) {
         if (!isSuperZZT) {
-            cols!![pos] = ZZTType.getColour(this, x, y).toByte()
-            chars!![pos] = ZZTType.getChar(this, x, y).toByte()
+            cols!![posI] = ZZTType.getColour(this, xy).toByte()
+            chars!![posI] = ZZTType.getChar(this, xy).toByte()
         } else {
-            cols!![pos] = SZZTType.getColour(this, x, y).toByte()
-            chars!![pos] = SZZTType.getChar(this, x, y).toByte()
+            cols!![posI] = SZZTType.getColour(this, xy).toByte()
+            chars!![posI] = SZZTType.getChar(this, xy).toByte()
         }
     }
 
@@ -44,7 +42,7 @@ class BufferBoard(override val isSuperZZT: Boolean, override var width: Int, ove
     }
 
     override fun clone(): Board {
-        val other: Board = BufferBoard(isSuperZZT, width, height)
+        val other: Board = BufferBoard(isSuperZZT, dim)
         cloneInto(other)
         return other
     }
@@ -54,8 +52,7 @@ class BufferBoard(override val isSuperZZT: Boolean, override var width: Int, ove
         if (!super.isEqualTo(other)) return false
 
         val bufOther = other
-        if (width != bufOther.width) return false
-        if (height != bufOther.height) return false
+        if (dim != bufOther.dim) return false
         return isSuperZZT == bufOther.isSuperZZT
     }
 }
