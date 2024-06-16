@@ -12,7 +12,6 @@ import zedit2.components.Util.evalConfigDir
 import zedit2.components.Util.getExtensionless
 import zedit2.components.Util.getKeyStroke
 import zedit2.components.Util.keyStrokeString
-import zedit2.components.Util.pair
 import zedit2.components.editor.BrushMenuPanel
 import zedit2.components.editor.TileInfoPanel
 import zedit2.components.editor.code.CodeEditor
@@ -33,9 +32,7 @@ import zedit2.util.Constants.EDITOR_FONT
 import zedit2.util.FileUtil.getFileChooser
 import zedit2.util.Logger.TAG
 import java.awt.*
-import java.awt.datatransfer.Clipboard
 import java.awt.datatransfer.DataFlavor
-import java.awt.datatransfer.Transferable
 import java.awt.datatransfer.UnsupportedFlavorException
 import java.awt.event.*
 import java.awt.image.BufferedImage
@@ -43,10 +40,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.Paths
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.Timer
 import java.util.regex.Pattern
@@ -135,9 +129,9 @@ class WorldEditor @JvmOverloads constructor(
     private val blinkingImageIcons = ArrayList<BlinkingImageIcon>()
 
     private var mouseScreenPos = Pos.ZERO
-    private var mousePosPos = Pos.ZERO
+    private var mouseCoord = Pos.ZERO
     private var mousePos = Pos.ZERO
-    private var oldMousePos = Pos.NEG_ONE
+    private var oldMouseCoord = Pos.NEG_ONE
     private val fmenus = HashMap<Int, JMenu>()
     private var recentFilesMenu: JMenu? = null
 
@@ -2113,17 +2107,17 @@ class WorldEditor @JvmOverloads constructor(
     private fun mouseDraw() {
         val dirty = HashSet<Board>()
         // TODO(jakeouellette): change to .isPositive
-        if (oldMousePos.x == -1) {
-            mousePlot(mousePos, dirty)
+        if (!oldMouseCoord.isPositive) {
+            mousePlot(mouseCoord, dirty)
         } else {
             var cxy = Pos.NEG_ONE
-            val dxy = mousePos - oldMousePos
+            val dxy = mouseCoord - oldMouseCoord
             val dist = dxy.distInt()
             if (dist == 0) return
             val plotSet = HashSet<Pos>()
             //int cw = canvas.getCharW(), ch = canvas.getCharH();
             for (i in 0..dist) {
-                val xy = dxy * i / dist + oldMousePos
+                val xy = dxy * i / dist + oldMouseCoord
                 val ncxy = canvas.toChar(xy)
                 if (ncxy != cxy) {
                     cxy = ncxy
@@ -2422,7 +2416,6 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     internal fun getTileAt(pos : Pos, copy: Boolean): Tile? {
-        Logger.i(TAG) {"pos: $pos, dim: $dim"}
         if (pos.outside(dim)) {
             throw IndexOutOfBoundsException("Attempted to read coordinate off map, pos: $pos, dim: $dim")
         }
@@ -2647,23 +2640,27 @@ class WorldEditor @JvmOverloads constructor(
 
     fun mouseMotion(e: MouseEvent, heldDown: Int) {
         mouseState = heldDown
-        // TODO(jakeouellette): "pospos" was done to avoid
-        // a name collision, rename it.
-        mousePosPos = Pos(e.x, e.y)
-        mousePos = Pos(mouseCharX(mousePosPos.x), mouseCharY(mousePosPos.y))
+        mouseCoord = Pos(e.x, e.y)
+        mousePos = canvas.toChar(mouseCoord)
 
         // Translate into local space
         mouseScreenPos = Pos(
             e.xOnScreen - frame.locationOnScreen.x,
             e.yOnScreen - frame.locationOnScreen.y
         )
-        if (heldDown == 1) {
-            mouseDraw()
-            oldMousePos = Pos(mousePosPos.x, mousePosPos.y)
-        } else {
-            if (heldDown == 2) mouseGrab()
-            else if (heldDown == 3) mouseMove()
-            oldMousePos = Pos.NEG_ONE
+        when (heldDown) {
+            1 -> {
+                mouseDraw()
+                oldMouseCoord = mouseCoord
+            }
+            2 -> {
+                mouseGrab()
+                oldMouseCoord = Pos.NEG_ONE
+            }
+            3 -> {
+                mouseMove()
+                oldMouseCoord = Pos.NEG_ONE
+            }
         }
 
         undoHandler.afterUpdate()

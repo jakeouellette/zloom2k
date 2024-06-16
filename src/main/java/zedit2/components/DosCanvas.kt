@@ -431,7 +431,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
             val grid = atlas!!.grid
             val boards = editor.boards
             val boardPixelOff = boardDim.tile(zoomx, zoomy)
-            val dirs = arrayOf(intArrayOf(0, -1), intArrayOf(0, 1), intArrayOf(-1, 0), intArrayOf(1, 0))
+            val dirs = arrayOf(Pos.UP, Pos.DOWN, Pos.LEFT, Pos.RIGHT)
             // TODO(jakeouellette): Simplify math
             val wallsThick = arrayOf(
                 intArrayOf(0, 0, boardPixelOff.w, 2),
@@ -449,6 +449,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
             for (y in 0 until gridDim.h) {
                 val py = tileY(y * boardDim.h)
                 for (x in 0 until gridDim.w) {
+                    val xy = Pos(x, y)
                     val px = tileX(x * boardDim.w)
                     val boardIdx = grid[y][x]
                     if (boardIdx != -1) {
@@ -456,10 +457,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
 
                         for (exit in 0..3) {
                             val exitd = board.getExit(exit)
-                            val nxy = Pos(
-                                x + dirs[exit][0],
-                                y + dirs[exit][1]
-                            )
+                            val nxy = xy + dirs[exit]
                             var walls = wallsThick[exit]
                             if (exitd == 0) {
                                 g.color = lcNormal
@@ -611,8 +609,8 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
             }
         }
         Logger.i(TAG) {
-            "MousePressed Event: IsMoving: $isMovingNow, $isMovingNow2 Selecting: $isSelectingNow, $isSelectingNow2 SelectingMode: $isInSelectingMode" +
-                    "Inside: $inside, [blockstart, moveblock, cursor]: [$blockStartPos ${editor.moveBlockPos} ${editor.moveBlockPos} $cursorPos $cursorPos]"
+            "MP: IMov: $isMovingNow, $isMovingNow2 Sel: $isSelectingNow, $isSelectingNow2 Mode: $isInSelectingMode" +
+                    "Ins: $inside, [bs, mb, c]: [$blockStartPos ${editor.moveBlockPos} $cursorPos]"
         }
     }
 
@@ -655,6 +653,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
 
     override fun mouseExited(e: MouseEvent) {
         if (mouseCursorPos.isPositive) {
+            Logger.i(TAG) {"Reset Cursor Neg one."}
             mouseCursorPos = Pos.NEG_ONE
             repaint()
         }
@@ -684,6 +683,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
         }
 
         if (newMouseCursorPos != mouseCursorPos) {
+            Logger.i(TAG) {"Reset Cursor2 $newMouseCursorPos"}
             mouseCursorPos = newMouseCursorPos
             repaint()
         }
