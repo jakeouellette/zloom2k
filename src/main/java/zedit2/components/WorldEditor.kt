@@ -85,7 +85,7 @@ class WorldEditor @JvmOverloads constructor(
     internal var drawing = false
         set(value) {
             field = value
-            canvas.setDrawing(value)
+            canvas.drawing = value
         }
 
     // FIXME(jakeouellette): Right now edit type just switches
@@ -99,7 +99,7 @@ class WorldEditor @JvmOverloads constructor(
     internal var textEntry = false
         set(value) {
             field = value
-            canvas.setTextEntry(value)
+            canvas.textEntry = value
         }
     internal var textEntryX = 0
     internal var fancyFillDialog = false
@@ -2109,9 +2109,8 @@ class WorldEditor @JvmOverloads constructor(
 
     private fun mouseDraw() {
         val dirty = HashSet<Board>()
-        // TODO(jakeouellette): change to .isPositive
         if (!oldMouseCoord.isPositive) {
-            mousePlot(mouseCoord, dirty)
+            mousePlot(mousePos, dirty)
         } else {
             var cxy = Pos.NEG_ONE
             val dxy = mouseCoord - oldMouseCoord
@@ -2127,10 +2126,12 @@ class WorldEditor @JvmOverloads constructor(
                     plotSet.add(cxy)
                 }
             }
+            Logger.i(TAG) {"plotset: ${plotSet.size} ${this.mouseState}"}
             for (plot in plotSet) {
                 mousePlot(plot, dirty)
             }
         }
+        Logger.i(TAG) {"mouseDraw: $oldMouseCoord $mouseCoord"}
         for (board in dirty) {
             board.finaliseStats()
         }
@@ -2165,9 +2166,11 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun mousePlot(xy: Pos, dirty: HashSet<Board>) {
+        Logger.i(TAG) {"Mouse Plot2 $xy, ${dirty.size} ${dim}"}
         if (xy.inside(dim)) {
             cursorPos = xy
             canvas.setCursor(cursorPos)
+            Logger.i(TAG) {"Mouse Plot $xy, ${dirty.size}"}
             val board = putTileDeferred(cursorPos, bufferTile, PUT_DEFAULT)
             if (board != null) dirty.add(board)
         }
@@ -2369,11 +2372,11 @@ class WorldEditor @JvmOverloads constructor(
                     placingTile.stats[0].isPlayer
                 ) {
                     // Find the stat 0 on this board
-                    val stat0 = board.getStat(0)
-                    val oldStat0pos = Pos(stat0!!.x - 1,stat0.y - 1)
+                    val stat0 = board.getStat(0)!!
+                    val oldStat0pos = stat0.pos - 1
                     // If stat 0 isn't on the board, nevermind!
 
-                    if (oldStat0pos.inside(0, 0, boardDim.w-1, boardDim.h-1)) {
+                    if (oldStat0pos.inside(boardDim)) {
                         // See what other stats are there
                         val oldStat0TileStats = board.getStatsAt(oldStat0pos)
                         if (oldStat0TileStats.size == 1) {
@@ -2391,7 +2394,7 @@ class WorldEditor @JvmOverloads constructor(
                     // Place the tile here, but without stat0
                     placingTile.stats.removeAt(0)
                     addRedraw(pos, pos)
-                    Logger.i(TAG) { "setTileDeferred $pos $tile"}
+                    Logger.i(TAG) { "setTileDirect $pos $tile"}
                     board.setTileDirect(pos % boardDim, placingTile)
                     // Then move stat0 to the cursor
                     stat0.pos = pos % boardDim + 1
@@ -2400,7 +2403,7 @@ class WorldEditor @JvmOverloads constructor(
                 }
             }
             addRedraw(pos, pos)
-            Logger.i(TAG) { "setTileDeferred2 $pos $tile"}
+            Logger.i(TAG) { "setTileDirect2 $pos $tile"}
             board.setTileDirect(pos % boardDim, placingTile)
         }
         return board
@@ -2653,6 +2656,9 @@ class WorldEditor @JvmOverloads constructor(
             e.xOnScreen - frame.locationOnScreen.x,
             e.yOnScreen - frame.locationOnScreen.y
         )
+        if (heldDown != DosCanvas.MouseState.NONE) {
+            Logger.i(TAG) { "mouseMotion $heldDown $oldMouseCoord $mouseScreenPos $mouseState $mousePos $mouseCoord" }
+        }
         when (heldDown) {
             DosCanvas.MouseState.DRAW -> {
                 mouseDraw()
@@ -2667,12 +2673,10 @@ class WorldEditor @JvmOverloads constructor(
                 oldMouseCoord = Pos.NEG_ONE
             }
             DosCanvas.MouseState.NONE -> {
-                // None.
+                oldMouseCoord = Pos.NEG_ONE
             }
         }
-        if (heldDown != DosCanvas.MouseState.NONE) {
-            Logger.i(TAG) { "mouseMotion $heldDown $oldMouseCoord" }
-        }
+
         undoHandler.afterUpdate()
     }
 

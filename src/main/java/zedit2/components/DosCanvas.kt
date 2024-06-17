@@ -56,8 +56,19 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
     private var mouseCursorPos = Pos(-1, -1)
     private var blockStartPos = Pos(-1, -1)
     private var placingBlockDim = Dim(0, 0)
-    private var drawing = false
-    private var textEntry = false
+    internal var drawing = false
+        get() = field
+        set(value) {
+            field = value
+            repaint()
+        }
+
+    internal var textEntry = false
+        get() = field
+        set(value) {
+            field = value
+            repaint()
+        }
 
     private var boardDim = Dim(0, 0)
     private var atlas: Atlas? = null
@@ -573,8 +584,9 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
     }
 
     override fun mousePressed(e: MouseEvent) {
-        mouseMoveCommon(e, getButton(e))
         Logger.i(TAG) { "Starting new block operation $blockStartPos" }
+        mouseMoveCommon(e, getButton(e))
+
         val isMovingNow = editor.moveBlockPos.isPositive
         val isSelectingNow = blockStartPos.isPositive
         val isInSelectingMode = editor.editType == WorldEditor.EditType.SELECTING
@@ -635,6 +647,9 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
                     "[bsX, bsY, mbX, mbY cX, cY]: [$blockStartPos ${editor.moveBlockPos} $cursorPos]"
         }
         mouseMoveCommon(e, MouseState.NONE)
+        if (editor.editType == WorldEditor.EditType.SELECTING && !(mouseState == MouseState.GRAB || mouseState == MouseState.MOVE)) { Logger.i(TAG) { "Unexpected draw mode ${editor.editType} $mouseState"} }
+        if (editor.editType == WorldEditor.EditType.EDITING && mouseState != MouseState.NONE) { Logger.i(TAG) { "Unexpected edit mode ${editor.editType} $mouseState"} }
+        if (editor.editType == WorldEditor.EditType.DRAWING && mouseState != MouseState.DRAW) { Logger.i(TAG) { "Unexpected draw mode ${editor.editType} $mouseState"} }
     }
 
     private fun getButton(e: MouseEvent): MouseState {
@@ -651,7 +666,6 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
 
     override fun mouseExited(e: MouseEvent) {
         if (mouseCursorPos.isPositive) {
-            Logger.i(TAG) {"Reset Cursor Neg one."}
             mouseCursorPos = Pos.NEG_ONE
             repaint()
         }
@@ -665,10 +679,10 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
         mouseMoveCommon(e)
     }
 
-    private fun mouseMoveCommon(e: MouseEvent, heldDown: MouseState = mouseState) {
+    private fun mouseMoveCommon(e: MouseEvent, state: MouseState = mouseState) {
         lastMouseEvent = e
-        mouseState = heldDown
-        editor.mouseMotion(e, heldDown)
+        mouseState = state
+        editor.mouseMotion(e, mouseState)
 
         val pos = Pos(getMouseCoords(e.point)!!)
         // TODO(jakeouellette): Is this supposed to be dim.w / dim.h?
@@ -681,7 +695,6 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
         }
 
         if (newMouseCursorPos != mouseCursorPos) {
-            Logger.i(TAG) {"Reset Cursor2 $newMouseCursorPos"}
             mouseCursorPos = newMouseCursorPos
             repaint()
         }
@@ -717,16 +730,6 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
     fun setPlacingBlock(dim: Dim) {
         Logger.i(TAG) { "setPlacingBlock $dim" }
         this.placingBlockDim = dim
-        repaint()
-    }
-
-    fun setTextEntry(state: Boolean) {
-        textEntry = state
-        repaint()
-    }
-
-    fun setDrawing(state: Boolean) {
-        drawing = state
         repaint()
     }
 

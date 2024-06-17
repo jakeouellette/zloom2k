@@ -319,8 +319,6 @@ abstract class Board {
     }
 
     fun setTileDirect(xy : Pos, tile: Tile) {
-        Logger.i(TAG) { "setTile $xy $tile"}
-//        RuntimeException("Test").printStackTrace()
         val pos = xy.arrayPos(dim.w)
         bid[pos] = tile.id.toByte().toInt()
         bco[pos] = tile.col.toByte().toInt()
