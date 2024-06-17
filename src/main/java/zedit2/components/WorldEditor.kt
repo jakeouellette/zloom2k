@@ -19,7 +19,6 @@ import zedit2.components.editor.TileInfoPanel
 import zedit2.components.editor.code.CodeEditor
 import zedit2.components.editor.code.CodeEditorFactory
 import zedit2.components.editor.world.*
-import zedit2.event.CanvasMouseListener
 import zedit2.event.KeyActionReceiver
 import zedit2.event.OnBoardUpdatedCallback
 import zedit2.event.TileEditorCallback
@@ -51,7 +50,6 @@ import javax.imageio.ImageIO
 import javax.swing.*
 import javax.swing.event.*
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
@@ -72,7 +70,6 @@ class WorldEditor @JvmOverloads constructor(
     internal var undoHandler: UndoHandler = UndoHandler(this)
     internal var selectionModeConfiguration : SelectionModeConfiguration? = null
     internal var cursorPos = Pos.ZERO
-    private var centreView = false
     internal var blockStartPos = Pos.NEG_ONE
     // TODO(jakeouellettE): Should these be negative, or 0
     internal var moveBlockDim = Dim(0, 0)
@@ -211,7 +208,7 @@ class WorldEditor @JvmOverloads constructor(
         val cb = worldData.currentBoard
         boardDim = boards[0].dim
         cursorPos = boards[cb].getStat(0)!!.pos - 1
-        centreView = true
+        canvas.centreView = true
 
         updateMenu()
         changeBoard(cb)
@@ -383,21 +380,7 @@ class WorldEditor @JvmOverloads constructor(
                     }
                 }
                 canvas = DosCanvas(this@WorldEditor, zoom,zoom)
-                canvas.isRequestFocusEnabled = true
-                Logger.i(TAG) {"Requesting Focus."}
-                canvas.requestFocusInWindow()
-                lastFocusedElement = canvas
-                canvas.setBlinkMode(GlobalEditor.getBoolean("BLINKING", true))
-                // change(jakeouellette): was this.layeredPane
-                this.addKeybinds(canvas)
-
-                //drawBoard();
-                canvasScrollPane = object : JScrollPane(canvas) {
-                    init {
-                        horizontalScrollBarPolicy = HORIZONTAL_SCROLLBAR_ALWAYS
-                        verticalScrollBarPolicy = VERTICAL_SCROLLBAR_ALWAYS
-                    }
-                }
+                canvasScrollPane = canvas.createScrollPane(this@WorldEditor)
 
                 infoBox = object : JTextArea(3, 20) {
                     init {
@@ -1371,8 +1354,10 @@ class WorldEditor @JvmOverloads constructor(
         return GlobalEditor.getString(String.format("F%d_MENU", f), "")
     }
 
-    private fun JFrame.addKeybinds(component: JComponent) {
-        this.focusTraversalKeysEnabled = false
+    public fun addKeybinds(component: JComponent) {
+
+        // TODO(jakeouellette): where go?
+//        this.focusTraversalKeysEnabled = false
         component.actionMap.clear()
         component.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).clear()
         listOf(
@@ -2373,35 +2358,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun scrollToCursor() {
-        var dim : Dim
-        var pos : Pos
-        if (centreView) {
-            canvas.revalidate()
-            val visibleRect = canvas.visibleRect
-
-            // TODO(jakeouellette): Convert to convienence
-            dim = Dim(clamp(visibleRect.width, 0, canvas.getCharW(this@WorldEditor.dim.w)),
-                clamp(visibleRect.height, 0, canvas.getCharH(this@WorldEditor.dim.h)))
-            val charDim = Dim(
-                canvas.getCharW(1),
-                canvas.getCharH(1))
-            pos =
-               Pos(max(0,
-                    (canvas.getCharW(cursorPos.x) + (charDim.w - dim.w) / 2)),
-                   max(0,canvas.getCharH(cursorPos.y) + (charDim.h - dim.h) / 2))
-            centreView = false
-        } else {
-            dim = Dim(canvas.getCharW(1), canvas.getCharH(1))
-            pos = Pos(canvas.getCharW(cursorPos.x),canvas.getCharH(cursorPos.y))
-
-            // FIXME(jakeouellette): This math can allow a scroll to slightly below / above the view.
-            // Expand this slightly
-
-            pos -= Pos(canvas.getCharW(EXPAND_X), canvas.getCharH(EXPAND_Y))
-            dim += Dim(canvas.getCharW(EXPAND_X * 2), canvas.getCharH(EXPAND_Y * 2))
-        }
-        val rect = Rectangle(pos.x, pos.y, dim.w, dim.h)
-        canvas.scrollRectToVisible(rect)
+            canvas.scrollRectToVisible(this@WorldEditor.dim)
     }
 
     internal fun afterChangeShowing() {
@@ -2792,7 +2749,7 @@ class WorldEditor @JvmOverloads constructor(
 
     private fun refreshKeymapping() {
         // change(jakeouellette): was this.layeredpane
-        frame.addKeybinds(canvas)
+        canvas.refreshKeymapping()
     }
 
     override fun popupMenuWillBecomeVisible(e: PopupMenuEvent) {

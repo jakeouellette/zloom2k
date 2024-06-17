@@ -156,11 +156,11 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
         editor.undoHandler.afterUpdate()
 
         val pos = dosCanvas.getMousePos(e.point)
-        val dim = Dim(dosCanvas.width, dosCanvas.height)
+        val dim = dosCanvas.viewDim
         val newMouseCursorPos = if (pos.outside(dim)) {
             Pos.NEG_ONE
         } else {
-            Pos(dosCanvas.x, dosCanvas.y)
+            dosCanvas.viewPos
         }
 
         if (newMouseCursorPos != dosCanvas.mouseCursorPos) {
