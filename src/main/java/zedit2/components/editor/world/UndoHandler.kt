@@ -4,6 +4,7 @@ import zedit2.components.DosCanvas
 import zedit2.components.GlobalEditor
 import zedit2.components.WorldEditor
 import zedit2.model.Board
+import zedit2.model.MouseState
 import java.awt.Color
 
 // TODO(jakeouellette): This Class is tightly coupled to the editor.
@@ -123,7 +124,7 @@ class UndoHandler(val editor: WorldEditor) {
     }
 
     fun afterUpdate() {
-        if (undoDirty && editor.mouseState != DosCanvas.MouseState.DRAW && !editor.fancyFillDialog) {
+        if (undoDirty && editor.mouseState != MouseState.DRAW && !editor.fancyFillDialog) {
             addUndo()
         }
     }

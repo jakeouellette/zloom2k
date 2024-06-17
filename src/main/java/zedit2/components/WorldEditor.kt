@@ -19,6 +19,7 @@ import zedit2.components.editor.TileInfoPanel
 import zedit2.components.editor.code.CodeEditor
 import zedit2.components.editor.code.CodeEditorFactory
 import zedit2.components.editor.world.*
+import zedit2.event.CanvasMouseListener
 import zedit2.event.KeyActionReceiver
 import zedit2.event.OnBoardUpdatedCallback
 import zedit2.event.TileEditorCallback
@@ -80,6 +81,7 @@ class WorldEditor @JvmOverloads constructor(
     internal val atlases = HashMap<Int, Atlas>()
     internal var currentAtlas: Atlas? = null
     internal var gridDim = Dim(0, 0)
+    internal var lastMouseEvent: MouseEvent? = null
     internal lateinit var grid: Array<IntArray>
     var dim : Dim = Dim(0,0)
     internal var drawing = false
@@ -125,10 +127,10 @@ class WorldEditor @JvmOverloads constructor(
 
     private val blinkingImageIcons = ArrayList<BlinkingImageIcon>()
 
-    private var mouseScreenPos = Pos.ZERO
-    private var mouseCoord = Pos.ZERO
-    private var mousePos = Pos.ZERO
-    private var oldMouseCoord = Pos.NEG_ONE
+    internal var mouseScreenPos = Pos.ZERO
+    internal var mouseCoord = Pos.ZERO
+    internal var mousePos = Pos.ZERO
+    internal var oldMouseCoord = Pos.NEG_ONE
     private val fmenus = HashMap<Int, JMenu>()
     private var recentFilesMenu: JMenu? = null
 
@@ -136,7 +138,7 @@ class WorldEditor @JvmOverloads constructor(
 
     internal lateinit var currentBufferManager: BufferManager
     private val bufferOperation = BufferOperationImpl(this@WorldEditor)
-    internal var mouseState = DosCanvas.MouseState.NONE
+    internal var mouseState = MouseState.NONE
 
     private var popupOpen = false
 
@@ -1646,7 +1648,6 @@ class WorldEditor @JvmOverloads constructor(
             frame.pack()
         }
         centreOn(centreOnPos)
-        canvas.recheckMouse()
     }
 
     private fun centreOn(pos: Pos) {
@@ -2106,66 +2107,8 @@ class WorldEditor @JvmOverloads constructor(
                 })
     }
 
-    private fun mouseDraw() {
-        val dirty = HashSet<Board>()
-        if (!oldMouseCoord.isPositive) {
-            mousePlot(mousePos, dirty)
-        } else {
-            var cxy = Pos.NEG_ONE
-            val dxy = mouseCoord - oldMouseCoord
-            val dist = dxy.distInt()
-            if (dist == 0) return
-            val plotSet = HashSet<Pos>()
-            //int cw = canvas.getCharW(), ch = canvas.getCharH();
-            for (i in 0..dist) {
-                val xy = dxy * i / dist + oldMouseCoord
-                val ncxy = canvas.toChar(xy)
-                if (ncxy != cxy) {
-                    cxy = ncxy
-                    plotSet.add(cxy)
-                }
-            }
-            Logger.i(TAG) {"plotset: ${plotSet.size} ${this.mouseState}"}
-            for (plot in plotSet) {
-                mousePlot(plot, dirty)
-            }
-        }
-        Logger.i(TAG) {"mouseDraw: $oldMouseCoord $mouseCoord"}
-        for (board in dirty) {
-            board.finaliseStats()
-        }
-        afterModification()
-        canvas.setCursor(cursorPos)
-    }
 
-    private fun mouseMove(): Boolean {
-        val pos = mousePos
-        if (pos.inside(dim)) {
-            cursorPos = pos
-            canvas.setCursor(cursorPos)
-            afterUpdate()
-            return true
-        }
-        return false
-    }
 
-    private fun mouseGrab() {
-        if (mouseMove()) {
-            bufferTile = getTileAt(cursorPos, true)
-            afterUpdate()
-        }
-    }
-
-    private fun mousePlot(xy: Pos, dirty: HashSet<Board>) {
-        Logger.i(TAG) {"Mouse Plot2 $xy, ${dirty.size} $dim"}
-        if (xy.inside(dim)) {
-            cursorPos = xy
-            canvas.setCursor(cursorPos)
-            Logger.i(TAG) {"Mouse Plot $xy, ${dirty.size}"}
-            val board = putTileDeferred(cursorPos, bufferTile, PUT_DEFAULT)
-            if (board != null) dirty.add(board)
-        }
-    }
 
 
     private fun getKeystroke(stroke: String): KeyStroke = getKeyStroke(this.globalEditor, stroke)
@@ -2633,40 +2576,6 @@ class WorldEditor @JvmOverloads constructor(
         currentAtlas = null
         // TODO(jakeouellette): Update board selector
         onBoardsUpdated(newBoardList)
-    }
-
-    fun mouseMotion(e: MouseEvent, heldDown: DosCanvas.MouseState) {
-        mouseState = heldDown
-        mouseCoord = Pos(e.x, e.y)
-        mousePos = canvas.toChar(mouseCoord)
-
-        // Translate into local space
-        mouseScreenPos = Pos(
-            e.xOnScreen - frame.locationOnScreen.x,
-            e.yOnScreen - frame.locationOnScreen.y
-        )
-        if (heldDown != DosCanvas.MouseState.NONE) {
-            Logger.i(TAG) { "mouseMotion $heldDown $oldMouseCoord $mouseScreenPos $mouseState $mousePos $mouseCoord" }
-        }
-        when (heldDown) {
-            DosCanvas.MouseState.DRAW -> {
-                mouseDraw()
-                oldMouseCoord = mouseCoord
-            }
-            DosCanvas.MouseState.GRAB -> {
-                mouseGrab()
-                oldMouseCoord = Pos.NEG_ONE
-            }
-            DosCanvas.MouseState.MOVE -> {
-                mouseMove()
-                oldMouseCoord = Pos.NEG_ONE
-            }
-            DosCanvas.MouseState.NONE -> {
-                oldMouseCoord = Pos.NEG_ONE
-            }
-        }
-
-        undoHandler.afterUpdate()
     }
 
     private fun removeAtlas() {

@@ -3,6 +3,7 @@ package zedit2.components
 import zedit2.components.editor.world.operationBlockEnd
 import zedit2.components.editor.world.operationBlockStart
 import zedit2.components.editor.world.operationGrabAndModify
+import zedit2.event.CanvasMouseListener
 import zedit2.util.Data
 import zedit2.model.Atlas
 import zedit2.model.spatial.Dim
@@ -27,13 +28,7 @@ import kotlin.math.max
 
 class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, private var zoomy: Double) : JPanel(),
 
-    MouseListener, FocusListener,
-    MouseMotionListener, MouseWheelListener, ImageRetriever {
-
-    // TODO(jakeouellette): Move out of DosCanvas
-    public enum class MouseState {
-        NONE, DRAW, GRAB, MOVE
-    }
+   FocusListener,  ImageRetriever {
 
     lateinit var charset: ByteArray
         private set
@@ -49,13 +44,16 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
     private var cols: ByteArray? = null
     private var blink = true
     private var blinkState = false
-    private var mouseState = MouseState.NONE
 
-    private var cursorPos = Pos(0, 0)
+    internal var cursorPos = Pos(0, 0)
     private var indicatePos: Array<Pos>? = null
-    private var mouseCursorPos = Pos(-1, -1)
-    private var blockStartPos = Pos(-1, -1)
-    private var placingBlockDim = Dim(0, 0)
+    internal var mouseCursorPos = Pos(-1, -1)
+        set(value) {
+            field = value
+            repaint()
+        }
+    internal var blockStartPos = Pos(-1, -1)
+    internal var placingBlockDim = Dim(0, 0)
     internal var drawing = false
         get() = field
         set(value) {
@@ -75,15 +73,18 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
 
     private var drawAtlasLines = false
 
-    private var lastMouseEvent: MouseEvent? = null
+
     private var show: ByteArray? = null
 
     init {
         initialiseBuffers()
-
-        addMouseListener(this)
-        addMouseMotionListener(this)
-        addMouseWheelListener(this)
+        val mouseListener : CanvasMouseListener = CanvasMouseListener(
+            { this.requestFocusInWindow()},
+            editor,
+            this)
+        addMouseListener(mouseListener)
+        addMouseMotionListener(mouseListener)
+        addMouseWheelListener(mouseListener)
         this.isFocusable = true
         addFocusListener(this)
     }
@@ -568,138 +569,6 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
         g.drawImage(image, 0, 0, tileX(dim.w), tileY(dim.h), 0, 0, dim.w * CHAR_W, dim.h * CHAR_H, null)
     }
 
-    override fun mouseClicked(e: MouseEvent) {
-        Logger.i(TAG) { "Requesting Focus." }
-        this.requestFocusInWindow()
-        mouseMoveCommon(e)
-    }
-
-    private fun getMouseCoords(p: Point?): Point? {
-        if (p == null) {
-            return null
-        }
-        val x = (p.x / zoomx / CHAR_W).toInt()
-        val y = (p.y / zoomy / CHAR_H).toInt()
-        return Point(x, y)
-    }
-
-    override fun mousePressed(e: MouseEvent) {
-        Logger.i(TAG) { "Starting new block operation $blockStartPos" }
-        mouseMoveCommon(e, getButton(e))
-
-        val isMovingNow = editor.moveBlockPos.isPositive
-        val isSelectingNow = blockStartPos.isPositive
-        val isInSelectingMode = editor.editType == WorldEditor.EditType.SELECTING
-        // Either, if when you click you always want a new selection,
-        // or you are already selecting and selection should be refreshed
-        var triggerOperationStart = false
-        if ((isInSelectingMode && !(isMovingNow || isSelectingNow)) || (isSelectingNow)) {
-            triggerOperationStart = true
-            editor.operationBlockStart()
-        }
-        val isMovingNow2 = editor.moveBlockPos.isPositive
-        val isSelectingNow2 = blockStartPos.isPositive
-        var inside = false
-        if (isInSelectingMode && isMovingNow) {
-
-            val placingBlockPos = editor.moveBlockPos + placingBlockDim
-
-            if (cursorPos.inside(
-                    editor.moveBlockPos.x,
-                    editor.moveBlockPos.y,
-                    placingBlockPos.x,
-                    placingBlockPos.y
-                )
-            ) {
-                inside = true
-            }
-        }
-        Logger.i(TAG) {
-            "MP: IMov: $isMovingNow, $isMovingNow2 Sel: $isSelectingNow, $isSelectingNow2 Mode: $isInSelectingMode" +
-                    "Ins: $inside, [bs, mb, c]: [$blockStartPos ${editor.moveBlockPos} $cursorPos]"
-        }
-    }
-
-    override fun mouseReleased(e: MouseEvent) {
-        // TODO(jakeouellette): separate this event out from operationBlockEnd:
-        // Make it so that this one uses whatever is the default behavior
-        // of the current selection brush
-        Logger.i(TAG) { "TODO: Trigger block operation $blockStartPos" }
-        val isMovingNow = editor.moveBlockPos.isPositive
-        val isSelectingNow = blockStartPos.isPositive
-        val isInSelectingMode = editor.editType == WorldEditor.EditType.SELECTING
-
-        // TODO(jakeouellette) do this a very different way
-        if (editor.moveBlockPos.isPositive) {
-            editor.operationGrabAndModify(
-                grab = true,
-                advanced = false)
-        }
-        if (blockStartPos.isPositive) {
-            editor.operationBlockEnd()
-        }
-        val isMovingNow2 = editor.moveBlockPos.isPositive
-        val isSelectingNow2 = blockStartPos.isPositive
-        Logger.i(TAG) {
-            "mouseReleased Event: state: ${mouseState} IsMoving: $isMovingNow, $isMovingNow2 " +
-                    "Selecting: $isSelectingNow, $isSelectingNow2, " +
-                    "SelectingMode: $isInSelectingMode" +
-                    "[bsX, bsY, mbX, mbY cX, cY]: [$blockStartPos ${editor.moveBlockPos} $cursorPos]"
-        }
-        mouseMoveCommon(e, MouseState.NONE)
-        if (editor.editType == WorldEditor.EditType.SELECTING && !(mouseState == MouseState.GRAB || mouseState == MouseState.MOVE)) { Logger.i(TAG) { "Unexpected draw mode ${editor.editType} $mouseState"} }
-        if (editor.editType == WorldEditor.EditType.EDITING && mouseState != MouseState.NONE) { Logger.i(TAG) { "Unexpected edit mode ${editor.editType} $mouseState"} }
-        if (editor.editType == WorldEditor.EditType.DRAWING && mouseState != MouseState.DRAW) { Logger.i(TAG) { "Unexpected draw mode ${editor.editType} $mouseState"} }
-    }
-
-    private fun getButton(e: MouseEvent): MouseState {
-        return if (SwingUtilities.isLeftMouseButton(e)) MouseState.DRAW
-        else if (SwingUtilities.isRightMouseButton(e)) MouseState.GRAB
-        else if (SwingUtilities.isMiddleMouseButton(e)) MouseState.MOVE
-        else MouseState.NONE
-    }
-
-    override fun mouseEntered(e: MouseEvent) {
-
-        mouseMoveCommon(e)
-    }
-
-    override fun mouseExited(e: MouseEvent) {
-        if (mouseCursorPos.isPositive) {
-            mouseCursorPos = Pos.NEG_ONE
-            repaint()
-        }
-    }
-
-    override fun mouseDragged(e: MouseEvent) {
-        mouseMoveCommon(e)
-    }
-
-    override fun mouseMoved(e: MouseEvent) {
-        mouseMoveCommon(e)
-    }
-
-    private fun mouseMoveCommon(e: MouseEvent, state: MouseState = mouseState) {
-        lastMouseEvent = e
-        mouseState = state
-        editor.mouseMotion(e, mouseState)
-
-        val pos = Pos(getMouseCoords(e.point)!!)
-        // TODO(jakeouellette): Is this supposed to be dim.w / dim.h?
-        // ( I don't think so, but leaving a note )
-        val dim = Dim(width, height)
-        val newMouseCursorPos = if (pos.outside(dim)) {
-            Pos.NEG_ONE
-        } else {
-            Pos(x, y)
-        }
-
-        if (newMouseCursorPos != mouseCursorPos) {
-            mouseCursorPos = newMouseCursorPos
-            repaint()
-        }
-    }
-
     fun setBlink(b: Boolean) {
         blinkState = b
         repaint()
@@ -807,23 +676,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
         this.drawAtlasLines = drawAtlasLines
     }
 
-    override fun mouseWheelMoved(e: MouseWheelEvent) {
-        if (e.wheelRotation < 0) {
-            editor.wheelUp(e)
-        } else {
-            editor.wheelDown(e)
-        }
-    }
 
-    fun recheckMouse() {
-        if (lastMouseEvent != null) {
-            // TODO
-            // TODO
-            // TODO
-            // TODO
-            // TODO
-        }
-    }
 
     companion object {
         const val CHAR_W: Int = 8
@@ -841,5 +694,11 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
 
     override fun focusLost(e: FocusEvent?) {
         Logger.i(this@DosCanvas.TAG) { "Focus lost, $e" }
+    }
+
+    fun getMousePos(p: Point): Pos {
+            val x = (p.x / zoomx / CHAR_W).toInt()
+            val y = (p.y / zoomy / CHAR_H).toInt()
+           return Pos(x, y)
     }
 }
