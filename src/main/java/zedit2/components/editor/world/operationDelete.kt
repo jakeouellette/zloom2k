@@ -1,7 +1,6 @@
 package zedit2.components.editor.world
 
 import zedit2.components.WorldEditor
-import zedit2.components.WorldEditor.Companion.PUT_DEFAULT
 import zedit2.model.Stat
 import zedit2.model.Tile
 
@@ -17,6 +16,6 @@ internal fun WorldEditor.operationDelete() {
         underTile.id = uid
         underTile.col = uco
     }
-    putTileAt(cursorPos, underTile, PUT_DEFAULT)
+    putTileAt(cursorPos, underTile, WorldEditor.Companion.PutTypes.PUT_DEFAULT)
     afterModification()
 }

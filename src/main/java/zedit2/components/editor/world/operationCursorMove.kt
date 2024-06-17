@@ -2,7 +2,6 @@ package zedit2.components.editor.world
 
 import zedit2.components.Util.clamp
 import zedit2.components.WorldEditor
-import zedit2.components.WorldEditor.Companion.PUT_DEFAULT
 import zedit2.model.Board
 import zedit2.model.spatial.Dim
 import zedit2.model.spatial.Pos
@@ -22,7 +21,7 @@ internal fun WorldEditor.operationCursorMove(off: Pos, draw: Boolean) {
                 cursorPos += delta
 
                 if (drawing) {
-                    val board = putTileDeferred(cursorPos, bufferTile, PUT_DEFAULT)
+                    val board = putTileDeferred(cursorPos, bufferTile, WorldEditor.Companion.PutTypes.PUT_DEFAULT)
                     if (board != null) dirty.add(board)
                 }
             }

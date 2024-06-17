@@ -1,7 +1,6 @@
 package zedit2.components.editor.world
 
 import zedit2.components.WorldEditor
-import zedit2.components.WorldEditor.Companion.PUT_DEFAULT
 
 
 internal fun WorldEditor.operationBufferPut() {
@@ -9,6 +8,6 @@ internal fun WorldEditor.operationBufferPut() {
         operationDelete()
         return
     }
-    putTileAt(cursorPos, bufferTile, PUT_DEFAULT)
+    putTileAt(cursorPos, bufferTile, WorldEditor.Companion.PutTypes.PUT_DEFAULT)
     afterModification()
 }

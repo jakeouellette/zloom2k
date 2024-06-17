@@ -1,5 +1,6 @@
 package zedit2.components.editor.world
 
+import zedit2.components.DosCanvas
 import zedit2.components.GlobalEditor
 import zedit2.components.WorldEditor
 import zedit2.model.Board
@@ -100,7 +101,6 @@ class UndoHandler(val editor: WorldEditor) {
         }
     }
 
-
     internal fun resetUndoList() {
         with(editor) {
             undoList.clear()
@@ -123,7 +123,7 @@ class UndoHandler(val editor: WorldEditor) {
     }
 
     fun afterUpdate() {
-        if (undoDirty && editor.mouseState != 1 && !editor.fancyFillDialog) {
+        if (undoDirty && editor.mouseState != DosCanvas.MouseState.DRAW && !editor.fancyFillDialog) {
             addUndo()
         }
     }

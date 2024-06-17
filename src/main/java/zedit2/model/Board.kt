@@ -8,6 +8,8 @@ import zedit2.components.WorldEditor
 import zedit2.model.spatial.Dim
 import zedit2.model.spatial.Pos
 import zedit2.util.CP437
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import zedit2.util.ZType
 import java.io.File
 import java.io.IOException
@@ -317,6 +319,8 @@ abstract class Board {
     }
 
     fun setTileDirect(xy : Pos, tile: Tile) {
+        Logger.i(TAG) { "setTile $xy $tile"}
+//        RuntimeException("Test").printStackTrace()
         val pos = xy.arrayPos(dim.w)
         bid[pos] = tile.id.toByte().toInt()
         bco[pos] = tile.col.toByte().toInt()

@@ -12,6 +12,8 @@ import zedit2.components.Util.evalConfigDir
 import zedit2.components.Util.getExtensionless
 import zedit2.components.Util.getKeyStroke
 import zedit2.components.Util.keyStrokeString
+import zedit2.components.WorldEditor.Companion.PutTypes.PUT_DEFAULT
+import zedit2.components.WorldEditor.Companion.PutTypes.PUT_REPLACE_BOTH
 import zedit2.components.editor.BrushMenuPanel
 import zedit2.components.editor.TileInfoPanel
 import zedit2.components.editor.code.CodeEditor
@@ -139,7 +141,7 @@ class WorldEditor @JvmOverloads constructor(
 
     internal lateinit var currentBufferManager: BufferManager
     private val bufferOperation = BufferOperationImpl(this@WorldEditor)
-    internal var mouseState = 0
+    internal var mouseState = DosCanvas.MouseState.NONE
 
     private var popupOpen = false
 
@@ -1873,7 +1875,7 @@ class WorldEditor @JvmOverloads constructor(
                     changingTiles[to] = Pos(id, col)
                     if (swap) {
                         val tid = toBoard.getTileId(to!! % boardDim)
-                        val tcol = toBoard.getTileCol(to!! % boardDim)
+                        val tcol = toBoard.getTileCol(to % boardDim)
                         changingTiles[from] = Pos(tid, tcol)
                     } else {
                         toBoard.setTileRaw(from % boardDim, blankTile.id, blankTile.col)
@@ -2058,6 +2060,7 @@ class WorldEditor @JvmOverloads constructor(
         val under = Tile(stat0.uid, stat0.uco)
         stat0.pos = cornerPos
 
+        Logger.i(TAG) { "erasePlayer $oldStat0"}
         board.setTile(oldStat0, under)
 
         /*
@@ -2309,7 +2312,7 @@ class WorldEditor @JvmOverloads constructor(
      *
      * @param putMode PUT_DEFAULT or PUT_PUSH_DOWN or PUT_REPLACE_BOTH
      */
-    internal fun putTileAt(pos : Pos, tile: Tile?, putMode: Int) {
+    internal fun putTileAt(pos : Pos, tile: Tile?, putMode: PutTypes) {
         val board = putTileDeferred(pos, tile, putMode)
         board?.finaliseStats()
     }
@@ -2318,7 +2321,7 @@ class WorldEditor @JvmOverloads constructor(
      *
      * @param putMode PUT_DEFAULT or PUT_PUSH_DOWN or PUT_REPLACE_BOTH
      */
-    internal fun putTileDeferred(pos : Pos, tile: Tile?, putMode: Int): Board? {
+    internal fun putTileDeferred(pos : Pos, tile: Tile?, putMode: PutTypes): Board? {
         var putMode = putMode
         val board = getBoardAt(pos)
         var currentTile = getTileAt(pos, false)
@@ -2332,7 +2335,7 @@ class WorldEditor @JvmOverloads constructor(
                 }
             }
 
-            if (putMode == PUT_DEFAULT || putMode == PUT_PUSH_DOWN) {
+            if (putMode == PUT_DEFAULT || putMode == PutTypes.PUT_PUSH_DOWN) {
                 val tileStats: List<Stat> = placingTile.stats
                 // Only check if we have exactly 1 stat
                 if (tileStats.size == 1) {
@@ -2341,17 +2344,17 @@ class WorldEditor @JvmOverloads constructor(
                     if (putMode == PUT_DEFAULT) {
                         // If the tile currently there is floor, we will push it down
                         if (ZType.isFloor(worldData.isSuperZZT, currentTile)) {
-                            putMode = PUT_PUSH_DOWN
+                            putMode = PutTypes.PUT_PUSH_DOWN
                         } else {
                             // Not a floor, so does it have one stat? If so, still push down (we will use its uid/uco)
                             if (currentTileStats.size == 1) {
-                                putMode = PUT_PUSH_DOWN
+                                putMode = PutTypes.PUT_PUSH_DOWN
                                 // replace currentTile with what was under it
                                 currentTile = Tile(currentTileStats[0].uid, currentTileStats[0].uco)
                             }
                         }
                     }
-                    if (putMode == PUT_PUSH_DOWN) {
+                    if (putMode == PutTypes.PUT_PUSH_DOWN) {
                         if (placingTile.col < 16) {
                             placingTile.col = (currentTile.col and 0x70) or placingTile.col
                         }
@@ -2388,6 +2391,7 @@ class WorldEditor @JvmOverloads constructor(
                     // Place the tile here, but without stat0
                     placingTile.stats.removeAt(0)
                     addRedraw(pos, pos)
+                    Logger.i(TAG) { "setTileDeferred $pos $tile"}
                     board.setTileDirect(pos % boardDim, placingTile)
                     // Then move stat0 to the cursor
                     stat0.pos = pos % boardDim + 1
@@ -2396,6 +2400,7 @@ class WorldEditor @JvmOverloads constructor(
                 }
             }
             addRedraw(pos, pos)
+            Logger.i(TAG) { "setTileDeferred2 $pos $tile"}
             board.setTileDirect(pos % boardDim, placingTile)
         }
         return board
@@ -2638,7 +2643,7 @@ class WorldEditor @JvmOverloads constructor(
         onBoardsUpdated(newBoardList)
     }
 
-    fun mouseMotion(e: MouseEvent, heldDown: Int) {
+    fun mouseMotion(e: MouseEvent, heldDown: DosCanvas.MouseState) {
         mouseState = heldDown
         mouseCoord = Pos(e.x, e.y)
         mousePos = canvas.toChar(mouseCoord)
@@ -2649,20 +2654,25 @@ class WorldEditor @JvmOverloads constructor(
             e.yOnScreen - frame.locationOnScreen.y
         )
         when (heldDown) {
-            1 -> {
+            DosCanvas.MouseState.DRAW -> {
                 mouseDraw()
                 oldMouseCoord = mouseCoord
             }
-            2 -> {
+            DosCanvas.MouseState.GRAB -> {
                 mouseGrab()
                 oldMouseCoord = Pos.NEG_ONE
             }
-            3 -> {
+            DosCanvas.MouseState.MOVE -> {
                 mouseMove()
                 oldMouseCoord = Pos.NEG_ONE
             }
+            DosCanvas.MouseState.NONE -> {
+                // None.
+            }
         }
-
+        if (heldDown != DosCanvas.MouseState.NONE) {
+            Logger.i(TAG) { "mouseMotion $heldDown $oldMouseCoord" }
+        }
         undoHandler.afterUpdate()
     }
 
@@ -2918,9 +2928,9 @@ class WorldEditor @JvmOverloads constructor(
     companion object {
         const val BLINK_DELAY: Int = 267
 
-        internal const val PUT_DEFAULT = 1
-        private const val PUT_PUSH_DOWN = 2
-        internal const val PUT_REPLACE_BOTH = 3
+        public enum class PutTypes {
+            PUT_DEFAULT, PUT_PUSH_DOWN, PUT_REPLACE_BOTH
+        }
 
         const val SHOW_NOTHING: Int = 0
         const val SHOW_STATS: Int = 1

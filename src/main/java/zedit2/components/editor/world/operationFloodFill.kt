@@ -2,8 +2,6 @@ package zedit2.components.editor.world
 
 import zedit2.components.FancyFill
 import zedit2.components.WorldEditor
-import zedit2.components.WorldEditor.Companion.PUT_DEFAULT
-import zedit2.components.WorldEditor.Companion.PUT_REPLACE_BOTH
 import zedit2.model.Board
 import zedit2.model.Stat
 import zedit2.model.spatial.Pos
@@ -26,7 +24,7 @@ internal fun WorldEditor.operationFloodfill(pos: Pos, fancy: Boolean) {
         for (fy in 0 until dim.h) {
             for (fx in 0 until dim.w) {
                 if (filled[fy][fx].toInt() == 1) {
-                    val board = putTileDeferred(Pos(fx, fy), bufferTile, PUT_DEFAULT)
+                    val board = putTileDeferred(Pos(fx, fy), bufferTile, WorldEditor.Companion.PutTypes.PUT_DEFAULT)
                     if (board != null) dirty.add(board)
                 }
             }
@@ -92,7 +90,9 @@ private fun WorldEditor.fancyFill(filled: Array<ByteArray>) {
             val tiles = fill.tiles
             val boardsHit = HashSet<Board?>()
             for (i in tileXs.indices) {
-                boardsHit.add(putTileDeferred(Pos(tileXs[i], tileYs[i]), tiles[i], PUT_REPLACE_BOTH))
+                boardsHit.add(putTileDeferred(Pos(tileXs[i], tileYs[i]), tiles[i],
+                    WorldEditor.Companion.PutTypes.PUT_REPLACE_BOTH
+                ))
             }
             for (board in boardsHit) {
                 board!!.finaliseStats()

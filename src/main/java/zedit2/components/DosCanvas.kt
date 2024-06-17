@@ -26,8 +26,15 @@ import kotlin.math.abs
 import kotlin.math.max
 
 class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, private var zoomy: Double) : JPanel(),
+
     MouseListener, FocusListener,
     MouseMotionListener, MouseWheelListener, ImageRetriever {
+
+    // TODO(jakeouellette): Move out of DosCanvas
+    public enum class MouseState {
+        NONE, DRAW, GRAB, MOVE
+    }
+
     lateinit var charset: ByteArray
         private set
 
@@ -42,7 +49,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
     private var cols: ByteArray? = null
     private var blink = true
     private var blinkState = false
-    private var mouseState = 0
+    private var mouseState = MouseState.NONE
 
     private var cursorPos = Pos(0, 0)
     private var indicatePos: Array<Pos>? = null
@@ -55,7 +62,6 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
     private var boardDim = Dim(0, 0)
     private var atlas: Atlas? = null
 
-    private val globalEditor: GlobalEditor = editor.globalEditor
     private var drawAtlasLines = false
 
     private var lastMouseEvent: MouseEvent? = null
@@ -379,17 +385,6 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
 
     public override fun paintComponent(g: Graphics) {
         super.paintComponent(g)
-        /*
-        var mc = getMouseCoords(getMousePosition());
-        if (mc != null) {
-            mouseCursorX = mc.x;
-            mouseCursorY = mc.y;
-            if (mouseCursorX < 0 || mouseCursorY < 0 || mouseCursorX >= width || mouseCursorY >= height) {
-                mouseCursorX = -1;
-                mouseCursorY = -1;
-            }
-        }
-        */
         g.color = Color(0x7F7F7F)
         // TODO(jakeouellette): Is this supposed to be dim.w / dim.h?
         // ( I don't think so, but leaving a note )
@@ -503,7 +498,6 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
         } else {
             g.color = Color.LIGHT_GRAY
         }
-
 
         val tilePos = cursorPos.tile(zoomx, zoomy) - 1
         val tileDim = Dim.ONE_BY_ONE.tile(zoomx, zoomy) + 1
@@ -625,7 +619,9 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
 
         // TODO(jakeouellette) do this a very different way
         if (editor.moveBlockPos.isPositive) {
-            editor.operationGrabAndModify(true, false)
+            editor.operationGrabAndModify(
+                grab = true,
+                advanced = false)
         }
         if (blockStartPos.isPositive) {
             editor.operationBlockEnd()
@@ -633,17 +629,19 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
         val isMovingNow2 = editor.moveBlockPos.isPositive
         val isSelectingNow2 = blockStartPos.isPositive
         Logger.i(TAG) {
-            "mouseReleased Event: IsMoving: $isMovingNow, $isMovingNow2 Selecting: $isSelectingNow, $isSelectingNow2, SelectingMode: $isInSelectingMode" +
+            "mouseReleased Event: state: ${mouseState} IsMoving: $isMovingNow, $isMovingNow2 " +
+                    "Selecting: $isSelectingNow, $isSelectingNow2, " +
+                    "SelectingMode: $isInSelectingMode" +
                     "[bsX, bsY, mbX, mbY cX, cY]: [$blockStartPos ${editor.moveBlockPos} $cursorPos]"
         }
-        mouseMoveCommon(e, 0)
+        mouseMoveCommon(e, MouseState.NONE)
     }
 
-    private fun getButton(e: MouseEvent): Int {
-        return if (SwingUtilities.isLeftMouseButton(e)) 1
-        else if (SwingUtilities.isRightMouseButton(e)) 2
-        else if (SwingUtilities.isMiddleMouseButton(e)) 3
-        else 0
+    private fun getButton(e: MouseEvent): MouseState {
+        return if (SwingUtilities.isLeftMouseButton(e)) MouseState.DRAW
+        else if (SwingUtilities.isRightMouseButton(e)) MouseState.GRAB
+        else if (SwingUtilities.isMiddleMouseButton(e)) MouseState.MOVE
+        else MouseState.NONE
     }
 
     override fun mouseEntered(e: MouseEvent) {
@@ -667,7 +665,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
         mouseMoveCommon(e)
     }
 
-    private fun mouseMoveCommon(e: MouseEvent, heldDown: Int = mouseState) {
+    private fun mouseMoveCommon(e: MouseEvent, heldDown: MouseState = mouseState) {
         lastMouseEvent = e
         mouseState = heldDown
         editor.mouseMotion(e, heldDown)
@@ -675,7 +673,7 @@ class DosCanvas(private val editor: WorldEditor, private var zoomx: Double, priv
         val pos = Pos(getMouseCoords(e.point)!!)
         // TODO(jakeouellette): Is this supposed to be dim.w / dim.h?
         // ( I don't think so, but leaving a note )
-        val dim = Dim(getWidth(), getHeight())
+        val dim = Dim(width, height)
         val newMouseCursorPos = if (pos.outside(dim)) {
             Pos.NEG_ONE
         } else {

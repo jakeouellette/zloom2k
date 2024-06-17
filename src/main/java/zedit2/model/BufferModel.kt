@@ -6,6 +6,8 @@ import zedit2.components.DosCanvas
 import zedit2.components.GlobalEditor
 import zedit2.model.spatial.Dim
 import zedit2.model.spatial.Pos
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.awt.Color
 import java.awt.Component
 import java.awt.image.BufferedImage
@@ -231,6 +233,7 @@ class BufferModel(private val manager: BufferManager,
                 for (y in 0 until dim.h) {
                     for (x in 0 until dim.w) {
                         val xy = Pos(x,y)
+                        Logger.i(TAG) { "setTile $xy"}
                         bb.setTile(xy, tiles[xy.arrayPos(dim.w)])
                     }
                 }
