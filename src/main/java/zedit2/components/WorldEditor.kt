@@ -92,10 +92,6 @@ class WorldEditor @JvmOverloads constructor(
     // between editing and selecting, but more types are represented
     // by it as an enum
     internal var editType : EditType = EditType.EDITING
-        set(value) {
-            field = value
-            // TODO(jakeouellette): Set something in the canvas?
-        }
     internal var textEntry = false
         set(value) {
             field = value
@@ -109,7 +105,6 @@ class WorldEditor @JvmOverloads constructor(
     private var redrawPos = Pos.ZERO
     private var redrawPos2 = Pos.ZERO
     private var redrawDim = Dim(0, 0)
-    private val deleteOnClose = HashSet<File>()
 
     lateinit var canvas: DosCanvas
         private set
@@ -251,8 +246,7 @@ class WorldEditor @JvmOverloads constructor(
         val atlas = atlases[newBoardIdx]
         if (atlas != null) {
             val gridPos = checkNotNull(atlas.search(newBoardIdx))
-            val pos = gridPos
-            cursorPos = (cursorPos % boardDim) + (pos * boardDim)
+            cursorPos = (cursorPos % boardDim) + (gridPos * boardDim)
             canvas.setCursor(cursorPos)
             setCurrentBoard(newBoardIdx)
             if (atlas != currentAtlas) {
@@ -267,8 +261,8 @@ class WorldEditor @JvmOverloads constructor(
             }
 
             val rect = Rectangle(
-                canvas.getCharW(pos.x * boardDim.w),
-                canvas.getCharH(pos.y * boardDim.h),
+                canvas.getCharW(gridPos.x * boardDim.w),
+                canvas.getCharH(gridPos.y * boardDim.h),
                 canvas.getCharW(boardDim.w),
                 canvas.getCharH(boardDim.h)
             )
@@ -423,7 +417,7 @@ class WorldEditor @JvmOverloads constructor(
                         this.isOpaque = false
                     }
                 }
-                infoBox.setPreferredSize(Dimension(80, 40))
+                infoBox.preferredSize = Dimension(80, 40)
                 val controlScrollPane = object : JScrollPane(bufferPane) {
                     init {
                         horizontalScrollBarPolicy = HORIZONTAL_SCROLLBAR_NEVER
@@ -923,8 +917,8 @@ class WorldEditor @JvmOverloads constructor(
         val menus = ArrayList<Menu>()
         run {
             var m = Menu("File")
-            m.add("New ZZT world", null) { e: ActionEvent? -> menuNewWorld(false) }
-            m.add("New Super ZZT world", null) { e: ActionEvent? -> menuNewWorld(true) }
+            m.add("New ZZT world", null) { menuNewWorld(false) }
+            m.add("New Super ZZT world", null) { menuNewWorld(true) }
             m.add("Open world", "L") { e: ActionEvent? -> menuOpenWorld() }
             recentFilesMenu = JMenu("Recent files")
             m.add(recentFilesMenu!!, "")
@@ -1010,11 +1004,14 @@ class WorldEditor @JvmOverloads constructor(
             m.add("Select colour", "C") { e: ActionEvent? -> operationColour() }
             m.add("Modify buffer tile", "P") { e: ActionEvent? -> operationModifyBuffer(false) }
             m.add("Modify buffer tile (advanced)", "Ctrl-P") { e: ActionEvent? -> operationModifyBuffer(true) }
-            m.add("Modify tile under cursor", "Alt-M") { e: ActionEvent? -> operationGrabAndModify(false, false) }
+            m.add("Modify tile under cursor", "Alt-M") { e: ActionEvent? -> operationGrabAndModify(
+                grab = false,
+                advanced = false
+            ) }
             m.add(
                 "Modify tile under cursor (advanced)",
                 "Ctrl-Alt-M"
-            ) { e: ActionEvent? -> operationGrabAndModify(false, true) }
+            ) { e: ActionEvent? -> operationGrabAndModify(grab = false, advanced = true) }
             m.add("Exchange buffer fg/bg colours", "Ctrl-X") { e: ActionEvent? -> operationBufferSwapColour() }
             m.add()
             m.add("Start block operation", "Alt-B") { e: ActionEvent? -> operationBlockStart() }
@@ -1026,7 +1023,7 @@ class WorldEditor @JvmOverloads constructor(
             m.add()
             for (f in 3..10) {
                 val fMenuName = getFMenuName(f)
-                if (fMenuName != null && !fMenuName.isEmpty()) {
+                if (fMenuName.isNotEmpty()) {
                     val elementMenu = JMenu(fMenuName)
                     fmenus[f] = elementMenu
                     m.add(elementMenu, "F$f")
@@ -1133,7 +1130,7 @@ class WorldEditor @JvmOverloads constructor(
 
         recentFilesMenu!!.removeAll()
         val recentMax = GlobalEditor.getInt("RECENT_MAX", 10)
-        for (i in 9 downTo 0) {
+        for (i in recentMax-1 downTo 0) {
             val recentFileName = GlobalEditor.getString(String.format("RECENT_%d", i))
             if (recentFileName != null) {
                 val recentFile = File(evalConfigDir(recentFileName))
@@ -1173,7 +1170,7 @@ class WorldEditor @JvmOverloads constructor(
         while (true) {
             val prop = String.format("F%d_MENU_%d", f, i)
             val element = GlobalEditor.getString(prop)
-            if (element == null || element.isEmpty()) {
+            if (element.isNullOrEmpty()) {
                 break
             } else {
                 var elementName: String?
@@ -1528,8 +1525,8 @@ class WorldEditor @JvmOverloads constructor(
             when (actionName) {
                 "Space" -> operationBufferPut()
                 "Delete" -> operationDelete()
-                "Enter" -> operationGrabAndModify(true, false)
-                "Ctrl-Enter" -> operationGrabAndModify(true, true)
+                "Enter" -> operationGrabAndModify(grab = true, advanced = false)
+                "Ctrl-Enter" -> operationGrabAndModify(grab = true, advanced = true)
                 "A" -> operationAddBoard()
                 "B" -> operationFocusOnBoardSelector()
                 "C" -> operationColour()
@@ -1551,12 +1548,12 @@ class WorldEditor @JvmOverloads constructor(
                 "Alt-B" -> operationBlockStart()
                 "Alt-F" -> operationFloodfill(cursorPos, true)
                 "Alt-I" -> menuImportBoard()
-                "Alt-M" -> operationGrabAndModify(false, false)
+                "Alt-M" -> operationGrabAndModify(grab = false, advanced = false)
                 "Alt-S" -> operationStatList()
                 "Alt-T" -> operationTestWorld()
                 "Alt-X" -> menuExportBoard()
                 "Shift-B" -> menuBoardList()
-                "Ctrl-Alt-M" -> operationGrabAndModify(false, true)
+                "Ctrl-Alt-M" -> operationGrabAndModify(grab = false, advanced = true)
                 "0" -> bufferOperation.operationGetFromBuffer(0)
                 "1" -> bufferOperation.operationGetFromBuffer(1)
                 "2" -> bufferOperation.operationGetFromBuffer(2)
@@ -1606,12 +1603,16 @@ class WorldEditor @JvmOverloads constructor(
         val maxZoom = GlobalEditor.getDouble("MAX_ZOOM", 8.0)
         var newZoom = zoom
 
-        if (zoomChange == 1) {
-            newZoom *= zoomFactor
-        } else if (zoomChange == -1) {
-            newZoom /= zoomFactor
-        } else if (zoomChange == 0) {
-            newZoom = 1.0
+        when (zoomChange) {
+            1 -> {
+                newZoom *= zoomFactor
+            }
+            -1 -> {
+                newZoom /= zoomFactor
+            }
+            0 -> {
+                newZoom = 1.0
+            }
         }
 
         // Find nearest zoom level
@@ -1632,12 +1633,10 @@ class WorldEditor @JvmOverloads constructor(
         if (abs(zoomDiff) > 0.0001) {
             zoom = newZoom
         }
-
-        val centreOnPos: Pos
-        if (mouse) {
-            centreOnPos = mousePos
+        val centreOnPos: Pos = if (mouse) {
+            mousePos
         } else {
-            centreOnPos = cursorPos
+            cursorPos
         }
 
         invalidateCache()
@@ -1792,13 +1791,11 @@ class WorldEditor @JvmOverloads constructor(
                     val boardKey = ArrayList<Board?>(2)
                     boardKey.add(getBoardAt(xy))
                     boardKey.add(getBoardAt(xyTo))
-                    val from = xy
-                    val to = xyTo
 
                     if (!blockMap.containsKey(boardKey)) {
                         blockMap[boardKey] = LinkedHashMap()
                     }
-                    blockMap[boardKey]!![from] = to
+                    blockMap[boardKey]!![xy] = xyTo
                 }
             }
         }
@@ -1921,7 +1918,7 @@ class WorldEditor @JvmOverloads constructor(
                     val idx = xyPos.arrayPos(dim.w)
                     val t = blockBuffer[idx]
                     val st: List<Stat> = t.stats
-                    if (!st.isEmpty()) {
+                    if (st.isNotEmpty()) {
                         if (st[0].isPlayer) {
                             // Player has been found. Record the player's location
                             // then place
@@ -1959,15 +1956,17 @@ class WorldEditor @JvmOverloads constructor(
         // todo(jakeouellette): replaced getPalette with get palette data, may
         // have introduced a bug, check it.
         val palette = canvas.paletteData
-        if (palette != Data.DEFAULT_PALETTE) {
+        if (!palette.contentEquals(Data.DEFAULT_PALETTE)) {
             val palFile = Paths.get(dir.path, "$basename.PAL").toFile()
-            Files.write(palFile.toPath(), palette)
+            if (palette != null) {
+                Files.write(palFile.toPath(), palette)
+            }
             unlinkList.add(palFile)
             argList.add("-l")
             argList.add("palette:pal:$basename.PAL")
         }
         val charset = canvas.charset
-        if (charset != Data.DEFAULT_CHARSET) {
+        if (!charset.contentEquals(Data.DEFAULT_CHARSET)) {
             val chrFile = Paths.get(dir.path, "$basename.CHR").toFile()
             Files.write(chrFile.toPath(), charset)
             unlinkList.add(chrFile)
@@ -1978,7 +1977,7 @@ class WorldEditor @JvmOverloads constructor(
 
     internal fun launchTest(
         argList: ArrayList<String?>, dir: File, testFile: File, unlinkList: ArrayList<File?>, testBoard: Int,
-        inject_P: Boolean, delay_P: Int, inject_Enter: Boolean, delay_Enter: Int
+        injectP: Boolean, delayP: Int, injectEnter: Boolean, delayEnter: Int
     ) {
         /*
         synchronized (deleteOnClose) {
@@ -1996,15 +1995,15 @@ class WorldEditor @JvmOverloads constructor(
                 if (saveGame(testFile, worldCopy)) {
                     pb.directory(dir)
                     val p = pb.start()
-                    if (inject_P || inject_Enter) {
+                    if (injectP || injectEnter) {
                         val r = Robot()
-                        if (inject_P) {
-                            r.delay(delay_P)
+                        if (injectP) {
+                            r.delay(delayP)
                             r.keyPress(KeyEvent.VK_P)
                             r.keyRelease(KeyEvent.VK_P)
                         }
-                        if (inject_Enter) {
-                            r.delay(delay_Enter)
+                        if (injectEnter) {
+                            r.delay(delayEnter)
                             r.keyPress(KeyEvent.VK_ENTER)
                             r.keyRelease(KeyEvent.VK_ENTER)
                         }
@@ -2157,16 +2156,8 @@ class WorldEditor @JvmOverloads constructor(
         }
     }
 
-    private fun mouseCharX(x: Int): Int {
-        return canvas.toCharX(x)
-    }
-
-    private fun mouseCharY(y: Int): Int {
-        return canvas.toCharY(y)
-    }
-
     private fun mousePlot(xy: Pos, dirty: HashSet<Board>) {
-        Logger.i(TAG) {"Mouse Plot2 $xy, ${dirty.size} ${dim}"}
+        Logger.i(TAG) {"Mouse Plot2 $xy, ${dirty.size} $dim"}
         if (xy.inside(dim)) {
             cursorPos = xy
             canvas.setCursor(cursorPos)
@@ -2462,8 +2453,7 @@ class WorldEditor @JvmOverloads constructor(
 
             // FIXME(jakeouellette): This math can allow a scroll to slightly below / above the view.
             // Expand this slightly
-            val EXPAND_X = 4
-            val EXPAND_Y = 4
+
             pos -= Pos(canvas.getCharW(EXPAND_X), canvas.getCharH(EXPAND_Y))
             dim += Dim(canvas.getCharW(EXPAND_X * 2), canvas.getCharH(EXPAND_Y * 2))
         }
@@ -2588,7 +2578,7 @@ class WorldEditor @JvmOverloads constructor(
     ) {
         val cb = this.currentBoard
         if (cursorTile == null || cb == null) return
-        val tileInfoPanel = TileInfoPanel(dosCanvas = canvas, worldData, title, cursorTile, cb, { b -> })
+        val tileInfoPanel = TileInfoPanel(dosCanvas = canvas, worldData, title, cursorTile, cb, { _ -> })
 
         //int w = bufferPane.getWidth() - 16;
         //tileInfoPanel.setPreferredSize(new Dimension(w, tileInfoPanel.getPreferredSize().getHeight()));
@@ -2596,8 +2586,7 @@ class WorldEditor @JvmOverloads constructor(
         val childPanel = JPanel(BorderLayout())
         bufferPaneContents.add(childPanel, BorderLayout.CENTER)
 
-        if (cb != null && (cursorTile.id == ZType.OBJECT || cursorTile.id == ZType.SCROLL)) {
-            val board = cb
+        if (cursorTile.id == ZType.OBJECT || cursorTile.id == ZType.SCROLL) {
             val editButton = JButton("Edit Code")
 
             editButton.addActionListener {
@@ -2613,9 +2602,9 @@ class WorldEditor @JvmOverloads constructor(
 
                         val mutableStats = mutableListOf<Stat>()
                         mutableStats.addAll(cursorTile.stats)
-                        mutableStats.set(0, cloneOfFirst)
+                        mutableStats[0] = cloneOfFirst
 
-                        setStats(board, boardPos, cursorPos, mutableStats)
+                        setStats(cb, boardPos, cursorPos, mutableStats)
                         // TODO(jakeouellette): Decide if this is needed
                         // (e.source as StatSelector).dataChanged()
                         afterModification()
@@ -2639,7 +2628,7 @@ class WorldEditor @JvmOverloads constructor(
     val boardPosOffset: Pos
         get() = cursorPos / boardDim * boardDim
 
-    fun replaceBoardList(newBoardList: ArrayList<Board>) {
+    private fun replaceBoardList(newBoardList: ArrayList<Board>) {
         atlases.clear()
         currentAtlas = null
         // TODO(jakeouellette): Update board selector
@@ -2892,7 +2881,7 @@ class WorldEditor @JvmOverloads constructor(
 //        if (currentBufferManager != null) currentBufferManager!!.isAlwaysOnTop = false
     }
 
-    fun refreshKeymapping() {
+    private fun refreshKeymapping() {
         // change(jakeouellette): was this.layeredpane
         frame.addKeybinds(canvas)
     }
@@ -2932,10 +2921,15 @@ class WorldEditor @JvmOverloads constructor(
     companion object {
         const val BLINK_DELAY: Int = 267
 
-        public enum class PutTypes {
+        enum class PutTypes {
             PUT_DEFAULT, PUT_PUSH_DOWN, PUT_REPLACE_BOTH
         }
 
+        /**
+         * Configures the scroll window buffer when sizing it.
+         */
+        const val EXPAND_X = 4
+        const val EXPAND_Y = 4
         const val SHOW_NOTHING: Int = 0
         const val SHOW_STATS: Int = 1
         const val SHOW_OBJECTS: Int = 2
