@@ -22,11 +22,16 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
     override fun mouseClicked(e: MouseEvent) {
         Logger.i(TAG) { "Requesting Focus." }
         onFocusNeeded()
-        mouseMoveCommon(e)
+        //mouseMoveCommon(e, source = "mouseClicked")
     }
 
     override fun mousePressed(e: MouseEvent) {
-        mouseMoveCommon(e, getButton(e))
+        val state =  getButton(e)
+        if (editor.mouseState != state) {
+            Logger.i(TAG) { "Going from ${editor.mouseState} to ${state}"}
+        }
+        editor.mouseState = state
+        mouseMoveCommon(e, state, source = "mousePressed")
 
         val isMovingNow = editor.moveBlockPos.isPositive
         val isSelectingNow = dosCanvas.blockStartPos.isPositive
@@ -87,7 +92,7 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
                     "SelectingMode: $isInSelectingMode" +
                     "[bsX, bsY, mbX, mbY cX, cY]: [$dosCanvas.blockStartPos ${editor.moveBlockPos} $dosCanvas.cursorPos]"
         }
-        mouseMoveCommon(e, MouseState.NONE)
+        mouseMoveCommon(e, MouseState.NONE, source = "mouseReleased")
         if (editor.editType == WorldEditor.EditType.SELECTING && !(editor.mouseState == MouseState.GRAB || editor.mouseState == MouseState.MOVE)) { Logger.i(TAG) { "Unexpected draw mode ${editor.editType} $editor.mouseState"} }
         if (editor.editType == WorldEditor.EditType.EDITING && editor.mouseState != MouseState.NONE) { Logger.i(TAG) { "Unexpected edit mode ${editor.editType} $editor.mouseState"} }
         if (editor.editType == WorldEditor.EditType.DRAWING && editor.mouseState != MouseState.DRAW) { Logger.i(TAG) { "Unexpected draw mode ${editor.editType} $editor.mouseState"} }
@@ -101,7 +106,10 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
     }
 
     override fun mouseEntered(e: MouseEvent) {
-        mouseMoveCommon(e)
+//        mouseMoveCommon(e, source = "mouseEntered")
+
+
+
     }
 
     override fun mouseExited(e: MouseEvent) {
@@ -111,19 +119,22 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
     }
 
     override fun mouseDragged(e: MouseEvent) {
-        mouseMoveCommon(e)
+        mouseMoveCommon(e, source ="mouseDragged")
     }
 
     override fun mouseMoved(e: MouseEvent) {
-        mouseMoveCommon(e)
+        mouseMoveCommon(e, source="mouseMoved")
     }
 
-    private fun mouseMoveCommon(e: MouseEvent, state: MouseState = editor.mouseState) {
+    private fun mouseMoveCommon(e: MouseEvent,
+                                source : String) {
         editor.lastMouseEvent = e
-        editor.mouseState = state
+        val state = editor.mouseState
+
         val mouseCoord = Pos(e.x, e.y)
         editor.mouseCoord = mouseCoord
-        editor.mousePos = dosCanvas.toChar(mouseCoord)
+        val mousePos = dosCanvas.toChar(mouseCoord)
+        editor.mousePos = mousePos
 
         // Translate into local space
         val screenLoc = editor.frame.locationOnScreen
@@ -160,8 +171,9 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
         val newMouseCursorPos = if (pos.outside(dim)) {
             Pos.NEG_ONE
         } else {
-            dosCanvas.viewPos
+            mousePos
         }
+        Logger.i(TAG) { "Mouse Coord: $mouseCoord"}
 
         if (newMouseCursorPos != dosCanvas.mouseCursorPos) {
             dosCanvas.mouseCursorPos = newMouseCursorPos
