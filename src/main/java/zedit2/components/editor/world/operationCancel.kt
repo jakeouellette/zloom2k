@@ -23,13 +23,13 @@ internal fun WorldEditor.operationCancel(): Boolean {
         afterUpdate()
         return true
     }
-    if (blockStartPos.isPositive) {
-        setBlockStart(Pos(-1, -1))
+    if (selectionBlockAnchorPos.isPositive) {
+        setSelectionBlockStart(Pos.NEG_ONE)
         afterUpdate()
         return true
     }
     if (moveBlockDim.w != 0) {
-        setMoveBlock(Dim(0, 0))
+        setMoveBlock(Pos.NEG_ONE, Dim.EMPTY)
         afterUpdate()
         return true
     }

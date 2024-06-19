@@ -5,7 +5,6 @@ import zedit2.components.DosCanvas.Companion.CHAR_W
 import zedit2.components.Util
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
-import java.awt.Dimension
 import java.awt.Point
 import kotlin.math.abs
 import kotlin.math.max
@@ -96,6 +95,10 @@ data class Pos(val x: Int, val y: Int) {
         return Pos(x - pos.x, y - pos.y)
     }
 
+    operator fun minus(dim: Dim): Pos {
+        return Pos(x - dim.w, y - dim.h)
+    }
+
     operator fun minus(scalar: Int): Pos {
         return Pos(x - scalar, y - scalar)
     }
@@ -108,7 +111,7 @@ data class Pos(val x: Int, val y: Int) {
         return Pos(x / scalar, y / scalar)
     }
 
-    fun arrayPos(width: Int): Int {
+    fun arrayIdx(width: Int): Int {
         return y * width + x
     }
 
@@ -122,6 +125,10 @@ data class Pos(val x: Int, val y: Int) {
 
     fun clamp(i: Int, pos: Pos): Pos {
         return Pos(Util.clamp(x, i, pos.x), Util.clamp(y, i, pos.y))
+    }
+
+    fun clamp(min: Pos, max: Pos): Pos {
+        return Pos(Util.clamp(x, min.x, max.x), Util.clamp(y, min.y, max.y))
     }
 
     operator fun unaryMinus(): Pos {

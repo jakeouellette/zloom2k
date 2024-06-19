@@ -23,6 +23,10 @@ object Logger {
         System.err.println("[$tag] WARN: ${line()}")
     }
 
+    fun v(tag: String, line: () -> String) {
+//        System.out.println("[$tag] ${line}")
+    }
+
     val Any.TAG: String
         get() {
             val tag = javaClass.simpleName

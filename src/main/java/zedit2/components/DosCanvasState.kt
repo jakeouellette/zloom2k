@@ -13,7 +13,7 @@ interface DosCanvasState {
     val placingBlockDim: Dim
     val dim: Dim
     val isFocused: Boolean
-    val cursorPos: Pos
+    val caretPos: Pos
     val textEntry: Boolean
     val drawing: Boolean
     val boardDim: Dim

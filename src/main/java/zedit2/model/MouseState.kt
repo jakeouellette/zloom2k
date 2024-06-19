@@ -1,5 +1,15 @@
 package zedit2.model
 
+/**
+ * Mouse state represents what the pin of the mouse is doing actively. Represents the current button press
+ */
 enum class MouseState {
-        NONE, DRAW, GRAB, MOVE
+        RELEASED,
+
+        /**
+         * The mouse is doing an activity:
+         */
+        PRIMARY,
+        SECONDARY,
+        MIDDLE
 }

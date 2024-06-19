@@ -8,7 +8,7 @@ import kotlin.math.max
 
 
 fun WorldEditor.operationSaveToBuffer(bufferNum: Int) {
-    if (blockStartPos.isPositive) {
+    if (selectionBlockAnchorPos.isPositive) {
         // Block selected.
         blockCopy(false)
     }

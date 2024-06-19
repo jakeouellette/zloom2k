@@ -129,7 +129,7 @@ class DosCanvasComponent(val state : DosCanvasState) : JPanel() {
             g.color = Color.LIGHT_GRAY
         }
 
-        val tilePos = state.cursorPos.tile(state.zoomx, state.zoomy) - 1
+        val tilePos = state.caretPos.tile(state.zoomx, state.zoomy) - 1
         val tileDim = Dim.ONE_BY_ONE.tile(state.zoomx, state.zoomy) + 1
         g.draw3DRect(tilePos.x, tilePos.y, tileDim.w, tileDim.h, state.blinkState)
 
@@ -155,28 +155,31 @@ class DosCanvasComponent(val state : DosCanvasState) : JPanel() {
             }
         }
 
+        // Render selection rect
         if (state.blockStartPos.isPositive) {
             g.color = Color(0x7F3399FF, true)
-            val rect = Rec.companion.from(state.blockStartPos, state.cursorPos)
+            val rect = Rec.companion.from(state.blockStartPos, state.caretPos)
             val (minPos, maxPos) = rect.toPos
             val blockStartTilePos = minPos.tile(state.zoomx, state.zoomy)
             val blockStartTileDim = (maxPos - minPos + 1).dim.tile(state.zoomx, state.zoomy)
             g.fillRect(blockStartTilePos.x, blockStartTilePos.y, blockStartTileDim.w, blockStartTileDim.h)
         }
 
+        // Render copy rect
         if (GlobalEditor.isBlockBuffer()) {
             g.color = Color(0x5FFF8133, true)
-            val xy2 = (state.dim.asPos - 1).min(state.cursorPos + GlobalEditor.blockBufferDim - 1)
-            val newTilePos = state.cursorPos.tile(state.zoomx, state.zoomy)
-            val newTileDim = (xy2 - state.cursorPos + 1).dim.tile(state.zoomx, state.zoomy)
+            val xy2 = (state.dim.asPos - 1).min(state.caretPos + GlobalEditor.blockBufferDim - 1)
+            val newTilePos = state.caretPos.tile(state.zoomx, state.zoomy)
+            val newTileDim = (xy2 - state.caretPos + 1).dim.tile(state.zoomx, state.zoomy)
             g.fillRect(newTilePos.x, newTilePos.y, newTileDim.w, newTileDim.h)
         }
 
+        // Render move rect
         if (state.placingBlockDim.w != -1) {
             g.color = Color(0x5F33ff99, true)
-            val xy2 = (state.dim.asPos - 1).min(state.cursorPos + state.placingBlockDim - 1)
-            val newTilePos = state.cursorPos.tile(state.zoomx, state.zoomy)
-            val newTileDim = (xy2 - state.cursorPos + 1).dim.tile(state.zoomx, state.zoomy)
+            val xy2 = (state.dim.asPos - 1).min(state.caretPos + state.placingBlockDim - 1)
+            val newTilePos = state.caretPos.tile(state.zoomx, state.zoomy)
+            val newTileDim = (xy2 - state.caretPos + 1).dim.tile(state.zoomx, state.zoomy)
             g.fillRect(newTilePos.x, newTilePos.y, newTileDim.w, newTileDim.h)
         }
         //g.drawImage(charBuffer, 0, 0, new Color(palette[7], true), null);

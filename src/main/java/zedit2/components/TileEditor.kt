@@ -403,7 +403,11 @@ class TileEditor(
 
     private fun relativeFrame(): Component {
         val frame = tileEditorFrame
-        if (frame != null) return frame
+        if (frame != null) {
+            Logger.i(TAG) { "tileEditorFrame Returning"}
+            return frame
+        }
+        Logger.i(TAG) { "frameForRelativePositioning Returning"}
         return frameForRelativePositioning
     }
 

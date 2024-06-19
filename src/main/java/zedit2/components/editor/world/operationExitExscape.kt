@@ -14,18 +14,18 @@ internal fun WorldEditor.operationExitCreate(exit: Int) {
     if (destBoard != 0) {
         changeBoard(destBoard)
     } else {
-        val savedCursorPos = cursorPos
-        cursorPos += Pos(xOff[exit],yOff[exit])
-        if (cursorPos.outside(dim)) {
-            cursorPos = savedCursorPos
+        val savedCursorPos = caretPos
+        caretPos += Pos(xOff[exit],yOff[exit])
+        if (caretPos.outside(dim)) {
+            caretPos = savedCursorPos
         }
         val newBoardIdx = operationAddBoard()
         if (newBoardIdx != -1) {
             boards[oldBoardIdx].setExit(exit, newBoardIdx)
             boards[newBoardIdx].setExit(exitRecip[exit], oldBoardIdx)
-            canvas.setCursor(cursorPos)
+            canvas.setCaret(caretPos)
         } else {
-            cursorPos = savedCursorPos
+            caretPos = savedCursorPos
         }
         afterUpdate()
     }

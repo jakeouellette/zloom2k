@@ -38,9 +38,17 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
     override val boards
         get() = editor.boards
     override var blinkState = false
+    override val placingBlockDim
+        get() = editor.moveBlockDim
     override val isFocused
         get() = editor.frame.isFocused
-    override var cursorPos = Pos(0, 0)
+    override var caretPos = Pos(0, 0)
+//        set(value) {
+//            Logger.i(TAG) {"caret updated"}
+//            RuntimeException("s").printStackTrace()
+//            field = value
+//            view.repaint()
+//        }
     override var indicatePos: Array<Pos>? = null
     override var mouseCursorPos = Pos(-1, -1)
         set(value) {
@@ -48,7 +56,6 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
             view.repaint()
         }
     override var blockStartPos = Pos(-1, -1)
-    override var placingBlockDim = Dim(0, 0)
     override var drawing = false
         get() = field
         set(value) {
@@ -172,15 +179,15 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
                             chr * CHAR_W + x,
                             col * CHAR_H + y
                         )
-                        val pI = pxy.arrayPos(dim.w)
+                        val pIdx = pxy.arrayIdx(dim.w)
 
                         // Is this pixel set in this char?
                         val charRow = charset[chr * CHAR_H + y]
                         val charMask = (128 shr x).toByte()
                         if ((charRow.toInt() and charMask.toInt()) != 0) {
-                            ar[pI] = palette[col]
+                            ar[pIdx] = palette[col]
                         } else {
-                            ar[pI] = TRANSPARENT
+                            ar[pIdx] = TRANSPARENT
                         }
                     }
                 }
@@ -294,28 +301,28 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
         for (dy in 0 until dim.h) {
             for (dx in 0 until dim.w) {
                 val dxy = Pos(dx, dy)
-                val dxyPos = dxy.arrayPos(dim.w)
-                val xy = dxy + offset
-                val xyPos = xy.arrayPos(this@DosCanvas.dim.w)
+                val dxyIdx = dxy.arrayIdx(dim.w)
+                val oxy = dxy + offset
+                val oxyIdx = oxy.arrayIdx(this@DosCanvas.dim.w)
                 var tshow = if (show != null) {
-                    show[dxyPos]
+                    show[dxyIdx]
                 } else {
                     0
                 }
-                if ((redrawAll || this.cols!![xyPos] != cols[dxyPos]) || this.chars!![xyPos] != chars[dxyPos] || this.show!![xyPos] != tshow) {
+                if ((redrawAll || this.cols!![oxyIdx] != cols[dxyIdx]) || this.chars!![oxyIdx] != chars[dxyIdx] || this.show!![oxyIdx] != tshow) {
                     // TODO(jakeouellette): Clean up this state machine.
-                    this.chars!![xyPos] = chars[dxyPos]
-                    this.cols!![xyPos] = cols[dxyPos]
-                    this.show!![xyPos] = tshow
-                    val chr = chars[dxyPos].toInt() and 0xFF
-                    val col = cols[dxyPos].toInt() and 0xFF
+                    this.chars!![oxyIdx] = chars[dxyIdx]
+                    this.cols!![oxyIdx] = cols[dxyIdx]
+                    this.show!![oxyIdx] = tshow
+                    val chr = chars[dxyIdx].toInt() and 0xFF
+                    val col = cols[dxyIdx].toInt() and 0xFF
 
                     TilePainters.drawTile(
                         boardBufferGraphics[0],
                         chr,
                         col,
-                        xy.x,
-                        xy.y,
+                        oxy.x,
+                        oxy.y,
                         1,
                         1,
                         blink,
@@ -330,8 +337,8 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
                             boardBufferGraphics[1],
                             chr,
                             col,
-                            xy.x,
-                            xy.y,
+                            oxy.x,
+                            oxy.y,
                             1,
                             1,
                             blink,
@@ -382,18 +389,13 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
         )
     }
 
-
-
-
-
-
     fun setBlink(b: Boolean) {
         blinkState = b
         view.repaint()
     }
 
-    fun setCursor(pos: Pos) {
-        cursorPos = pos
+    fun setCaret(pos: Pos) {
+        caretPos = pos
         view.repaint()
     }
 
@@ -411,12 +413,6 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
 
     fun setSelectionBlock(blockStartPos: Pos) {
         this.blockStartPos = blockStartPos
-        view.repaint()
-    }
-
-    fun setPlacingBlock(dim: Dim) {
-        Logger.i(TAG) { "setPlacingBlock $dim" }
-        this.placingBlockDim = dim
         view.repaint()
     }
 
@@ -537,13 +533,13 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
             pos =
                 Pos(
                     max(0,
-                    (this.getCharW(cursorPos.x) + (charDim.w - dim.w) / 2)),
-                    max(0,this.getCharH(cursorPos.y) + (charDim.h - dim.h) / 2)
+                    (this.getCharW(caretPos.x) + (charDim.w - dim.w) / 2)),
+                    max(0,this.getCharH(caretPos.y) + (charDim.h - dim.h) / 2)
                 )
             centreView = false
         } else {
             dim = Dim(this.getCharW(1), this.getCharH(1))
-            pos = Pos(this.getCharW(cursorPos.x),this.getCharH(cursorPos.y))
+            pos = Pos(this.getCharW(caretPos.x),this.getCharH(caretPos.y))
 
             // FIXME(jakeouellette): This math can allow a scroll to slightly below / above the view.
             // Expand this slightly

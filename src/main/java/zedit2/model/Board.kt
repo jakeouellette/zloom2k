@@ -8,8 +8,6 @@ import zedit2.components.WorldEditor
 import zedit2.model.spatial.Dim
 import zedit2.model.spatial.Pos
 import zedit2.util.CP437
-import zedit2.util.Logger
-import zedit2.util.Logger.TAG
 import zedit2.util.ZType
 import java.io.File
 import java.io.IOException
@@ -260,11 +258,11 @@ abstract class Board {
     protected abstract fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, xy: Pos)
 
     fun getTileCol(pos : Pos): Int {
-        return bco[pos.arrayPos(dim.w)] and 0xFF
+        return bco[pos.arrayIdx(dim.w)] and 0xFF
     }
 
     fun getTileId(pos : Pos): Int {
-        return bid[pos.arrayPos(dim.w)] and 0xFF
+        return bid[pos.arrayIdx(dim.w)] and 0xFF
     }
 
     fun getStatsAt(pos : Pos): List<Stat> {
@@ -319,9 +317,9 @@ abstract class Board {
     }
 
     fun setTileDirect(xy : Pos, tile: Tile) {
-        val pos = xy.arrayPos(dim.w)
-        bid[pos] = tile.id.toByte().toInt()
-        bco[pos] = tile.col.toByte().toInt()
+        val idx = xy.arrayIdx(dim.w)
+        bid[idx] = tile.id.toByte().toInt()
+        bco[idx] = tile.col.toByte().toInt()
         dirtyRLE()
 
         val statsInTile = HashMap<Int, Stat>()
@@ -419,10 +417,10 @@ abstract class Board {
      * Sets a tile without affecting stats
      */
     fun setTileRaw(tilePos : Pos, id: Int, col: Int) {
-        val pos = tilePos.arrayPos(dim.w)
-        if (bid[pos] != id.toByte().toInt() || bco[pos] != col.toByte().toInt()) {
-            bid[pos] = id.toByte().toInt()
-            bco[pos] = col.toByte().toInt()
+        val idx = tilePos.arrayIdx(dim.w)
+        if (bid[idx] != id.toByte().toInt() || bco[idx] != col.toByte().toInt()) {
+            bid[idx] = id.toByte().toInt()
+            bco[idx] = col.toByte().toInt()
             dirtyRLE()
         }
     }
@@ -597,29 +595,29 @@ abstract class Board {
                 for (stat in stats) {
                     val xy = stat!!.pos - 1 - pos
                     if (xy.inside(wh)) {
-                        show[xy.arrayPos(wh.w)] = showing.toByte()
+                        show[xy.arrayIdx(wh.w)] = showing.toByte()
                     }
                 }
             }
         }
-        for (y in 0 until wh.h) {
-            for (x in 0 until wh.w) {
-                val xy = Pos(x, y)
+        for (dy in 0 until wh.h) {
+            for (dx in 0 until wh.w) {
+                val dxy = Pos(dx, dy)
 
-                val posI = xy.arrayPos(wh.w)
-                drawCharacter(cols, chars, posI, xy + pos)
+                val idx = dxy.arrayIdx(wh.w)
+                drawCharacter(cols, chars, idx, dxy + pos)
                 if (showing != WorldEditor.SHOW_NOTHING) {
-                    val bpos = (xy + pos).arrayPos(this.dim.w)
-                    val id = bid[bpos]
+                    val bIdx = (dxy + pos).arrayIdx(this.dim.w)
+                    val id = bid[bIdx]
                     when (showing) {
                         WorldEditor.SHOW_EMPTIES, WorldEditor.SHOW_EMPTEXTS -> if (id == ZType.EMPTY) {
-                            show!![posI] = showing.toByte()
-                            cols[posI] = bco[bpos].toByte()
+                            show!![idx] = showing.toByte()
+                            cols[idx] = bco[bIdx].toByte()
                         }
 
-                        WorldEditor.SHOW_FAKES -> if (id == ZType.FAKE) show!![posI] = showing.toByte()
-                        WorldEditor.SHOW_INVISIBLES -> if (id == ZType.INVISIBLE) show!![posI] = showing.toByte()
-                        WorldEditor.SHOW_OBJECTS -> if (id == ZType.OBJECT) show!![posI] = showing.toByte()
+                        WorldEditor.SHOW_FAKES -> if (id == ZType.FAKE) show!![idx] = showing.toByte()
+                        WorldEditor.SHOW_INVISIBLES -> if (id == ZType.INVISIBLE) show!![idx] = showing.toByte()
+                        WorldEditor.SHOW_OBJECTS -> if (id == ZType.OBJECT) show!![idx] = showing.toByte()
                     }
                 }
             }

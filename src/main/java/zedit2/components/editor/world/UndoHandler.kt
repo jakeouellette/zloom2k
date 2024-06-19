@@ -124,7 +124,11 @@ class UndoHandler(val editor: WorldEditor) {
     }
 
     fun afterUpdate() {
-        if (undoDirty && editor.mouseState != MouseState.DRAW && !editor.fancyFillDialog) {
+        // TODO(jakeouellette): Unravel this, any action inacted on the board should be a unit action / transaction
+        // The way this currently works is it treats down clicks as disable functions to undo, but
+        // instead of this, it should have a mechanism where upon completion of a board change event,
+        // it gets persisted to history with a before and after state.
+        if (undoDirty && editor.mouseState != MouseState.PRIMARY && !editor.fancyFillDialog) {
             addUndo()
         }
     }
