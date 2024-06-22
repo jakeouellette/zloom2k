@@ -74,7 +74,7 @@ internal fun WorldEditor.operationTestWorld() {
             }
         }
         val params =
-            GlobalEditor.getString(zzt + "_TEST_PARAMS")!!.split(" ".toRegex()).dropLastWhile { it.isEmpty() }
+            GlobalEditor.getString(zzt + "_TEST_PARAMS")!!.split(" ".toRegex())
                 .toTypedArray()
         argList.addAll(Arrays.asList(*params))
 

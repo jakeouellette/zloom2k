@@ -787,7 +787,7 @@ class CodeEditor(
         for (menu in menus) {
             val jmenu = JMenu(menu.title)
             for (menuEntry in menu) {
-                menuEntry.addToJMenu(worldEditor.globalEditor, jmenu)
+                menuEntry.addToJMenu(jmenu)
             }
             menuBar.add(jmenu)
         }

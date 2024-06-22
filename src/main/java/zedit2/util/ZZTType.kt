@@ -33,7 +33,7 @@ object ZZTType : ZType() {
     private fun getFirstStat(board: Board, xy : Pos): Stat? {
         val stats = board.getStatsAt(xy)
         if (stats.isEmpty()) return null
-        return stats[0]
+        return stats.getOrNull(0)
     }
 
     @JvmStatic
@@ -44,9 +44,7 @@ object ZZTType : ZType() {
 
     @JvmStatic
     fun getChar(board: Board, xy: Pos): Int {
-        val id = board.getTileId(xy)
-
-        when (id) {
+        when (val id = board.getTileId(xy)) {
             DUPLICATOR -> {
                 val lastStat = getFirstStat(board, xy) ?: return checkCharCodes(board, xy, id)
                 return duplicatorFrames[lastStat.p1]

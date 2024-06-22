@@ -136,8 +136,9 @@ object SZZTType : ZType() {
 
     private fun getFirstStat(board: Board, xy : Pos): Stat? {
         val stats = board.getStatsAt(xy)
-        if (stats.isEmpty()) return null
-        return stats[0]
+        val firstStat = stats.getOrNull(0)
+        if (stats.isEmpty() || firstStat == null) return null
+        return firstStat
     }
 
     @JvmStatic
@@ -148,9 +149,7 @@ object SZZTType : ZType() {
 
     @JvmStatic
     fun getChar(board: Board, xy: Pos): Int {
-        val id = board.getTileId(xy)
-
-        when (id) {
+        when (val id = board.getTileId(xy)) {
             DUPLICATOR -> {
                 val lastStat = getFirstStat(board, xy) ?: return checkCharcodes(id)
                 return duplicatorFrames[lastStat.p1]
@@ -236,9 +235,7 @@ object SZZTType : ZType() {
 
     @JvmStatic
     fun getColour(board: Board, xy: Pos): Int {
-        val id = board.getTileId(xy)
-
-        when (id) {
+        when (val id = board.getTileId(xy)) {
             EMPTY -> {
                 // Empty is a little special- it's always black
                 return 0x00

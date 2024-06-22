@@ -15,7 +15,7 @@ object CodeEditorFactory {
     fun create(
         tilePos: Pos,
         editExempt: Boolean,
-        relativeFrame: Component,
+        relativeFrame: Component?,
         worldEditor: WorldEditor,
         icon: Image,
         board: Board,

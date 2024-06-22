@@ -12,8 +12,7 @@ internal fun WorldEditor.operationFocusOnBoardSelector() {
         "Current focus element: ${this.lastFocusedElement}:${this.lastFocusedElement.isFocusOwner}"
     }
     if (this.boardSelectorComponent.isFocusOwner) {
-        this.canvas.requestFocusInWindow()
-        this.lastFocusedElement = this.canvas
+        this.lastFocusedElement = this.canvas.requestFocusInWindow()
     } else {
         val willFocus = this.boardSelectorComponent.requestFocusInWindow()
         this.lastFocusedElement = this.boardSelectorComponent

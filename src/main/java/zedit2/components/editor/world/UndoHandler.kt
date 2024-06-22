@@ -4,6 +4,7 @@ import zedit2.components.DosCanvas
 import zedit2.components.GlobalEditor
 import zedit2.components.WorldEditor
 import zedit2.model.Board
+import zedit2.model.MouseState
 import java.awt.Color
 
 // TODO(jakeouellette): This Class is tightly coupled to the editor.
@@ -123,7 +124,11 @@ class UndoHandler(val editor: WorldEditor) {
     }
 
     fun afterUpdate() {
-        if (undoDirty && editor.mouseState != DosCanvas.MouseState.DRAW && !editor.fancyFillDialog) {
+        // TODO(jakeouellette): Unravel this, any action inacted on the board should be a unit action / transaction
+        // The way this currently works is it treats down clicks as disable functions to undo, but
+        // instead of this, it should have a mechanism where upon completion of a board change event,
+        // it gets persisted to history with a before and after state.
+        if (undoDirty && editor.mouseState != MouseState.PRIMARY && !editor.fancyFillDialog) {
             addUndo()
         }
     }

@@ -8,7 +8,7 @@ import java.awt.image.BufferedImage
 
 object TilePainters {
 
-    public fun drawTile(
+    fun drawTile(
         g: Graphics?,
         chr: Int,
         col: Int,

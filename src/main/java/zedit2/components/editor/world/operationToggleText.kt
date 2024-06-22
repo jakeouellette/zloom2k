@@ -6,6 +6,6 @@ import zedit2.components.WorldEditor
 internal fun WorldEditor.operationToggleText() {
     if (operationCancel()) return
     textEntry = true
-    textEntryX = cursorPos.x
+    textEntryX = caretPos.x
     afterUpdate()
 }

@@ -4,7 +4,6 @@ import zedit2.components.BufferManager
 import zedit2.components.BufferManager.Companion.getBufferDataString
 import zedit2.components.DosCanvas
 import zedit2.components.GlobalEditor
-import zedit2.model.spatial.Dim
 import zedit2.model.spatial.Pos
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
@@ -233,8 +232,8 @@ class BufferModel(private val manager: BufferManager,
                 for (y in 0 until dim.h) {
                     for (x in 0 until dim.w) {
                         val xy = Pos(x,y)
-                        Logger.i(TAG) { "setTile $xy"}
-                        bb.setTile(xy, tiles[xy.arrayPos(dim.w)])
+                        Logger.v(TAG) { "setTile $xy"}
+                        bb.setTile(xy, tiles[xy.arrayIdx(dim.w)])
                     }
                 }
                 val chars = ByteArray(1)

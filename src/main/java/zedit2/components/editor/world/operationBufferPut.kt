@@ -4,10 +4,10 @@ import zedit2.components.WorldEditor
 
 
 internal fun WorldEditor.operationBufferPut() {
-    if (getTileAt(cursorPos, false) == bufferTile) {
+    if (getTileAt(caretPos, false) == bufferTile) {
         operationDelete()
         return
     }
-    putTileAt(cursorPos, bufferTile, WorldEditor.Companion.PutTypes.PUT_DEFAULT)
+    putTileAt(caretPos, bufferTile, WorldEditor.Companion.PutTypes.PUT_DEFAULT)
     afterModification()
 }

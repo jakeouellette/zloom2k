@@ -71,7 +71,7 @@ object GlobalEditor {
     }
 
     fun setBlockBuffer(dim : Dim, data: Array<Tile>?, repeated: Boolean, szzt: Boolean) {
-        Logger.i(TAG) { "Set Block Buffer: $dim $blockBufferDim"}
+        Logger.i(TAG) { "Set Block Buffer: New: $dim Old: $blockBufferDim"}
         blockBufferDim = dim
         blockBuffer = data
         blockBufferRepeated = repeated

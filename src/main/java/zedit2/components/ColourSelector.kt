@@ -82,27 +82,24 @@ class ColourSelector(
     override fun keyAction(actionName: String?, e: ActionEvent?) {
         Logger.i(TAG) { "Key Action Pressed $actionName, $e"}
         when (actionName) {
-            "Up" -> operationCursorMove(0, -1)
-            "Down" -> operationCursorMove(0, 1)
-            "Left" -> operationCursorMove(-1, 0)
-            "Right" -> operationCursorMove(1, 0)
-            "Home" -> operationCursorMove(-999, -999)
-            "End" -> operationCursorMove(999, 999)
+            "Up" -> operationCaretMove(Pos.UP)
+            "Down" -> operationCaretMove(Pos.DOWN)
+            "Left" -> operationCaretMove(Pos.LEFT)
+            "Right" -> operationCaretMove(Pos.RIGHT)
+            "Home" -> operationCaretMove(Pos(-999,-999))
+            "End" -> operationCaretMove(Pos(999,999))
             "Enter", "Space" -> operationSubmit()
             "Escape" -> operationExit()
         }
     }
 
-    private fun operationCursorMove(xOff: Int, yOff: Int) {
-        val xMin = 0
-        if (oPos.x == 0 && xOff == -1 && wrap) {
+    private fun operationCaretMove(pos : Pos) {
+        if (oPos.x == 0 && pos.x == -1 && wrap) {
             oPos = Pos(oDim.w - 1, (oPos.y + oDim.h - 1) % oDim.h)
-        } else if (oPos.x == oDim.w - 1 && xOff == 1 && wrap) {
+        } else if (oPos.x == oDim.w - 1 && pos.x == 1 && wrap) {
             oPos = Pos(0, (oPos.y + 1) % oDim.h)
         } else {
-            oPos = Pos(
-                Util.clamp(oPos.x + xOff, xMin, oDim.w - 1),
-                Util.clamp(oPos.y + yOff, 0, oDim.h - 1))
+            oPos = (oPos + pos).clamp(0, oDim.asPos - 1)
         }
         upd()
     }
@@ -117,17 +114,17 @@ class ColourSelector(
     }
 
     private fun upd() {
-//        dialog.title = TITLES[selectorMode] + ": " + col
-//        if (selectorMode != CHAR) {
-//            dialog.setIconImage(canvas.extractCharImage(254, col, 2, 2, false, "$"))
-//        } else {
-//            dialog.setIconImage(canvas.extractCharImage(col, 0x1b, 2, 2, false, "$"))
-//        }
+        dialog.title = TITLES[selectorMode] + ": " + col
+        if (selectorMode != CHAR) {
+            dialog.setIconImage(canvas.extractCharImage(254, col, 2, 2, false, "$"))
+        } else {
+            dialog.setIconImage(canvas.extractCharImage(col, 0x1b, 2, 2, false, "$"))
+        }
         repaint()
     }
 
     private val col: Int
-        get() = oPos.arrayPos(oDim.w)
+        get() = oPos.arrayIdx(oDim.w)
 
     override fun getPreferredSize(): Dimension {
         return Dimension(
@@ -139,7 +136,7 @@ class ColourSelector(
     public override fun paintComponent(g: Graphics) {
         super.paintComponent(g)
         g.color = Color(0x7F7F7F)
-        g.fillRect(0, 0, getWidth(), getHeight())
+        g.fillRect(0, 0, width, height)
         g.drawImage(colourPalette, borderPos.x, borderPos.y, null)
 
 
@@ -213,7 +210,7 @@ class ColourSelector(
             listener: ActionListener,
             selectorMode: Int
         ) {
-            createColourSelector(editor, col, relativeTo, null, listener, selectorMode)
+            createColourSelector(editor, col, relativeTo, relativeTo, listener, selectorMode)
         }
 
         @JvmStatic

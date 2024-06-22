@@ -16,9 +16,6 @@ import zedit2.util.ZType
 class ZZTBoard : Board {
     private var dark = false
     override var message: ByteArray = ByteArray(0)
-        get() {
-            return field
-        }
         set(value) {
                 field = value
                 setDirty()
@@ -143,5 +140,4 @@ class ZZTBoard : Board {
     }
 
     override val dim: Dim = Dim(60, 25)
-        get() = field
 }

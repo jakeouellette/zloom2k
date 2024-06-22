@@ -14,7 +14,7 @@ fun WorldEditor.operationAddBoard(): Int {
 
         if (currentAtlas != null) {
             // TODO(jakeouellette): Update this with more Pos / Dim idiom
-            val gridPos = cursorPos / boardDim
+            val gridPos = caretPos / boardDim
             if (grid[gridPos.y][gridPos.x] == -1) {
                 addedToAtlas = true
                 grid[gridPos.y][gridPos.x] = newBoardIdx

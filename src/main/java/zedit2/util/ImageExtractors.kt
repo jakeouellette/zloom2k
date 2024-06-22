@@ -7,7 +7,7 @@ import zedit2.util.TilePainters.drawTile
 import java.awt.image.BufferedImage
 
 object ImageExtractors {
-    public class ExtractionResponse( val blinkState: Boolean, val image: BufferedImage)
+    class ExtractionResponse( val blinkState: Boolean, val image: BufferedImage)
 
     /**
      * Format of pattern is:
@@ -49,9 +49,8 @@ object ImageExtractors {
         val blinkSaved = blink
         var blinkState = blink
         for (i in 0 until pattern.length) {
-            val c = pattern[i]
-            when (c) {
-                '@' -> TilePainters.drawTile(
+            when (val c = pattern[i]) {
+                '@' -> drawTile(
                     img.graphics,
                     chr,
                     col,
@@ -66,7 +65,7 @@ object ImageExtractors {
                 )
                 '$' -> {
                     blinkState = false
-                    TilePainters.drawTile(
+                    drawTile(
                         img.graphics,
                         chr,
                         col,
@@ -84,7 +83,7 @@ object ImageExtractors {
 
                 '_' -> {
                     blinkState = false
-                    TilePainters.drawTile(img.graphics, 32, col, i % dim.w, i / dim.w, zoomx,zoomy, blink=blinkSaved, blinkingTime=blinkingTime, palette,
+                    drawTile(img.graphics, 32, col, i % dim.w, i / dim.w, zoomx,zoomy, blink=blinkSaved, blinkingTime=blinkingTime, palette,
                         charBuffer)
                     blinkState = blinkSaved
                 }

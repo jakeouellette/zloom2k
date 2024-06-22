@@ -20,10 +20,11 @@ class BufferManager(val bufferOperation : BufferOperation, prefix : String, dosC
 //        title = "Buffer Manager"
 //        contentPane.layout = BorderLayout()
     private var listModel: BufferModel
-    public val scrollpane = JScrollPane(this)
+    val scrollpane = JScrollPane(this)
 
     init {
 //        this.layout = BorderLayout()
+
         this.layoutOrientation = HORIZONTAL_WRAP
 
         this.addMouseListener(this)
@@ -113,6 +114,9 @@ class BufferManager(val bufferOperation : BufferOperation, prefix : String, dosC
 //        focusableWindowState = false
 //        isAlwaysOnTop = true
 //        isVisible = true
+
+        this.scrollpane.preferredSize = this.preferredSize
+        this.scrollpane.minimumSize = this.preferredSize
     }
 
     fun updateBuffer(num: Int) {

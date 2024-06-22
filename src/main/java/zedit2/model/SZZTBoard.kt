@@ -89,7 +89,6 @@ class SZZTBoard : Board {
         set(message) {}
 
     override var cameraPos: Pos = Pos(0, 0)
-        get() = field
         set(value) {
             field = value
             setDirty()
@@ -97,10 +96,6 @@ class SZZTBoard : Board {
 
     // FIXME(jakeouellette): I don't set Dirty on these, do I need to?
     override var dim: Dim = Dim(0,0)
-        get() = field
-        set(value) {
-            field = value
-        }
 
     override val currentSize: Int
         get() {

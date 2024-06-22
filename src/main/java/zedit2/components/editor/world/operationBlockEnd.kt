@@ -2,20 +2,17 @@ package zedit2.components.editor.world
 
 import zedit2.components.WorldEditor
 import zedit2.model.SelectionModeConfiguration
-import zedit2.util.Logger
-import zedit2.util.Logger.TAG
 import java.awt.event.ActionEvent
 import java.awt.event.ActionListener
 import java.awt.event.KeyEvent
 import javax.swing.JMenuItem
 import javax.swing.JPopupMenu
 import javax.swing.SwingUtilities
-import kotlin.math.min
 
 
 internal fun WorldEditor.operationBlockEnd() {
-    val savedBlockstart = blockStartPos
-    val savedCursorPos = cursorPos
+    val savedBlockstart = selectionBlockAnchorPos
+    val savedCaretPos = caretPos
     val lastSelectionModeConfiguration = this.selectionModeConfiguration
     if (lastSelectionModeConfiguration != null) {
         operateOnMenuItem(lastSelectionModeConfiguration.description)
@@ -25,7 +22,7 @@ internal fun WorldEditor.operationBlockEnd() {
     popupMenu.addPopupMenuListener(this)
     val menuItems = SelectionModeConfiguration.entries.map { it.description }
     val listener = ActionListener { e: ActionEvent ->
-        if (blockStartPos != savedBlockstart || cursorPos != savedCursorPos) return@ActionListener
+        if (selectionBlockAnchorPos != savedBlockstart || caretPos != savedCaretPos) return@ActionListener
         val menuItem = (e.source as JMenuItem).text
         operateOnMenuItem(menuItem)
     }
@@ -52,8 +49,8 @@ fun WorldEditor.operateOnMenuItem(menuItem: String) {
     when (menuItem) {
         SelectionModeConfiguration.COPY.description -> blockCopy(false)
         SelectionModeConfiguration.COPY_REPEATED.description -> blockCopy(true)
-        SelectionModeConfiguration.MOVE.description -> blockMove()
-        SelectionModeConfiguration.CLEAR.description -> blockClear()
+        SelectionModeConfiguration.MOVE.description -> startBlockMove()
+        SelectionModeConfiguration.CLEAR.description -> selectionBlockClear()
         SelectionModeConfiguration.FLIP.description -> blockFlip(false)
         SelectionModeConfiguration.MIRROR.description -> blockFlip(true)
         SelectionModeConfiguration.PAINT.description -> blockPaint()

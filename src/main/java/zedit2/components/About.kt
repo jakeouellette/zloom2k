@@ -143,6 +143,6 @@ class About(frameForRelativePositioning: Component) {
                 "          Hacked from 'Zedit2' by:      \n" +
                 "   (c) Mahou Shoujo ☼ Magical Moestar   \n" +
                 "                                        \n" +
-                "                                        "
+                "     hi -kaddar                           "
     }
 }
