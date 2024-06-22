@@ -49,8 +49,8 @@ data class Pos(val x: Int, val y: Int) {
         return Pos(mX, mY)
     }
     fun max(cursorPos: Pos): Pos {
-        val mX = kotlin.math.max(cursorPos.x, this.x)
-        val mY = kotlin.math.max(cursorPos.y, this.y)
+        val mX = max(cursorPos.x, this.x)
+        val mY = max(cursorPos.y, this.y)
         return Pos(mX, mY)
     }
 

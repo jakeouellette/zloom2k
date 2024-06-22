@@ -232,7 +232,7 @@ class BufferModel(private val manager: BufferManager,
                 for (y in 0 until dim.h) {
                     for (x in 0 until dim.w) {
                         val xy = Pos(x,y)
-                        Logger.i(TAG) { "setTile $xy"}
+                        Logger.v(TAG) { "setTile $xy"}
                         bb.setTile(xy, tiles[xy.arrayIdx(dim.w)])
                     }
                 }

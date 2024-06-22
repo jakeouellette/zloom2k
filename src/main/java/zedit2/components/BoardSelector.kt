@@ -36,11 +36,9 @@ class BoardSelector(
         this.setListData(boardNames.toTypedArray())
 
         this.selectedIndex = currentBoard
-        this.background = Color(0x0000AA)
-        this.foreground = Color(0xFFFFFF)
         this.font = CP437.font
         this.selectionModel.selectionMode = ListSelectionModel.SINGLE_SELECTION
-
+        this.border = null
         val boardSelector = this
         this.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {

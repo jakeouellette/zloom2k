@@ -323,7 +323,7 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
     private fun mouseDraw(mouseCoord: Pos) {
         val dirty = HashSet<Board>()
         val lastMouseCoord = lastMouseCoord
-        if (lastMouseCoord == null || !lastMouseCoord.isPositive) {
+        if (lastMouseCoord == null || !lastMouseCoord.isPositive || lastMouseCoord == mouseCoord) {
             mousePlot(dosCanvas.mouseCursorPos, dirty)
         } else {
             var cxy = Pos.NEG_ONE
@@ -390,6 +390,7 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
 
     private fun mousePlot(xy: Pos, dirty: HashSet<Board>) {
         val earlyLog = "Mouse Plot $xy, ${dirty.size} ${editor.dim}"
+        Logger.i(TAG) { "${earlyLog}"}
         if (xy.inside(editor.dim)) {
             editor.caretPos = xy
             dosCanvas.setCaret(editor.caretPos)

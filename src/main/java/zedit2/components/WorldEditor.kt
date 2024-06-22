@@ -14,7 +14,6 @@ import zedit2.components.Util.getKeyStroke
 import zedit2.components.Util.keyStrokeString
 import zedit2.components.WorldEditor.Companion.PutTypes.PUT_DEFAULT
 import zedit2.components.WorldEditor.Companion.PutTypes.PUT_REPLACE_BOTH
-import zedit2.components.editor.BrushMenuPanel
 import zedit2.components.editor.TileInfoPanel
 import zedit2.components.editor.code.CodeEditor
 import zedit2.components.editor.code.CodeEditorFactory
@@ -48,6 +47,8 @@ import java.util.Timer
 import java.util.regex.Pattern
 import javax.imageio.ImageIO
 import javax.swing.*
+import javax.swing.JFrame.TOP_ALIGNMENT
+import javax.swing.border.Border
 import javax.swing.event.*
 import kotlin.math.abs
 import kotlin.math.min
@@ -112,18 +113,16 @@ class WorldEditor @JvmOverloads constructor(
     internal lateinit var frame: JFrame
     internal lateinit var editingModePane: EditingModePane
     internal lateinit var boardSelector: JScrollPane
-    private lateinit var boardListPane: JPanel
-    private lateinit var brushesPane: JPanel
-    private lateinit var cursorInfoPane: JPanel
-    private lateinit var bufferPane: JPanel
-    private lateinit var bufferPaneContents: JPanel
+    private lateinit var westPane: JPanel
+    internal lateinit var northPane: JPanel
+    private lateinit var eastPane: JPanel
     private lateinit var infoBox: JTextArea
+    internal lateinit var toolInfoPane : JPanel
     private lateinit var canvasScrollPane: JScrollPane
     private lateinit var menuBar: JMenuBar
     private var recentFilesMenu: JMenu? = null
     private val fmenus = HashMap<Int, JMenu>()
 
-    private lateinit var onBufferTileUpdated: JComponent.(Tile?) -> Unit
     internal lateinit var currentBufferManager: BufferManager
     private val bufferOperation = BufferOperationImpl(this@WorldEditor)
 
@@ -374,6 +373,7 @@ class WorldEditor @JvmOverloads constructor(
                 }
                 canvas = DosCanvas(this@WorldEditor, zoom,zoom)
                 canvasScrollPane = canvas.createScrollPane(this@WorldEditor)
+                canvasScrollPane.border = null
 
                 infoBox = object : JTextArea(3, 20) {
                     init {
@@ -388,19 +388,20 @@ class WorldEditor @JvmOverloads constructor(
                     }
                 }
 
-                bufferPane = JPanel(BorderLayout())
+//                eastPane = JPanel(MigLayout("wrap"))
 
                 editingModePane = object : EditingModePane() {
                     init {
                         this.isOpaque = false
                     }
                 }
-                infoBox.preferredSize = Dimension(80, 40)
-                val controlScrollPane = object : JScrollPane(bufferPane) {
-                    init {
-                        horizontalScrollBarPolicy = HORIZONTAL_SCROLLBAR_NEVER
-                    }
-                }
+//                infoBox.preferredSize = Dimension(80, 40)
+//                infoBox.minimumSize = Dimension(80, 40)
+//                val controlScrollPane = object : JScrollPane(bufferPane) {
+//                    init {
+//                        horizontalScrollBarPolicy = HORIZONTAL_SCROLLBAR_NEVER
+//                    }
+//                }
 
 //                val brushSelectorPane = JPanel()
                 this@WorldEditor.currentBufferManager = BufferManager(
@@ -409,111 +410,45 @@ class WorldEditor @JvmOverloads constructor(
                     this@WorldEditor.canvas,
                     this@WorldEditor.globalEditor
                 )
-                val frameThis = this
-                this@WorldEditor.onBufferTileUpdated = { tile: Tile? ->
-                    this.removeAll()
 
-                    val leftHandPanel = JPanel(BorderLayout())
-                    val editsPanel = JPanel()
 
-                    val undoButton = JButton("↩")
-                    undoButton.addActionListener { e ->
-                        undoHandler.operationUndo()
-                    }
-                    editsPanel.add(undoButton)
-                    val redoButton = JButton("↪")
-                    redoButton.addActionListener { e ->
-                        undoHandler.operationRedo()
-                    }
-                    editsPanel.add(redoButton)
-                    leftHandPanel.add(editsPanel, BorderLayout.NORTH)
-                    leftHandPanel.add(infoBox, BorderLayout.SOUTH)
+                this@WorldEditor.northPane = JPanel()
 
-                    this.add(leftHandPanel, "west")
-                    infoBox.alignmentY = TOP_ALIGNMENT
-                    val board = this@WorldEditor.currentBoard
-                    if (tile != null && board != null) {
-                        val infoTile = TileInfoPanel(
-                            dosCanvas = canvas,
-                            this@WorldEditor.worldData,
-                            "Brush",
-                            tile,
-                            board,
-                            onBlinkingImageIconAdded = {})
-                        infoTile.minimumSize = Dimension(200, 220)
-                        val onCodeSaved = { e: ActionEvent ->
-                            // TODO(jakeouellette): I dunno why it is always stats[0]
-                            CodeEditorFactory.create(
-                                Pos.NEG_ONE,
-                                true,
-                                frameThis,
-                                this@WorldEditor,
-                                IconFactory.getIcon(worldData.isSuperZZT, tile, this@WorldEditor),
-                                board,
-                                tile.stats[0]
-                            )
-                        }
+                val layout = MigLayout("ins 0", "", "[]")
+                this@WorldEditor.northPane.layout = layout
+                this@WorldEditor.updateBufferTile(bufferTile, this@WorldEditor.frameForRelativePositioning)
 
-                        this.add(infoTile, "push")
-                        val shouldShowViewCode = tile.id == ZType.OBJECT || tile.id == ZType.SCROLL
-
-                        val brushMenu = BrushMenuPanel(
-                            shouldShowViewCode,
-                            { e,source ->
-                                toolType = ToolType.SELECTION_TOOL
-                                source.onBrushUpdated(toolType, this@WorldEditor.selectionModeConfiguration)
-
-                            },
-                            { mode : SelectionModeConfiguration, source :BrushMenuPanel ->
-                                this@WorldEditor.selectionModeConfiguration = mode
-                            },
-                            { source ->
-                                toolType = ToolType.DRAWING
-                                source.onBrushUpdated(toolType, this@WorldEditor.selectionModeConfiguration)
-                            },
-                            { e,source ->
-
-                                operationModifyBuffer(true)
-                            },
-                            { e,source -> operationColour() },
-                            { e,source -> operationBufferSwapColour() },
-                            {e,source -> onCodeSaved },
-                            this@WorldEditor.selectionModeConfiguration,
-                            toolType
-                        )
-                        this.add(brushMenu)
-                    }
-                    this.add(currentBufferManager, "east")
-                    currentBufferManager.alignmentY = TOP_ALIGNMENT
-                }
-
-                this@WorldEditor.brushesPane = JPanel()
-
-                val layout = MigLayout()
-                this@WorldEditor.brushesPane.layout = layout
-                this@WorldEditor.brushesPane.onBufferTileUpdated(bufferTile)
-
-                this@WorldEditor.cursorInfoPane = object : JPanel() {
-                    init {
-                        this.add(controlScrollPane)
-                    }
-                }
+                this@WorldEditor.eastPane = JPanel(MigLayout("nogrid, flowy","","min"))
                 this@WorldEditor.boardSelectorComponent = createBoardSelector()
-                this@WorldEditor.boardSelector = JScrollPane(boardSelectorComponent)
-                this@WorldEditor.boardListPane = object : JPanel(BorderLayout()) {
+
+                this@WorldEditor.boardSelector = JScrollPane(
+                    boardSelectorComponent,
+                    JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                    JScrollPane.HORIZONTAL_SCROLLBAR_NEVER)
+                boardSelector.border = null
+                boardSelectorComponent.border = null
+                this@WorldEditor.westPane = object : JPanel(MigLayout("ins 0", "", "[grow, shrink][][]")) {
                     init {
-                        this.add(editingModePane, BorderLayout.SOUTH)
-                        this.add(boardSelector, BorderLayout.CENTER)
+                        this.add(boardSelector, "cell 0 0, grow")
+                        this.add(infoBox, "cell 0 1, growx")
+                        this.add(editingModePane, "cell 0 2, growx")
+                        this.border = null
                     }
                 }
 
-//                val splitPane = JSplitPane(JSplitPane.VERTICAL_SPLIT, brushesPane, canvasScrollPane)
-                val splitPane = object : JPanel(BorderLayout()) {
+//                eastPane.minimumSize = Dimension(eastPane.preferredSize.width,0)
+
+                val editorPane = object : JPanel(MigLayout("" , "[][grow][]", "[][grow, shrink]")) {
                     init {
-                        this.add(brushesPane, BorderLayout.NORTH)
-                        this.add(canvasScrollPane, BorderLayout.CENTER)
-                        this.add(boardListPane, BorderLayout.WEST)
-                        this.add(cursorInfoPane, BorderLayout.EAST)
+
+
+                        this.add(northPane, "north, grow, shrinkprio 200")
+                        this.add(eastPane, "east, grow")
+                        this.add(westPane, "west, grow")
+                        this.add(canvasScrollPane, "top,grow, shrinkprio 200")
+
+
+
                     }
                 }
 
@@ -533,12 +468,11 @@ class WorldEditor @JvmOverloads constructor(
                             for (icon in blinkingImageIcons) {
                                 icon.blink(blinkState)
                             }
-                            bufferPane.repaint()
+                            eastPane.repaint()
                         }
                     }
                 }, BLINK_DELAY.toLong(), BLINK_DELAY.toLong())
-
-                contentPane.add(splitPane)
+                contentPane = editorPane
                 pack()
                 setLocationRelativeTo(null)
                 /**/ //frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
@@ -824,7 +758,7 @@ class WorldEditor @JvmOverloads constructor(
                 var boardNum = -1
                 try {
                     boardNum =
-                        file.name.split("[^0-9]".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0].toInt()
+                        file.name.split("[^0-9]".toRegex()).toTypedArray()[0].toInt()
                 } catch (ignore: NumberFormatException) {
                 } catch (ignore: ArrayIndexOutOfBoundsException) {
                 }
@@ -1002,15 +936,9 @@ class WorldEditor @JvmOverloads constructor(
             m.add("Toggle drawing", "Tab") { e: ActionEvent? -> operationToggleDrawing() }
             m.add("Flood fill", "F") { e: ActionEvent? -> operationFloodfill(caretPos, false) }
             m.add("Gradient fill", "Alt-F") { e: ActionEvent? -> operationFloodfill(caretPos, true) }
-            m.add()
-            for (f in 3..10) {
-                val fMenuName = getFMenuName(f)
-                if (fMenuName.isNotEmpty()) {
-                    val elementMenu = JMenu(fMenuName)
-                    fmenus[f] = elementMenu
-                    m.add(elementMenu, "F$f")
-                }
-            }
+            menus.add(m)
+            m = Menu("Elements")
+            createPrefabMenu(m, fmenus)
             menus.add(m)
             m = Menu("View")
             m.add("Zoom in", "Ctrl-=") { e: ActionEvent? -> operationZoomIn(false) }
@@ -1057,7 +985,7 @@ class WorldEditor @JvmOverloads constructor(
             val menu = JMenu(m.title)
             menu.addMenuListener(this@WorldEditor)
             for (mEntry in m) {
-                mEntry.addToJMenu(globalEditor, menu)
+                mEntry.addToJMenu(menu)
             }
 
             menuBar.add(menu)
@@ -1095,6 +1023,7 @@ class WorldEditor @JvmOverloads constructor(
         }
          */
     }
+
 
     private fun afterBlinkToggle() {
         canvas.setBlinkMode(GlobalEditor.getBoolean("BLINKING", true))
@@ -1217,6 +1146,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     internal fun getTileFromElement(element: String, col: Int): Tile {
+        Logger.i(TAG) {"Getting element $element, $col"}
         var vanilla = false
         var parenPos = element.indexOf('(')
         if (parenPos == -1) {
@@ -1254,17 +1184,17 @@ class WorldEditor @JvmOverloads constructor(
             elementStatInfo = elementStatInfo.replace("\\n", "\uE004")
 
             // Split into stats
-            val statList = elementStatInfo.split(Pattern.quote("|").toRegex()).dropLastWhile { it.isEmpty() }
+            val statList = elementStatInfo.split(Pattern.quote("|").toRegex())
                 .toTypedArray()
             val stats = ArrayList<Stat>()
             for (statString in statList) {
                 val stat = Stat(worldData.isSuperZZT)
                 // Split into params
-                val paramList = statString.split(",".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+                val paramList = statString.split(",".toRegex()).toTypedArray()
                 for (paramString in paramList) {
                     if (paramString.isEmpty()) continue
                     // Split into key=value
-                    val kvPair = paramString.split("=".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+                    val kvPair = paramString.split("=".toRegex()).toTypedArray()
                     if (kvPair.size != 2) throw RuntimeException("Invalid key=value pair in $paramString")
                     val param = kvPair[0].uppercase(Locale.getDefault())
                     val value = kvPair[1]
@@ -1345,13 +1275,9 @@ class WorldEditor @JvmOverloads constructor(
         return col
     }
 
-    internal fun getFMenuName(f: Int): String {
-        val firstItem = GlobalEditor.getString(String.format("F%d_MENU_0", f), "")
-        if (firstItem.isEmpty()) return ""
-        return GlobalEditor.getString(String.format("F%d_MENU", f), "")
-    }
 
-    public fun addKeybinds(component: JComponent) {
+
+    fun addKeybinds(component: JComponent) {
 
         // TODO(jakeouellette): where go?
 //        this.focusTraversalKeysEnabled = false
@@ -2073,11 +1999,14 @@ class WorldEditor @JvmOverloads constructor(
     // TODO(jakeouellette): Make this behave a bit more reactive
     internal fun onBoardsUpdated(boards: ArrayList<Board>) {
         Logger.i(TAG) { "Boards updated. ${boards.size}" }
-        this.boardListPane.remove(boardSelector)
+        this.westPane.remove(boardSelector)
         this.boards = boards
         this.boardSelectorComponent = createBoardSelector()
-        this.boardSelector = JScrollPane(boardSelectorComponent)
-        this.boardListPane.add(boardSelector, BorderLayout.CENTER)
+        this.boardSelector = JScrollPane(
+            boardSelectorComponent,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER)
+        this.westPane.add(boardSelector, "cell 0 0, grow")
     }
 
     private fun createBoardSelector(): BoardSelector {
@@ -2132,7 +2061,7 @@ class WorldEditor @JvmOverloads constructor(
             advanced = advanced,
             exempt = exempt,
             callback = callback,
-            selected = -1
+            selected = -1,
         )
 
     internal fun createTileEditor(
@@ -2143,7 +2072,7 @@ class WorldEditor @JvmOverloads constructor(
         pos : Pos,
         stats: List<Stat>? = null,
         tile: Tile? = null,
-        selected: Int = -1,
+        selected: Int = -1
     ) =
         TileEditor(
             this,
@@ -2253,8 +2182,9 @@ class WorldEditor @JvmOverloads constructor(
             val placingTile = tile.clone()
             // First, we will not allow putTileAt to erase stat 0
             val currentTileStats: List<Stat> = currentTile.stats
-            if (currentTileStats.isNotEmpty()) {
-                if (currentTileStats[0].statId == 0) {
+            val firstStat = currentTileStats.getOrNull(0)
+            if (firstStat != null) {
+                if (firstStat.statId == 0) {
                     return board
                 }
             }
@@ -2262,8 +2192,8 @@ class WorldEditor @JvmOverloads constructor(
             if (putMode == PUT_DEFAULT || putMode == PutTypes.PUT_PUSH_DOWN) {
                 val tileStats: List<Stat> = placingTile.stats
                 // Only check if we have exactly 1 stat
-                if (tileStats.size == 1) {
-                    val tileStat = tileStats[0]
+                val tileStat = tileStats.getOrNull(0)
+                if (tileStats.size == 1 && tileStat != null) {
 
                     if (putMode == PUT_DEFAULT) {
                         // If the tile currently there is floor, we will push it down
@@ -2271,10 +2201,11 @@ class WorldEditor @JvmOverloads constructor(
                             putMode = PutTypes.PUT_PUSH_DOWN
                         } else {
                             // Not a floor, so does it have one stat? If so, still push down (we will use its uid/uco)
-                            if (currentTileStats.size == 1) {
+                            val firstStat = currentTileStats.getOrNull(0)
+                            if (currentTileStats.size == 1 && firstStat != null) {
                                 putMode = PutTypes.PUT_PUSH_DOWN
                                 // replace currentTile with what was under it
-                                currentTile = Tile(currentTileStats[0].uid, currentTileStats[0].uco)
+                                currentTile = Tile(firstStat.uid, firstStat.uco)
                             }
                         }
                     }
@@ -2288,9 +2219,10 @@ class WorldEditor @JvmOverloads constructor(
                 }
             }
             // Are we placing stat 0?
-            if (placingTile.stats.isNotEmpty()) {
-                if (placingTile.stats[0].statId == 0 ||
-                    placingTile.stats[0].isPlayer
+            val firstPlacingStat = placingTile.stats.getOrNull(0)
+            if (placingTile.stats.isNotEmpty() && firstPlacingStat != null) {
+                if (firstPlacingStat.statId == 0 ||
+                    firstPlacingStat.isPlayer
                 ) {
                     // Find the stat 0 on this board
                     val stat0 = board.getStat(0)!!
@@ -2310,8 +2242,8 @@ class WorldEditor @JvmOverloads constructor(
                         } // Otherwise there are stats left, so leave the tile alone
                     }
                     // Fix uid/uco
-                    stat0.uid = placingTile.stats[0].uid
-                    stat0.uco = placingTile.stats[0].uco
+                    stat0.uid = firstPlacingStat.uid
+                    stat0.uco = firstPlacingStat.uco
                     // Place the tile here, but without stat0
                     placingTile.stats.removeAt(0)
                     addRedraw(pos, pos)
@@ -2400,16 +2332,23 @@ class WorldEditor @JvmOverloads constructor(
         s += String.format("W.Mem: %6d", worldSize)
 
         infoBox.text = s
+        infoBox.alignmentY = TOP_ALIGNMENT
 
         updateEditingMode()
 
-        bufferPane.removeAll()
-        bufferPaneContents = bufferPane
+        eastPane.removeAll()
         blinkingImageIcons.clear()
         val cursorTile = getTileAt(caretPos, false)
-        addCursorTileInfoDisplay("Cursor", cursorTile, boardPos, caretPos)
-        brushesPane.onBufferTileUpdated(bufferTile)
-        bufferPane.repaint()
+        val cursorPanel = createCursorInfoDisplay("Cursor", cursorTile, boardPos, caretPos)
+
+        toolInfoPane = JPanel(BorderLayout())
+        eastPane.add(currentBufferManager.scrollpane, "growx")
+        eastPane.add(toolInfoPane, "growx")
+        if (cursorPanel != null) {
+            eastPane.add(cursorPanel, "growx")
+        }
+        this.updateBufferTile(bufferTile, this.frameForRelativePositioning)
+        eastPane.repaint()
     }
 
     enum class ToolType {
@@ -2472,21 +2411,18 @@ class WorldEditor @JvmOverloads constructor(
     }
 
 
-    private fun addCursorTileInfoDisplay(
+    private fun createCursorInfoDisplay(
         title: String,
         cursorTile: Tile?,
         boardPos : Pos,
         cursorPos : Pos
-    ) {
+    ) : JComponent? {
         val cb = this.currentBoard
-        if (cursorTile == null || cb == null) return
+        if (cursorTile == null || cb == null) return null
         val tileInfoPanel = TileInfoPanel(dosCanvas = canvas, worldData, title, cursorTile, cb, { _ -> })
 
         //int w = bufferPane.getWidth() - 16;
         //tileInfoPanel.setPreferredSize(new Dimension(w, tileInfoPanel.getPreferredSize().getHeight()));
-        bufferPaneContents.add(tileInfoPanel, BorderLayout.NORTH)
-        val childPanel = JPanel(BorderLayout())
-        bufferPaneContents.add(childPanel, BorderLayout.CENTER)
 
         if (cursorTile.id == ZType.OBJECT || cursorTile.id == ZType.SCROLL) {
             val editButton = JButton("Edit Code")
@@ -2494,12 +2430,15 @@ class WorldEditor @JvmOverloads constructor(
             editButton.addActionListener {
                 CodeEditorFactory.create(
                     Pos.NEG_ONE, true, frame, this@WorldEditor,
-                    IconFactory.getIcon(worldData.isSuperZZT, cursorTile, this@WorldEditor), cb, cursorTile.stats[0]
+                    IconFactory.getIcon(worldData.isSuperZZT, cursorTile, this@WorldEditor), cb, cursorTile.stats.getOrNull(0)
                 ) { e ->
                     if (e!!.actionCommand == "update") {
                         val source = e.source as CodeEditor
-
-                        val cloneOfFirst = cursorTile.stats[0].clone()
+                        val firstStat = cursorTile.stats.getOrNull(0)
+                        if (firstStat == null) {
+                            throw IllegalArgumentException("Cannot have a null first stat in code updates.")
+                        }
+                        val cloneOfFirst = firstStat.clone()
                         cloneOfFirst.code = source.code
 
                         val mutableStats = mutableListOf<Stat>()
@@ -2513,9 +2452,9 @@ class WorldEditor @JvmOverloads constructor(
                     }
                 }
             }
-            bufferPaneContents.add(editButton, BorderLayout.SOUTH)
+            tileInfoPanel.add(editButton, BorderLayout.SOUTH)
         }
-        bufferPaneContents = childPanel
+        return tileInfoPanel
     }
 
     private val worldSize: Int
@@ -2788,6 +2727,24 @@ class WorldEditor @JvmOverloads constructor(
 
     companion object {
         const val BLINK_DELAY: Int = 267
+
+
+        public fun createPrefabMenu(m: Menu, fmenus : HashMap<Int, JMenu>) {
+            for (f in 3..10) {
+                val fMenuName = getFMenuName(f)
+                if (fMenuName.isNotEmpty()) {
+                    val elementMenu = JMenu(fMenuName)
+                    fmenus[f] = elementMenu
+                    m.add(elementMenu, "F$f")
+                }
+            }
+        }
+
+        internal fun getFMenuName(f: Int): String {
+            val firstItem = GlobalEditor.getString(String.format("F%d_MENU_0", f), "")
+            if (firstItem.isEmpty()) return ""
+            return GlobalEditor.getString(String.format("F%d_MENU", f), "")
+        }
 
         enum class PutTypes {
             PUT_DEFAULT, PUT_PUSH_DOWN, PUT_REPLACE_BOTH

@@ -1,5 +1,6 @@
 package zedit2.components
 
+import com.formdev.flatlaf.FlatDarkLaf
 import zedit2.model.WorldCorruptedException
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
@@ -13,6 +14,8 @@ import kotlin.system.exitProcess
 class Main : Runnable {
     override fun run() {
         try {
+            FlatDarkLaf.setup()
+            UIManager.put("Component.borderWidth", 0)
             //Util.removeAltProcessor();
             //var editor = new WorldEditor(ge, false);
             var defaultFile: String

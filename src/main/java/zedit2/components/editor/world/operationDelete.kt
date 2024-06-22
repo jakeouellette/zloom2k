@@ -10,9 +10,10 @@ internal fun WorldEditor.operationDelete() {
     val underTile = Tile(0, 0)
     checkNotNull(tile)
     val tileStats: List<Stat> = tile.stats
-    if (tileStats.size > 0) {
-        val uid = tileStats[0].uid
-        val uco = tileStats[0].uco
+    val firstStat = tileStats.getOrNull(0)
+    if (firstStat != null) {
+        val uid = firstStat.uid
+        val uco = firstStat.uco
         underTile.id = uid
         underTile.col = uco
     }

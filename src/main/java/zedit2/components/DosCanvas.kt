@@ -57,13 +57,11 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
         }
     override var blockStartPos = Pos(-1, -1)
     override var drawing = false
-        get() = field
         set(value) {
             field = value
             view.repaint()
         }
     override var textEntry = false
-        get() = field
         set(value) {
             field = value
             view.repaint()
@@ -132,7 +130,7 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
             charBuffer = charBuffer
         ).image
 
-    public fun extractCharImageWH(
+    fun extractCharImageWH(
         chr: Int,
         col: Int,
         zoomx: Int,
@@ -199,7 +197,7 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
 
     @Throws(IOException::class)
     private fun loadPalette(path: File?) {
-        var pdata: ByteArray;
+        var pdata: ByteArray
         if (path != null) {
             pdata = Files.readAllBytes(path.toPath())
             if (pdata.size != 16 * 3) {
@@ -402,6 +400,10 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
     fun setIndicate(xys: Array<Pos>?) {
         indicatePos = xys
         view.repaint()
+    }
+
+    fun colorColor(colIdx: Int): Color {
+        return Color.decode(htmlColour(colIdx))
     }
 
     fun htmlColour(colIdx: Int): String {

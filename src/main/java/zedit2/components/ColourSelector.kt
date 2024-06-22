@@ -114,12 +114,12 @@ class ColourSelector(
     }
 
     private fun upd() {
-//        dialog.title = TITLES[selectorMode] + ": " + col
-//        if (selectorMode != CHAR) {
-//            dialog.setIconImage(canvas.extractCharImage(254, col, 2, 2, false, "$"))
-//        } else {
-//            dialog.setIconImage(canvas.extractCharImage(col, 0x1b, 2, 2, false, "$"))
-//        }
+        dialog.title = TITLES[selectorMode] + ": " + col
+        if (selectorMode != CHAR) {
+            dialog.setIconImage(canvas.extractCharImage(254, col, 2, 2, false, "$"))
+        } else {
+            dialog.setIconImage(canvas.extractCharImage(col, 0x1b, 2, 2, false, "$"))
+        }
         repaint()
     }
 
@@ -136,7 +136,7 @@ class ColourSelector(
     public override fun paintComponent(g: Graphics) {
         super.paintComponent(g)
         g.color = Color(0x7F7F7F)
-        g.fillRect(0, 0, getWidth(), getHeight())
+        g.fillRect(0, 0, width, height)
         g.drawImage(colourPalette, borderPos.x, borderPos.y, null)
 
 

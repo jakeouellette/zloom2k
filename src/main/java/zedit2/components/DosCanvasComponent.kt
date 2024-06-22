@@ -13,12 +13,15 @@ import kotlin.math.max
 
 class DosCanvasComponent(val state : DosCanvasState) : JPanel() {
 
+    init {
+        this.border = null
+    }
     public override fun paintComponent(g: Graphics) {
         super.paintComponent(g)
         g.color = Color(0x7F7F7F)
         // TODO(jakeouellette): Is this supposed to be dim.w / dim.h?
         // ( I don't think so, but leaving a note )
-        g.fillRect(0, 0, getWidth(), getHeight())
+        g.fillRect(0, 0, width, height)
 
         if (g is Graphics2D) {
             val interpMode: Any
@@ -53,7 +56,7 @@ class DosCanvasComponent(val state : DosCanvasState) : JPanel() {
             val lcNormal = Color(1.0f, 1.0f, 1.0f)
             val lcVoid = Color(1.0f, 1.0f, 1.0f, 0.2f)
             val gridDim = atlas.dim
-            val grid = atlas!!.grid
+            val grid = atlas.grid
             val boards = state.boards
             val boardPixelOff = state.boardDim.tile(state.zoomx, state.zoomy)
             val dirs = arrayOf(Pos.UP, Pos.DOWN, Pos.LEFT, Pos.RIGHT)
@@ -193,6 +196,9 @@ class DosCanvasComponent(val state : DosCanvasState) : JPanel() {
     private fun tileX(x: Int) = SpatialUtil.tileX(x, state.zoomx)
     private fun tileY(y: Int) = SpatialUtil.tileY(y, state.zoomy)
 
+    override fun getMinimumSize(): Dimension {
+        return Dimension(0,0)
+    }
     override fun getPreferredSize(): Dimension {
         var d = state.dim
         if (d.w == 0 || d.h == 0) {

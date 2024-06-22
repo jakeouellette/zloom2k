@@ -47,7 +47,7 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
     lateinit var xs: IntArray
     lateinit var ys: IntArray
     lateinit var tiles: Array<Tile?>
-    lateinit private var gradientTiles: Array<Tile>
+    private lateinit var gradientTiles: Array<Tile>
     private var minX = 0
     private var minY = 0
     private var maxX = 0
