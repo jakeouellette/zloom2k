@@ -4,10 +4,13 @@ import zedit2.components.DosCanvas
 import zedit2.components.GlobalEditor
 import zedit2.components.WorldEditor
 import zedit2.components.WorldEditor.Companion.PutTypes.PUT_DEFAULT
+import zedit2.components.editor.world.*
 import zedit2.components.editor.world.operationBlockEnd
 import zedit2.components.editor.world.operationBlockStart
+import zedit2.components.editor.world.operationFloodfill
 import zedit2.components.editor.world.operationGrabAndModify
 import zedit2.model.Board
+import zedit2.model.FloodFillConfiguration
 import zedit2.model.MouseState
 import zedit2.model.SelectionModeConfiguration
 import zedit2.model.spatial.Dim
@@ -44,7 +47,10 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
         COPIED,
         COPYING_TO_NOT,
         TO_TEXT_EDITING,
-        TO_NON_PRIMARY
+        TO_NON_PRIMARY,
+        PAINT_BUCKET_FLOOD_FILL,
+        PAINT_BUCKET_GRADIENT_FILL,
+        START_TYPING
     }
 
     /**
@@ -98,6 +104,16 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
         Pair(MouseState.MIDDLE, MouseState.MIDDLE) -> MouseEventDescription.OTHER
         Pair(MouseState.PRIMARY, MouseState.RELEASED) -> {
             when (toolType) {
+                WorldEditor.ToolType.PAINT_BUCKET -> {
+                    when (editor.paintBucketModeConfiguration) {
+                        FloodFillConfiguration.FLOOD_FILL -> {
+                            MouseEventDescription.PAINT_BUCKET_FLOOD_FILL
+                        }
+                        FloodFillConfiguration.GRADIENT_FILL -> {
+                            MouseEventDescription.PAINT_BUCKET_GRADIENT_FILL
+                        }
+                    }
+                }
                 WorldEditor.ToolType.SELECTION_TOOL -> {
                     if (wasCopying) {
                         MouseEventDescription.COPIED
@@ -125,6 +141,7 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
                 WorldEditor.ToolType.EDITING -> {
                     MouseEventDescription.FROM_DRAWING_OR_EDITING
                 }
+                WorldEditor.ToolType.TEXT_ENTRY -> MouseEventDescription.START_TYPING
 
                 else -> {
                     MouseEventDescription.OTHER
@@ -295,6 +312,19 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
                 editor.operationGrabAndModify(
                     grab = true,
                     advanced = false)
+            }
+
+            MouseEventDescription.PAINT_BUCKET_FLOOD_FILL -> {
+                updateCaretPosition()
+                editor.operationFloodfill(dosCanvas.toChar(mouseCoord), false)
+            }
+            MouseEventDescription.PAINT_BUCKET_GRADIENT_FILL -> {
+                updateCaretPosition()
+                editor.operationFloodfill(dosCanvas.toChar(mouseCoord), true)
+            }
+            MouseEventDescription.START_TYPING -> {
+                updateCaretPosition()
+                editor.operationToggleText(forceEnable = true)
             }
         }
         if (logging){

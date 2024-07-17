@@ -10,10 +10,7 @@ import zedit2.components.editor.BrushMenuPanel
 import zedit2.components.editor.TileInfoPanel
 import zedit2.components.editor.code.CodeEditor
 import zedit2.components.editor.code.CodeEditorFactory
-import zedit2.model.IconFactory
-import zedit2.model.SelectionModeConfiguration
-import zedit2.model.Stat
-import zedit2.model.Tile
+import zedit2.model.*
 import zedit2.model.spatial.Pos
 import zedit2.util.Logger
 import zedit2.util.Logger.TAG
@@ -89,15 +86,23 @@ fun WorldEditor.updateBufferTile(tile: Tile?, frameForRelativePositioning: Compo
                 fgColor = fgcol,
                 onSelectionModeSelected = { e, source ->
                     toolType = ToolType.SELECTION_TOOL
-                    source.onBrushUpdated(toolType, this.selectionModeConfiguration)
+                    source.onBrushUpdated(toolType, this.selectionModeConfiguration, this.paintBucketModeConfiguration)
 
                 },
                 onSelectionModeConfigured = { mode : SelectionModeConfiguration, source : BrushMenuPanel ->
                     this.selectionModeConfiguration = mode
                 },
                 onEditModeSelected = { source ->
-                    toolType = ToolType.DRAWING
-                    source.onBrushUpdated(toolType, this.selectionModeConfiguration)
+                    if (brushModeConfiguration == BrushModeConfiguration.DRAW) {
+                        toolType = ToolType.DRAWING
+                    } else {
+                        toolType = ToolType.EDITING
+                    }
+
+                    source.onBrushUpdated(toolType, this.selectionModeConfiguration, this.paintBucketModeConfiguration)
+                },
+                onBrushConfigured = { mode : BrushModeConfiguration, source ->
+                    this.brushModeConfiguration = mode
                 },
                 onEditBrushSelected = { e, source ->
 
@@ -105,7 +110,21 @@ fun WorldEditor.updateBufferTile(tile: Tile?, frameForRelativePositioning: Compo
                 },
                 onEditColorSelected = { e, source -> operationColour() },
                 onColorSwapSelected = { e, source -> operationBufferSwapColour() },
+                onFloodFillSelected = { e, source ->
+                    toolType = ToolType.PAINT_BUCKET
+                    source.onBrushUpdated(toolType, this.selectionModeConfiguration, this.paintBucketModeConfiguration)
+
+                },
+                onFloodFillConfigured = { mode : FloodFillConfiguration, source : BrushMenuPanel ->
+                    this.paintBucketModeConfiguration = mode
+                },
+                onTextCaretSelected = {e, source ->
+                    toolType = ToolType.TEXT_ENTRY
+                    source.onBrushUpdated(toolType, this.selectionModeConfiguration, this.paintBucketModeConfiguration)
+                },
                 initialSelectionMode = this.selectionModeConfiguration,
+                initialBrushMode = this.brushModeConfiguration,
+                initialPaintBucketMode = this.paintBucketModeConfiguration,
                 initialToolType = toolType
             )
             northPane.add(brushMenu)

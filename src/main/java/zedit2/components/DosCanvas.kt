@@ -573,8 +573,15 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
 
     // TODO(jakeouellette): cleanup this bit of indirection
     fun refreshKeymapping() {
+        this.view.removeKeyListener(editor)
         editor.addKeybinds(this.view)
     }
+    fun disableKeymappings() {
+        editor.removeKeybinds(this.view)
+        this.view.removeKeyListener(editor)
+        this.view.addKeyListener(editor)
+    }
+
     fun scrollRectToVisible(worldRect: Rectangle) {
         // TODO(jakeouellette): Move the callsite more into the canvas
         this.view.scrollRectToVisible(worldRect)
@@ -584,6 +591,11 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
     fun requestFocusInWindow(): Component {
         this.view.requestFocusInWindow()
         return this.view
+    }
+
+    fun addKeyListener(worldEditor: WorldEditor) {
+        this.view.addKeyListener(worldEditor)
+
     }
 
     companion object {

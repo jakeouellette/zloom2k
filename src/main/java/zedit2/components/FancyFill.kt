@@ -401,8 +401,8 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
         }
 
     private fun genList(filled: Array<ByteArray>) {
-        val width = filled[0].size
-        val height = filled.size
+        val width = filled.size
+        val height = filled[0].size
         var count = 0
         for (bytes in filled) {
             for (b in bytes) {
@@ -419,7 +419,7 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
         minY = Int.MAX_VALUE
         for (y in 0 until height) {
             for (x in 0 until width) {
-                if (filled[y][x].toInt() == 1) {
+                if (filled[x][y].toInt() == 1) {
                     minX = min(minX.toDouble(), x.toDouble()).toInt()
                     minY = min(minY.toDouble(), y.toDouble()).toInt()
                     maxX = max(maxX.toDouble(), x.toDouble()).toInt()
@@ -633,9 +633,9 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
     }
 
     private fun slimeFill() {
-        val width = filled[0].size
-        val height = filled.size
-        val slimeArea = Array(height) { FloatArray(width) }
+        val width = filled.size
+        val height = filled[0].size
+        val slimeArea = Array(width) { FloatArray(height) }
         for (slimeRow in slimeArea) {
             Arrays.fill(slimeRow, Float.MAX_VALUE)
         }
@@ -645,7 +645,7 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
             val x = xs[i]
             val y = ys[i]
             if (isEdge(x, y, width, height)) {
-                slimeArea[y][x] = 0.0f
+                slimeArea[x][y] = 0.0f
                 queue.add(Util.pair(x, y))
             }
         }
@@ -658,7 +658,7 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
             val pos = queue.pop()
             val x = pos[0]
             val y = pos[1]
-            val value = slimeArea[y][x]
+            val value = slimeArea[x][y]
             max = max(max.toDouble(), slimeExpand(x + 1, y, width, height, value + xScale, queue, slimeArea).toDouble())
                 .toFloat()
             max = max(max.toDouble(), slimeExpand(x - 1, y, width, height, value + xScale, queue, slimeArea).toDouble())
@@ -671,7 +671,7 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
         for (i in xs.indices) {
             val x = xs[i]
             val y = ys[i]
-            var v = slimeArea[y][x]
+            var v = slimeArea[x][y]
             v = if (max >= 0.000001) {
                 v / max
             } else {
@@ -691,9 +691,9 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
         slimeArea: Array<FloatArray>
     ): Float {
         if (x < 0 || y < 0 || x >= width || y >= height) return 0.0f
-        if (filled[y][x].toInt() == 0) return 0.0f
-        if (v < slimeArea[y][x]) {
-            slimeArea[y][x] = v
+        if (filled[x][y].toInt() == 0) return 0.0f
+        if (v < slimeArea[x][y]) {
+            slimeArea[x][y] = v
             queue.add(Util.pair(x, y))
             return v
         }
@@ -704,10 +704,10 @@ class FancyFill(editor: WorldEditor, listener: ActionListener, filled: Array<Byt
 //        if (x == 0 || y == 0 || x == width - 1 || y == height - 1) {
 //            return true;
 //        }
-        if (y < height - 1 && filled[y + 1][x].toInt() == 0) return true
-        if (y > 0 && filled[y - 1][x].toInt() == 0) return true
-        if (x > 0 && filled[y][x - 1].toInt() == 0) return true
-        if (x < width - 1 && filled[y][x + 1].toInt() == 0) return true
+        if (y < height - 1 && filled[x][y + 1].toInt() == 0) return true
+        if (y > 0 && filled[x][y - 1].toInt() == 0) return true
+        if (x > 0 && filled[x - 1][y].toInt() == 0) return true
+        if (x < width - 1 && filled[x + 1][y].toInt() == 0) return true
         return false
     }
 

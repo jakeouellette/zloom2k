@@ -48,7 +48,6 @@ import java.util.regex.Pattern
 import javax.imageio.ImageIO
 import javax.swing.*
 import javax.swing.JFrame.TOP_ALIGNMENT
-import javax.swing.border.Border
 import javax.swing.event.*
 import kotlin.math.abs
 import kotlin.math.min
@@ -68,7 +67,9 @@ class WorldEditor @JvmOverloads constructor(
     private var zoom: Double
     lateinit var lastFocusedElement : Component
     internal var undoHandler: UndoHandler = UndoHandler(this)
-    internal var selectionModeConfiguration : SelectionModeConfiguration = SelectionModeConfiguration.MOVE
+    internal var selectionModeConfiguration : SelectionModeConfiguration = SelectionModeConfiguration.DEFAULT
+    internal var brushModeConfiguration : BrushModeConfiguration = BrushModeConfiguration.DEFAULT
+    internal var paintBucketModeConfiguration : FloodFillConfiguration = FloodFillConfiguration.DEFAULT
     // FIXME(jakeouellette): Whenever this changes, if it isn't reflected in the dosCanvas, that can be weird.
     internal var caretPos = Pos.ZERO
     internal var anchorDelta : Dim? = null
@@ -93,6 +94,10 @@ class WorldEditor @JvmOverloads constructor(
     // between editing and selecting, but more types are represented
     // by it as an enum
     internal var toolType : ToolType = ToolType.EDITING
+        set(value) {
+            operationCancel()
+            field = value
+        }
     internal var textEntry = false
         set(value) {
             field = value
@@ -331,7 +336,7 @@ class WorldEditor @JvmOverloads constructor(
                 disableAlt()
 
                 /**/ //frame.setUndecorated(true);
-                this.addKeyListener(this@WorldEditor)
+
                 this.addWindowFocusListener(this@WorldEditor)
                 this.addWindowFocusListener(object : WindowFocusListener {
                     override fun windowGainedFocus(e: WindowEvent?) {
@@ -932,7 +937,7 @@ class WorldEditor @JvmOverloads constructor(
             m.add()
             m.add("Start block operation", "Alt-B") { e: ActionEvent? -> operationBlockStart() }
             m.add()
-            m.add("Enter text", "F2") { e: ActionEvent? -> operationToggleText() }
+            m.add("Enter text", "F2") { e: ActionEvent? -> operationToggleText(true) }
             m.add("Toggle drawing", "Tab") { e: ActionEvent? -> operationToggleDrawing() }
             m.add("Flood fill", "F") { e: ActionEvent? -> operationFloodfill(caretPos, false) }
             m.add("Gradient fill", "Alt-F") { e: ActionEvent? -> operationFloodfill(caretPos, true) }
@@ -1382,6 +1387,13 @@ class WorldEditor @JvmOverloads constructor(
         ).forEach { addKeybind(globalEditor, this@WorldEditor, component, it) }
     }
 
+    fun removeKeybinds(component: JComponent) {
+
+        // TODO(jakeouellette): where go?
+//        this.focusTraversalKeysEnabled = false
+        component.actionMap.clear()
+    }
+
     override fun keyAction(actionName: String?, e: ActionEvent?) {
         // These actions activate whether textEntry is set or not
         when (actionName) {
@@ -1412,7 +1424,7 @@ class WorldEditor @JvmOverloads constructor(
             "Ctrl-Y" -> undoHandler.operationRedo()
             "Ctrl-Z" -> undoHandler.operationUndo()
             "F1" -> menuHelp()
-            "F2" -> operationToggleText()
+            "F2" -> operationToggleText(true)
             "F3" -> operationF(3)
             "F4" -> operationF(4)
             "F5" -> operationF(5)
@@ -2352,7 +2364,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     enum class ToolType {
-        TEXT_ENTRY, DRAWING, SELECTION_TOOL, EDITING
+        TEXT_ENTRY, DRAWING, SELECTION_TOOL, EDITING, PAINT_BUCKET
     }
 
     private fun getBrushMode(): ToolType {
@@ -2605,45 +2617,59 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     override fun keyTyped(e: KeyEvent) {
-        if (textEntry) {
-            val ch = e.keyChar
-            if (ch.code < 256) {
-                if (ch == '\n') {
+        if (!textEntry) {
+            Logger.i(TAG) { "Text Entry disabled, on key: ${e.keyChar}" }
+            return
+        }
+
+        Logger.i(TAG) { "Key released event on key: ${e.keyChar}, ${e.keyCode}" }
+        if (e.keyChar.code == 27) {
+            this.operationCancel()
+            return
+        }
+
+        val ch = e.keyChar
+        if (ch.code < 256) {
+            if (ch == '\n') {
+                // TODO(jakeouellette): Convert to convenience
+                caretPos = Pos(
+                    textEntryX,
+                    clamp(caretPos.y + 1, 0, this@WorldEditor.dim.h - 1))
+            } else {
+                if (ch.code == 8) { // bksp
+                    caretPos = Pos(
+                        clamp(caretPos.x - 1, 0, this@WorldEditor.dim.w - 1),
+                        caretPos.y)
+                }
+                var col = ch.code
+                if (ch.code == 8 || ch.code == 127) { // bksp or del
+                    col = ' '.code
+                }
+
+                val id = (getTileColour(bufferTile!!) % 128) + 128
+                val textTile = Tile(id, col)
+                putTileAt(caretPos, textTile, PUT_DEFAULT)
+
+                if (ch.code != 8 && ch.code != 127) { // not bksp or del
                     // TODO(jakeouellette): Convert to convienence
                     caretPos = Pos(
-                        textEntryX,
-                        clamp(caretPos.y + 1, 0, this@WorldEditor.dim.h - 1))
-                } else {
-                    if (ch.code == 8) { // bksp
-                        caretPos = Pos(
-                            clamp(caretPos.x - 1, 0, this@WorldEditor.dim.w - 1),
-                            caretPos.y)
-                    }
-                    var col = ch.code
-                    if (ch.code == 8 || ch.code == 127) { // bksp or del
-                        col = ' '.code
-                    }
-
-                    val id = (getTileColour(bufferTile!!) % 128) + 128
-                    val textTile = Tile(id, col)
-                    putTileAt(caretPos, textTile, PUT_DEFAULT)
-
-                    if (ch.code != 8 && ch.code != 127) { // not bksp or del
-                        // TODO(jakeouellette): Convert to convienence
-                        caretPos = Pos(
-                            clamp(caretPos.x + 1, 0, this@WorldEditor.dim.w - 1),
-                            caretPos.y)
-                    }
-
-                    afterModification()
+                        clamp(caretPos.x + 1, 0, this@WorldEditor.dim.w - 1),
+                        caretPos.y)
                 }
-                canvas.setCaret(caretPos)
+
+                afterModification()
             }
+            canvas.setCaret(caretPos)
         }
     }
 
-    override fun keyPressed(e: KeyEvent) {}
-    override fun keyReleased(e: KeyEvent) {}
+    override fun keyPressed(e: KeyEvent) {
+
+    }
+
+    override fun keyReleased(e: KeyEvent) {
+
+    }
 
     private fun JFrame.disableAlt() {
         // From https://stackoverflow.com/a/3994002
@@ -2724,6 +2750,8 @@ class WorldEditor @JvmOverloads constructor(
         Logger.i(TAG) {"menuCanceled: Requesting Focus."}
         lastFocusedElement.requestFocusInWindow()
     }
+
+
 
     companion object {
         const val BLINK_DELAY: Int = 267

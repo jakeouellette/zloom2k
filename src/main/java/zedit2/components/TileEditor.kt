@@ -517,6 +517,7 @@ class TileEditor(
 
         return object : KeyListener {
             override fun keyPressed(e: KeyEvent) {
+                Logger.i(TAG) { "TileEditor Key Pressed Handler"}
                 if (Util.keyMatches(e, k_PgUp)) {
                     statList.setSelectedIndex(statList.selectedIndex - 1)
                     e.consume()

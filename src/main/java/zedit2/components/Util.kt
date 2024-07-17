@@ -138,6 +138,7 @@ object Util {
         }
         component.actionMap.put(actionName, object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent) {
+                // TODO(jakeouellette): This is fighting with the text entry from the WorldEditor keyListener
                 Logger.i(this@Util.TAG) { "Action for $actionName, $e, "}
                 receiver.keyAction(actionName, e)
             }

@@ -15,6 +15,7 @@ internal fun WorldEditor.operationCancel(): Boolean {
     }
     if (textEntry) {
         textEntry = false
+        canvas.refreshKeymapping()
         afterUpdate()
         return true
     }
