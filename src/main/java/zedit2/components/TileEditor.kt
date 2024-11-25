@@ -32,9 +32,9 @@ class TileEditor(
     private val boardPosOffset: Pos,
     val currentBoard: Int,
     val isSuperZZT: Boolean,
-    private val boards : List<Board>,
+    private val boards: List<Board>,
     private val imageRetriever: ImageRetriever,
-    val frameForRelativePositioning : Component,
+    val frameForRelativePositioning: Component,
     board: Board,
     inputTile: Tile?,
     stats: List<Stat>?,
@@ -43,8 +43,8 @@ class TileEditor(
     advanced: Boolean,
     selected: Int,
     editExempt: Boolean,
-    private val onIndicateSet : (Array<Pos>?) -> Unit,
-    val getKeystroke : (stroke : String) -> KeyStroke
+    private val onIndicateSet: (Array<Pos>?) -> Unit,
+    val getKeystroke: (stroke: String) -> KeyStroke
 ) {
     private val editExempt: Boolean
     private val selected: Int
@@ -56,7 +56,7 @@ class TileEditor(
     private val callback: TileEditorCallback
     private var tileEditorFrame: JDialog? = null
     private var statList: JList<String?>? = null
-    private val tilePos : Pos
+    private val tilePos: Pos
     private val board: Board
     private var currentStat: Stat? = null
     private var otherEditorPanel: JPanel? = null
@@ -94,7 +94,7 @@ class TileEditor(
         } else {
             tile = inputTile.clone()
         }
-        originalTile = tile!!.clone()
+        originalTile = tile.clone()
         szzt = isSuperZZT
         if (advanced) {
             createAdvancedGUI()
@@ -108,7 +108,7 @@ class TileEditor(
         // These will result in the dialog not popping up
         val stats = tile.stats
         // First of all, multiple stats means you get the advanced editor, always
-        if (stats!!.size > 1) {
+        if (stats.size > 1) {
             createAdvancedGUI()
             return
         }
@@ -120,8 +120,9 @@ class TileEditor(
             }
         }
 
-        if (stats.size == 1) {
-            currentStat = stats[0]
+        val firstStat = stats.getOrNull(0)
+        if (stats.size == 1 && firstStat != null) {
+            currentStat = firstStat
 
             when (tile.id) {
                 ZType.OBJECT -> {
@@ -150,7 +151,7 @@ class TileEditor(
         otherEditorPanel = JPanel(BorderLayout())
         otherEditorPanelActive = otherEditorPanel
 
-        val tileId = tile!!.id
+        val tileId = tile.id
         val szzt = isSuperZZT
         when (tileId) {
             ZType.PASSAGE -> {
@@ -401,14 +402,19 @@ class TileEditor(
         appendToActivePanel(boardSelect)
     }
 
-    private fun relativeFrame(): Component {
+    private fun relativeFrame(): Component? {
         val frame = tileEditorFrame
-        if (frame != null) return frame
-        return frameForRelativePositioning
+        if (frame != null) {
+            Logger.i(TAG) { "tileEditorFrame Returning" }
+            return frame
+        }
+
+//        Logger.i(TAG) { "frameForRelativePositioning Returning" }
+        return null
     }
 
     private fun editorText() {
-        createColourSelector(editor, tile!!.col, relativeFrame(), { e: ActionEvent ->
+        createColourSelector(editor, tile.col, relativeFrame(), { e: ActionEvent ->
             tile.col = e.actionCommand.toInt()
             callback.callback(tile)
         }, ColourSelector.CHAR)
@@ -468,10 +474,10 @@ class TileEditor(
     }
 
     private val isModified: Boolean
-        get() = !tile!!.equals(originalTile)
+        get() = !tile.equals(originalTile)
 
     private fun createGUI() {
-        val frame : JDialog = JDialog()
+        val frame: JDialog = JDialog()
         tileEditorFrame = frame
         Util.addPromptedEscClose(frame, frame.rootPane) {
             if (isModified) {
@@ -501,7 +507,7 @@ class TileEditor(
     }
 
     private fun setTitle() {
-        tileEditorFrame!!.title = "Set " + ZType.getName(szzt, tile!!.id)
+        tileEditorFrame!!.title = "Set " + ZType.getName(szzt, tile.id)
         tileEditorFrame!!.setIconImage(icon)
     }
 
@@ -511,6 +517,7 @@ class TileEditor(
 
         return object : KeyListener {
             override fun keyPressed(e: KeyEvent) {
+                Logger.i(TAG) { "TileEditor Key Pressed Handler"}
                 if (Util.keyMatches(e, k_PgUp)) {
                     statList.setSelectedIndex(statList.selectedIndex - 1)
                     e.consume()
@@ -547,7 +554,7 @@ class TileEditor(
         tileEditorFrame!!.contentPane.removeAll()
         tileEditorFrame!!.contentPane.layout = BorderLayout()
 
-        if (tile!!.id != -1) {
+        if (tile.id != -1) {
             val tileControls = JPanel()
             tileControls.border = BorderFactory.createTitledBorder("Edit tile:")
             val tileTypeLabel = JLabel("Type:")
@@ -645,7 +652,10 @@ class TileEditor(
 
     private fun cancelButton(): JButton {
         val button = JButton("Cancel")
-        button.addActionListener { e: ActionEvent? -> tileEditorFrame!!.dispose() }
+        button.addActionListener { e: ActionEvent? ->
+            tileEditorFrame!!.dispose()
+            editor.canvas.requestFocusInWindow()
+        }
         return button
     }
 
@@ -665,7 +675,7 @@ class TileEditor(
     }
 
     private fun addStat(statList: JList<String?>, statListListener: ListSelectionListener, copyFrom: Stat?) {
-        val t : Tile = tile!!
+        val t: Tile = tile
         val newStat = copyFrom?.clone() ?: Stat(szzt)
         if (tilePos.isPositive) {
             newStat.pos = tilePos + 1
@@ -681,7 +691,7 @@ class TileEditor(
     }
 
     private fun delStat(statList: JList<String?>, statListListener: ListSelectionListener, statIdx: Int) {
-        val t : Tile = tile!!
+        val t: Tile = tile
         if (t.stats[statIdx].statId == 0) {
             JOptionPane.showMessageDialog(relativeFrame(), "You can't delete stat 0.")
             return
@@ -694,7 +704,7 @@ class TileEditor(
     }
 
     private fun restoreSelectedIndex(statList: JList<String?>) {
-        val statCount = tile!!.stats.size
+        val statCount = tile.stats.size
         if (statCount == 0) return
         for (i in 0 until statCount) {
             if (tile.stats[i].internalTag == internalTagTracker) {
@@ -714,7 +724,7 @@ class TileEditor(
     }
 
     private fun restoreFocus(container: Container, focusedElement: String, listener: KeyListener) {
-        Logger.i(TAG) {"Restore Focus"}
+        Logger.i(TAG) { "Restore Focus" }
         val components = container.components
         for (component in components) {
             if (component is JComponent) {
@@ -722,7 +732,7 @@ class TileEditor(
                 jcomponent.addKeyListener(listener)
                 val tooltip = jcomponent.toolTipText
                 if (tooltip != null && tooltip == focusedElement) {
-                    Logger.i(TAG) {"Requesting Focus."}
+                    Logger.i(TAG) { "Requesting Focus." }
                     jcomponent.requestFocusInWindow()
                     return
                 }
@@ -886,7 +896,7 @@ class TileEditor(
                     )
                 }
                 if (confirm == JOptionPane.OK_OPTION) {
-                    StatSelector(boardPosOffset,currentBoard,imageRetriever, board, { e1: ActionEvent ->
+                    StatSelector(boardPosOffset, currentBoard, imageRetriever, board, { e1: ActionEvent ->
                         (e1.source as StatSelector).close()
                         val value = getStatIdx(e1.actionCommand)
                         if (value != stat.statId) {

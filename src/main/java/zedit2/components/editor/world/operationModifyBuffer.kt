@@ -12,6 +12,6 @@ internal fun WorldEditor.operationModifyBuffer(advanced: Boolean) {
         },
         exempt = false,
         advanced = advanced,
-        tile = bufferTile!!
+        tile = bufferTile!!,
     )
 }

@@ -314,12 +314,12 @@ case COL_UCO:
 
         @JvmStatic
         fun getStatIdx(actionCommand: String): Int {
-            return actionCommand.split("\\|".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[1].toInt()
+            return actionCommand.split("\\|".toRegex()).toTypedArray()[1].toInt()
         }
 
         @JvmStatic
         fun getOption(actionCommand: String): Int {
-            return actionCommand.split("\\|".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0].toInt()
+            return actionCommand.split("\\|".toRegex()).toTypedArray()[0].toInt()
         }
     }
 }

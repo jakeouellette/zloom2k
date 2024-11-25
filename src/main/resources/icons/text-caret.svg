@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?><!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+<svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" id="colorable" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+        <path d="m9 4h1c1.1046 0 2 .89543 2 2v12c0 1.1046-.8954 2-2 2h-1"/>
+        <path d="m15 4h-1c-1.1046 0-2 .89543-2 2v12c0 1.1046.8954 2 2 2h1"/>
+        <path d="m10 12h4"/>
+    </g>
+</svg>

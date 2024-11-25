@@ -129,15 +129,17 @@ object Util {
     fun addKeybind(ge: GlobalEditor, receiver: KeyActionReceiver, component: JComponent, actionName: String) {
 
         if (actionName.isBlank()) return
-        val keyStroke = getKeyStroke(ge, actionName) ?: return
+        val keyStroke = getKeyStroke(ge, actionName)
         component.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(keyStroke, actionName)
         if ((keyStroke.modifiers or InputEvent.ALT_DOWN_MASK) != 0) {
             val altgrMod = keyStroke.modifiers or InputEvent.ALT_GRAPH_DOWN_MASK
             val altgrKeyStroke = KeyStroke.getKeyStroke(keyStroke.keyCode, altgrMod)
             component.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(altgrKeyStroke, actionName)
         }
+        component.setFocusTraversalKeysEnabled(false)
         component.actionMap.put(actionName, object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent) {
+                // TODO(jakeouellette): This is fighting with the text entry from the WorldEditor keyListener
                 Logger.i(this@Util.TAG) { "Action for $actionName, $e, "}
                 receiver.keyAction(actionName, e)
             }

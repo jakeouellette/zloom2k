@@ -41,7 +41,7 @@ class MenuEntry {
         this.key = key
     }
 
-    private fun setTitle(ge: GlobalEditor, item: JMenuItem?) {
+    private fun setTitle(item: JMenuItem?) {
         var text = title
 
         // TODO(jakeouellette): Added a check for "" to avoid NPE
@@ -57,18 +57,18 @@ class MenuEntry {
         item!!.text = text
     }
 
-    fun addToJMenu(ge: GlobalEditor, menu: JMenu) {
+    fun addToJMenu(menu: JMenu) {
         when (type) {
             TYPE_MENUITEM -> {
                 val item = JMenuItem()
-                setTitle(ge, item)
+                setTitle(item)
                 item.addActionListener(act)
                 menu.add(item)
             }
 
             TYPE_CHECKBOX -> {
                 val menuItem = JCheckBoxMenuItem()
-                setTitle(ge, menuItem)
+                setTitle(menuItem)
                 menuItem.isSelected = init
                 menuItem.addChangeListener(cAct)
                 menu.add(menuItem)
@@ -79,7 +79,7 @@ class MenuEntry {
             }
 
             TYPE_SUBMENU -> {
-                setTitle(ge, submenu)
+                setTitle(submenu)
                 menu.add(submenu)
             }
 

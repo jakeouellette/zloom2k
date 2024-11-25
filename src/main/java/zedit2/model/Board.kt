@@ -143,7 +143,7 @@ abstract class Board {
             finalisationCheck()
             if (statsSizeSaved == 0) {
                 for (stat in stats) {
-                    statsSizeSaved += stat!!.statSize
+                    statsSizeSaved += stat.statSize
                 }
             }
             return statsSizeSaved
@@ -253,25 +253,25 @@ abstract class Board {
         offset += 2
 
         for (stat in stats) {
-            offset = stat!!.write(worldData, offset)
+            offset = stat.write(worldData, offset)
         }
     }
 
     protected abstract fun drawCharacter(cols: ByteArray?, chars: ByteArray?, pos: Int, xy: Pos)
 
     fun getTileCol(pos : Pos): Int {
-        return bco[pos.arrayPos(dim.w)] and 0xFF
+        return bco[pos.arrayIdx(dim.w)] and 0xFF
     }
 
     fun getTileId(pos : Pos): Int {
-        return bid[pos.arrayPos(dim.w)] and 0xFF
+        return bid[pos.arrayIdx(dim.w)] and 0xFF
     }
 
     fun getStatsAt(pos : Pos): List<Stat> {
         val tileStats = ArrayList<Stat>()
         for (stat in stats) {
             // TODO(jakeouellette): Why is this pos + 1? Can we make this simpler?
-            if (stat!!.pos == (pos + 1)) {
+            if (stat.pos == (pos + 1)) {
                 tileStats.add(stat.clone())
             }
         }
@@ -291,7 +291,7 @@ abstract class Board {
                         break
                     }
                     visited.add(followStat)
-                    if (followStat!!.codeLength >= 0) {
+                    if (followStat.codeLength >= 0) {
                         // Now we are at the parent. We will steal its code, then set autobind on
                         if (followStat !== stat) {
                             stat.code = followStat.code
@@ -319,9 +319,9 @@ abstract class Board {
     }
 
     fun setTileDirect(xy : Pos, tile: Tile) {
-        val pos = xy.arrayPos(dim.w)
-        bid[pos] = tile.id.toByte().toInt()
-        bco[pos] = tile.col.toByte().toInt()
+        val idx = xy.arrayIdx(dim.w)
+        bid[idx] = tile.id.toByte().toInt()
+        bco[idx] = tile.col.toByte().toInt()
         dirtyRLE()
 
         val statsInTile = HashMap<Int, Stat>()
@@ -368,7 +368,7 @@ abstract class Board {
     }
 
     fun directReplaceStat(statId: Int, replacementStat: Stat): Boolean {
-        if (stats[statId]!!.isIdenticalTo(replacementStat)) return false
+        if (stats[statId].isIdenticalTo(replacementStat)) return false
         stats[statId] = replacementStat.clone()
         needsFinalisation = true
         return true
@@ -419,10 +419,10 @@ abstract class Board {
      * Sets a tile without affecting stats
      */
     fun setTileRaw(tilePos : Pos, id: Int, col: Int) {
-        val pos = tilePos.arrayPos(dim.w)
-        if (bid[pos] != id.toByte().toInt() || bco[pos] != col.toByte().toInt()) {
-            bid[pos] = id.toByte().toInt()
-            bco[pos] = col.toByte().toInt()
+        val idx = tilePos.arrayIdx(dim.w)
+        if (bid[idx] != id.toByte().toInt() || bco[idx] != col.toByte().toInt()) {
+            bid[idx] = id.toByte().toInt()
+            bco[idx] = col.toByte().toInt()
             dirtyRLE()
         }
     }
@@ -440,7 +440,7 @@ abstract class Board {
         // Go through the stats with specific IDs
         for (i in 1 until stats.size) {
             val stat = stats[i]
-            if (stat!!.isSpecifyId) {
+            if (stat.isSpecifyId) {
                 val preferredPos = stat.order
                 if (preferredPos >= 1 && preferredPos < newStatList.size) {
                     if (newStatList[preferredPos] == null) {
@@ -454,7 +454,7 @@ abstract class Board {
         for (i in 1 until stats.size) {
             if (placed[i]) continue
             val stat = stats[i]
-            if (stat!!.isSpecifyId) {
+            if (stat.isSpecifyId) {
                 var preferredPos = Util.clamp(stat.order, 1, newStatList.size - 1)
                 var dir = 1
                 while (true) {
@@ -497,12 +497,12 @@ abstract class Board {
             }
 
             stats[i] = s
-            stats[i]!!.statId = i
+            stats[i].statId = i
         }
 
         // Remapping stage
         for (stat in stats) {
-            if (stat!!.follower != -1) {
+            if (stat.follower != -1) {
                 val newFollower = oldToNew[stat.follower]
                 stat.follower = Objects.requireNonNullElse(newFollower, -1)!!
             }
@@ -532,8 +532,8 @@ abstract class Board {
                     break
                 }
                 followedSet.add(followStat)
-                if (followStat!!.codeLength < 0) {
-                    val bind = -stat!!.codeLength
+                if (followStat.codeLength < 0) {
+                    val bind = -stat.codeLength
                     if (bind < stats.size) {
                         codeOwnerIdx = bind
                         followStat = stats[codeOwnerIdx]
@@ -554,22 +554,22 @@ abstract class Board {
             val list = bindMap[codeOwnerIdx]!!
             // TODO(jakeout): This was sorted by null?
 //            list.sortWith(null)
-            val code = stats[codeOwnerIdx]!!.code
+            val code = stats[codeOwnerIdx].code
             val newOwner = list[0]
             for (i in list) {
-                stats[i]!!.codeLength = -newOwner
+                stats[i].codeLength = -newOwner
             }
-            stats[newOwner]!!.code = code
+            stats[newOwner].code = code
         }
         // Autobinding stage
         val autoBind = HashMap<String, Int>()
         for (i in 1 until stats.size) {
-            if (stats[i]!!.codeLength > 0) {
-                val code = CP437.toUnicode(stats[i]!!.code)
+            if (stats[i].codeLength > 0) {
+                val code = CP437.toUnicode(stats[i].code)
                 if (autoBind.containsKey(code)) {
-                    if (stats[i]!!.isAutobind) {
+                    if (stats[i].isAutobind) {
                         // Bind to the earlier object
-                        stats[i]!!.codeLength = autoBind[code]!! * -1
+                        stats[i].codeLength = autoBind[code]!! * -1
                         //System.out.printf("stat #%d autobound with #%d\n", i, autoBind.get(code));
                     }
                 } else {
@@ -582,6 +582,7 @@ abstract class Board {
     }
 
     fun drawToCanvas(canvas: DosCanvas, offset : Pos, pos : Pos, pos2 : Pos, showing: Int) {
+        Logger.i(TAG) { "Drawing to canvas, $offset, $pos, $pos2, $showing" }
         finalisationCheck()
 
         val wh = (pos2 - pos + 1).dim
@@ -595,36 +596,37 @@ abstract class Board {
 
             if (showing == WorldEditor.SHOW_STATS) {
                 for (stat in stats) {
-                    val xy = stat!!.pos - 1 - pos
+                    val xy = stat.pos - 1 - pos
                     if (xy.inside(wh)) {
-                        show[xy.arrayPos(wh.w)] = showing.toByte()
+                        show[xy.arrayIdx(wh.w)] = showing.toByte()
                     }
                 }
             }
         }
-        for (y in 0 until wh.h) {
-            for (x in 0 until wh.w) {
-                val xy = Pos(x, y)
+        for (dy in 0 until wh.h) {
+            for (dx in 0 until wh.w) {
+                val dxy = Pos(dx, dy)
 
-                val posI = xy.arrayPos(wh.w)
-                drawCharacter(cols, chars, posI, xy + pos)
+                val idx = dxy.arrayIdx(wh.w)
+                drawCharacter(cols, chars, idx, dxy + pos)
                 if (showing != WorldEditor.SHOW_NOTHING) {
-                    val bpos = (xy + pos).arrayPos(this.dim.w)
-                    val id = bid[bpos]
+                    val bIdx = (dxy + pos).arrayIdx(this.dim.w)
+                    val id = bid[bIdx]
                     when (showing) {
                         WorldEditor.SHOW_EMPTIES, WorldEditor.SHOW_EMPTEXTS -> if (id == ZType.EMPTY) {
-                            show!![posI] = showing.toByte()
-                            cols[posI] = bco[bpos].toByte()
+                            show!![idx] = showing.toByte()
+                            cols[idx] = bco[bIdx].toByte()
                         }
 
-                        WorldEditor.SHOW_FAKES -> if (id == ZType.FAKE) show!![posI] = showing.toByte()
-                        WorldEditor.SHOW_INVISIBLES -> if (id == ZType.INVISIBLE) show!![posI] = showing.toByte()
-                        WorldEditor.SHOW_OBJECTS -> if (id == ZType.OBJECT) show!![posI] = showing.toByte()
+                        WorldEditor.SHOW_FAKES -> if (id == ZType.FAKE) show!![idx] = showing.toByte()
+                        WorldEditor.SHOW_INVISIBLES -> if (id == ZType.INVISIBLE) show!![idx] = showing.toByte()
+                        WorldEditor.SHOW_OBJECTS -> if (id == ZType.OBJECT) show!![idx] = showing.toByte()
                     }
                 }
             }
         }
-        canvas.setData(wh, cols, chars, offset + pos, showing, show)
+        // TODO: changed "showing" to true, it wasn't used inside?
+        canvas.setData(wh, cols, chars, offset + pos, true, show)
     }
 
     fun setDirty() {
@@ -638,7 +640,7 @@ abstract class Board {
 
     abstract fun write(warning: CompatWarning?, worldData: ByteArray, currentOffset: Int)
 
-    fun getStat(idx: Int): Stat? {
+    fun getStat(idx: Int): Stat {
         return stats[idx]
     }
 
@@ -650,6 +652,7 @@ abstract class Board {
         other.bco = bco.clone()
         other.name = name.clone()
         other.shots = shots
+        Logger.i(TAG) { "exits: ${exits.joinToString()}"}
         other.exits = exits.clone()
         other.restartOnZap = restartOnZap
         other.playerPos = playerPos
@@ -660,7 +663,7 @@ abstract class Board {
         other.cameraPos = cameraPos
 
         other.stats = ArrayList()
-        for (stat in stats) other.stats.add(stat!!.clone())
+        for (stat in stats) other.stats.add(stat.clone())
         other.rleSizeSaved = rleSizeSaved
         other.statsSizeSaved = statsSizeSaved
         other.isDirty = isDirty
@@ -671,18 +674,18 @@ abstract class Board {
     private fun statDeleted(statIdx: Int) {
         //System.out.println("Deleted stat " + statIdx);
         val stat = stats[statIdx]
-        val statId = stat!!.statId
+        val statId = stat.statId
 
         val statPos = HashMap<Int, Int>()
         for (i in stats.indices) {
-            statPos[stats[i]!!.statId] = i
+            statPos[stats[i].statId] = i
         }
 
         // First of all, does this stat have its own code or is it just another in the chain?
         var codeOwnerIdx = statIdx
         var codeOwnerId = statId
         while (true) {
-            val cl = stats[codeOwnerIdx]!!.codeLength
+            val cl = stats[codeOwnerIdx].codeLength
             if (cl >= 0) break // Reached the parent
 
             if (-cl >= stats.size) {
@@ -690,34 +693,34 @@ abstract class Board {
                 break
             } else {
                 codeOwnerIdx = statPos[-cl]!!
-                codeOwnerId = stats[codeOwnerIdx]!!.statId
+                codeOwnerId = stats[codeOwnerIdx].statId
             }
         }
 
         // Fix binds and erase centipede links
         for (i in stats.indices) {
-            if (stats[i]!!.codeLength == -statId) {
+            if (stats[i].codeLength == -statId) {
                 // Stat i is bound to statIdx.
                 if (codeOwnerIdx == statIdx) {
                     // As statIdx is going away, stat i will become the new owner
-                    val targetCodeLen = stats[statIdx]!!.codeLength
-                    val targetCode = stats[statIdx]!!.code
-                    stats[i]!!.code = targetCode
-                    if (targetCodeLen < 0) stats[i]!!.codeLength = targetCodeLen
+                    val targetCodeLen = stats[statIdx].codeLength
+                    val targetCode = stats[statIdx].code
+                    stats[i].code = targetCode
+                    if (targetCodeLen < 0) stats[i].codeLength = targetCodeLen
                     codeOwnerIdx = i
-                    codeOwnerId = stats[i]!!.statId
+                    codeOwnerId = stats[i].statId
                 } else {
                     // Otherwise, point to the owner
-                    stats[i]!!.codeLength = -codeOwnerId
+                    stats[i].codeLength = -codeOwnerId
                 }
             }
-            if (stats[i]!!.follower == statId) {
+            if (stats[i].follower == statId) {
                 // Break link
-                stats[i]!!.follower = -1
+                stats[i].follower = -1
             }
-            if (stats[i]!!.leader == statId) {
+            if (stats[i].leader == statId) {
                 // Break link
-                stats[i]!!.leader = -1
+                stats[i].leader = -1
             }
         }
         dirtyStats()
@@ -761,7 +764,7 @@ abstract class Board {
         if (timeLimit != other.timeLimit) return false
         if (stats.size != other.stats.size) return false
         for (i in stats.indices) {
-            if (!stats[i]!!.isIdenticalTo(other.stats[i]!!)) return false
+            if (!stats[i].isIdenticalTo(other.stats[i])) return false
         }
         return true
     }

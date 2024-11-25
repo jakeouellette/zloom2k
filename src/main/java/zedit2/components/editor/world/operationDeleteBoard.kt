@@ -4,5 +4,5 @@ import zedit2.components.WorldEditor
 
 
 internal fun WorldEditor.operationDeleteBoard() {
-    menuBoardList(this.boardIdx)
+    menuBoardList(this.currentBoardIdx)
 }

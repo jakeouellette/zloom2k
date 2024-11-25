@@ -13,7 +13,7 @@ class ZZTWorldData(data: ByteArray?) : WorldData(data!!) {
     override var name: ByteArray
         get() = readPascalString(data[29], data, 30, 50)
         set(str) {
-            writePascalString(str!!, data, 29, 30, 50)
+            writePascalString(str, data, 29, 30, 50)
             isDirty = true
         }
 

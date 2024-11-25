@@ -1,27 +1,25 @@
 package zedit2.components.editor.world
 
-import zedit2.components.Util.clamp
 import zedit2.components.WorldEditor
 import zedit2.model.Board
-import zedit2.model.spatial.Dim
 import zedit2.model.spatial.Pos
-import kotlin.math.abs
 
 
-internal fun WorldEditor.operationCursorMove(off: Pos, draw: Boolean) {
-    val newCursorPos = (cursorPos+off).clamp(0, dim.asPos - 1)
-
-    if (newCursorPos != cursorPos) {
+internal fun WorldEditor.operationCaretMove(off: Pos, draw: Boolean) {
+    val newCaretPos = (caretPos+off).clamp(0, dim.asPos - 1)
+    var updatingPosition = caretPos
+    if (newCaretPos != caretPos) {
         if (!draw) {
-            cursorPos = newCursorPos
+            updatingPosition = newCaretPos
         } else {
             val delta = off.toDelta()
             val dirty = HashSet<Board>()
-            while (cursorPos != newCursorPos) {
-                cursorPos += delta
+
+            while (updatingPosition != newCaretPos) {
+                updatingPosition += delta
 
                 if (drawing) {
-                    val board = putTileDeferred(cursorPos, bufferTile, WorldEditor.Companion.PutTypes.PUT_DEFAULT)
+                    val board = putTileDeferred(updatingPosition, bufferTile, WorldEditor.Companion.PutTypes.PUT_DEFAULT)
                     if (board != null) dirty.add(board)
                 }
             }
@@ -29,8 +27,8 @@ internal fun WorldEditor.operationCursorMove(off: Pos, draw: Boolean) {
                 board.finaliseStats()
             }
         }
-        canvas.setCursor(cursorPos)
-
+        this.caretPos = updatingPosition
+        canvas.setCaret(updatingPosition)
         if (drawing) {
             afterModification()
         } else {

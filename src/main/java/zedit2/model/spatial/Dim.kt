@@ -45,7 +45,7 @@ data class Dim(val w : Int, val h: Int) {
      * Convert an array to a positional offset in a table.
      */
     fun fromArray(col: Int): Pos {
-        return Pos(col % w, col / h)
+        return Pos(col % w, col / w)
     }
 
     val arrSize: Int = w * h

@@ -1,6 +1,7 @@
 package zedit2.components.editor.world
 
 import zedit2.components.WorldEditor
+import zedit2.components.WorldEditor.Companion.getFMenuName
 import javax.swing.JPopupMenu
 
 

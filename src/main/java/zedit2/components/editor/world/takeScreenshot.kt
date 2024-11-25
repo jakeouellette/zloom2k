@@ -25,7 +25,7 @@ internal fun WorldEditor.takeScreenshot() {
     screenshotFilename = screenshotFilename.replace("{worldname}", toUnicode(worldData.name))
     val currentBoardName = if (currentBoard == null) "(no board)" else toUnicode(currentBoard!!.getName())
     screenshotFilename = screenshotFilename.replace("{boardname}", currentBoardName)
-    screenshotFilename = screenshotFilename.replace("{boardnum}", boardIdx.toString())
+    screenshotFilename = screenshotFilename.replace("{boardnum}", currentBoardIdx.toString())
 
     //var screenshotFilename = String.format("Screenshot %s.png", dtf.format(now));
     val screenshotDir = evalConfigDir(GlobalEditor.getString("SCREENSHOT_DIR", ""))

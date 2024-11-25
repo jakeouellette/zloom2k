@@ -11,8 +11,8 @@ import java.awt.event.ActionEvent
 import javax.swing.KeyStroke
 
 internal fun WorldEditor.operationStatList() {
-    val board = getBoardAt(cursorPos)
-    val boardXY = cursorPos / boardDim * boardDim
+    val board = getBoardAt(caretPos)
+    val boardXY = caretPos / boardDim * boardDim
     if (board == null) return
     val contextOptions = arrayOf(
         "Modify",
@@ -42,7 +42,7 @@ internal fun WorldEditor.operationStatList() {
 
     StatSelector(
         this.boardPosOffset,
-        this.boardIdx,
+        this.currentBoardIdx,
         this.canvas,
         board,
         { e: ActionEvent ->

@@ -3,6 +3,9 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/src/main/java/java.iml" filepath="$PROJECT_DIR$/src/main/java/java.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/zloom2k.iml" filepath="$PROJECT_DIR$/.idea/modules/zloom2k.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/zloom2k.main.iml" filepath="$PROJECT_DIR$/.idea/modules/zloom2k.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/zloom2k.test.iml" filepath="$PROJECT_DIR$/.idea/modules/zloom2k.test.iml" />
     </modules>
   </component>
 </project>

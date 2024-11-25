@@ -7,8 +7,8 @@ import javax.swing.text.DocumentFilter
 // From https://stackoverflow.com/questions/10136794/limiting-the-number-of-characters-in-a-jtextfield
 class LimitDocFilter(private val maxChars: Int) : DocumentFilter() {
     @Throws(BadLocationException::class)
-    override fun replace(fb: FilterBypass, offset: Int, length: Int, text: String, attrs: AttributeSet) {
-        var text = text
+    override fun replace(fb: FilterBypass, offset: Int, length: Int, inText: String, attrs: AttributeSet?) {
+        var text = inText
         val currentLength = fb.document.length
         val overLimit = (currentLength + text.length) - maxChars - length
         if (overLimit > 0) {

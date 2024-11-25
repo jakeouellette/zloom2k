@@ -13,7 +13,7 @@ import java.util.*
 internal fun WorldEditor.operationFloodfill(pos: Pos, fancy: Boolean) {
     val originalTile = this.getTileAt(pos, false) ?: return
 
-    val filled = Array(dim.h) { ByteArray(dim.w) }
+    val filled = Array(dim.w) { ByteArray(dim.h) }
     val tileStats: List<Stat> = originalTile.stats
     val isStatted = tileStats != null && !tileStats.isEmpty()
     // TODO(jakeouellette): remove the mechanic of passing in a boolean object to floodfill
@@ -23,7 +23,7 @@ internal fun WorldEditor.operationFloodfill(pos: Pos, fancy: Boolean) {
         val dirty = HashSet<Board>()
         for (fy in 0 until dim.h) {
             for (fx in 0 until dim.w) {
-                if (filled[fy][fx].toInt() == 1) {
+                if (filled[fx][fy].toInt() == 1) {
                     val board = putTileDeferred(Pos(fx, fy), bufferTile, WorldEditor.Companion.PutTypes.PUT_DEFAULT)
                     if (board != null) dirty.add(board)
                 }
@@ -77,7 +77,7 @@ internal fun WorldEditor.floodFill(
 
 private fun WorldEditor.fancyFill(filled: Array<ByteArray>) {
     val boardListing = HashSet<Int>()
-    for (fy in 0 until dim.h) for (fx in 0 until dim.w) if (filled[fy][fx].toInt() == 1) boardListing.add(grid[fy / boardDim.h][fx / boardDim.w])
+    for (fy in 0 until dim.h) for (fx in 0 until dim.w) if (filled[fx][fy].toInt() == 1) boardListing.add(grid[fx / boardDim.w][fy / boardDim.h])
     val savedBoards = HashMap<Int, Board>()
     for (boardIdx in boardListing) savedBoards[boardIdx] = boards[boardIdx].clone()
     this.fancyFillDialog = true

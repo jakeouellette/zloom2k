@@ -116,10 +116,10 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
         previewTimer = null
         sourceImageLabel = JLabel()
         destImageLabel = JLabel()
-        sourceImageLabel!!.horizontalAlignment = SwingConstants.CENTER
-        sourceImageLabel!!.verticalAlignment = SwingConstants.CENTER
-        destImageLabel!!.horizontalAlignment = SwingConstants.CENTER
-        destImageLabel!!.verticalAlignment = SwingConstants.CENTER
+        sourceImageLabel.horizontalAlignment = SwingConstants.CENTER
+        sourceImageLabel.verticalAlignment = SwingConstants.CENTER
+        destImageLabel.horizontalAlignment = SwingConstants.CENTER
+        destImageLabel.verticalAlignment = SwingConstants.CENTER
 
         val l = JScrollPane(sourceImageLabel)
         val r = JScrollPane(destImageLabel)
@@ -144,16 +144,16 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
 
         val optionsBox = JPanel(GridLayout(0, 1, 0, 0))
 
-        val w = image!!.width
-        val h = image!!.height
+        val w = image.width
+        val h = image.height
         srcLeft = addSpinner(optionsBox, "Left:", SpinnerNumberModel(0, 0, w - 1, 1))
         srcRight = addSpinner(optionsBox, "Right:", SpinnerNumberModel(w - 1, 0, w - 1, 1))
         srcTop = addSpinner(optionsBox, "Top:", SpinnerNumberModel(0, 0, h - 1, 1))
         srcBottom = addSpinner(optionsBox, "Bottom:", SpinnerNumberModel(h - 1, 0, h - 1, 1))
         macroW = addSpinner(optionsBox, "Macroblock W:", SpinnerListModel(arrayOf(1, 2, 4, 8)))
         macroH = addSpinner(optionsBox, "Macroblock H:", SpinnerListModel(arrayOf(1, 2, 7, 14)))
-        macroW!!.value = GlobalEditor.getInt("CONVERT_MACROW", 8)
-        macroH!!.value = GlobalEditor.getInt("CONVERT_MACROH", 14)
+        macroW.value = GlobalEditor.getInt("CONVERT_MACROW", 8)
+        macroH.value = GlobalEditor.getInt("CONVERT_MACROH", 14)
 
         var defaultCharW = max(1.0, ((w + 4) / 8).toDouble()).toInt()
         var defaultCharH = max(1.0, ((h + 7) / 14).toDouble()).toInt()
@@ -171,7 +171,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
         sizeH = addSpinner(optionsBox, "Output Height:", SpinnerNumberModel(defaultCharH, 1, editor.dim.h, 1))
         objCount = addSpinner(optionsBox, "Max Stats:", SpinnerNumberModel(0, 0, 32767, 1))
 
-        objCount!!.value = GlobalEditor.getInt("CONVERT_MAXSTATS", 0)
+        objCount.value = GlobalEditor.getInt("CONVERT_MAXSTATS", 0)
 
         val usePanel = JPanel(GridLayout(0, 5))
 
@@ -201,12 +201,12 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
             val nonNullTiles : Array<Tile> = buffer!!.map { tile : Tile? ->
                 tile ?: throw RuntimeException("Tile uninitialized past initialization phase, unexpected.")
             }.toTypedArray()
-            GlobalEditor.setBlockBuffer(bufferDim, nonNullTiles!!, false, szzt)
-            GlobalEditor.setInt("CONVERT_MACROW", macroW!!.value as Int)
-            GlobalEditor.setInt("CONVERT_MACROH", macroH!!.value as Int)
-            GlobalEditor.setInt("CONVERT_MAXSTATS", objCount!!.value as Int)
+            GlobalEditor.setBlockBuffer(bufferDim, nonNullTiles, false, szzt)
+            GlobalEditor.setInt("CONVERT_MACROW", macroW.value as Int)
+            GlobalEditor.setInt("CONVERT_MACROH", macroH.value as Int)
+            GlobalEditor.setInt("CONVERT_MAXSTATS", objCount.value as Int)
             GlobalEditor.setString(if (szzt) "CONVERT_SZZT_TYPES" else "CONVERT_ZZT_TYPES", elementsString)
-            GlobalEditor.setBoolean("CONVERT_LIVEPREVIEW", livePreviewChk!!.isSelected)
+            GlobalEditor.setBoolean("CONVERT_LIVEPREVIEW", livePreviewChk.isSelected)
             dispose()
         }
         val cancel = JButton("Cancel")
@@ -229,23 +229,23 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
             minSize.width -= 8
             chkb.preferredSize = minSize
             chkb.addItemListener(itemListener)
-            elementCheckboxes!!.add(chkb)
+            elementCheckboxes.add(chkb)
             usePanel.add(chkb)
         }
         // TODO(jakeouellette): Confirm non-nullable
         elementsString = GlobalEditor.getString(if (szzt) "CONVERT_SZZT_TYPES" else "CONVERT_ZZT_TYPES")!!
 
         addButton(usePanel, "Select all") { e: ActionEvent? ->
-            for (chkb in elementCheckboxes!!) chkb.isSelected = true
+            for (chkb in elementCheckboxes) chkb.isSelected = true
         }
         addButton(usePanel, "Deselect all") { e: ActionEvent? ->
-            for (chkb in elementCheckboxes!!) chkb.isSelected = false
+            for (chkb in elementCheckboxes) chkb.isSelected = false
         }
         addButton(usePanel, "Dither only") { e: ActionEvent? ->
-            for (chkb in elementCheckboxes!!) chkb.isSelected = ditherOnly.contains(chkb.text)
+            for (chkb in elementCheckboxes) chkb.isSelected = ditherOnly.contains(chkb.text)
         }
         addButton(usePanel, "All gfx") { e: ActionEvent? ->
-            for (chkb in elementCheckboxes!!) chkb.isSelected = allGfx.contains(chkb.text)
+            for (chkb in elementCheckboxes) chkb.isSelected = allGfx.contains(chkb.text)
         }
         usePanel.border = BorderFactory.createTitledBorder("Element use")
 
@@ -265,17 +265,17 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
 
     private var elementsString: String
         get() {
-            val str = StringBuilder(elementCheckboxes!!.size)
-            for (chkb in elementCheckboxes!!) {
+            val str = StringBuilder(elementCheckboxes.size)
+            for (chkb in elementCheckboxes) {
                 str.append(if (chkb.isSelected) 'X' else '.')
             }
             return str.toString()
         }
         private set(string) {
             if (string == null) return
-            if (string.length != elementCheckboxes!!.size) return
+            if (string.length != elementCheckboxes.size) return
             for (i in 0 until string.length) {
-                elementCheckboxes!![i].isSelected = string[i] == 'X'
+                elementCheckboxes[i].isSelected = string[i] == 'X'
             }
         }
 
@@ -293,18 +293,18 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
     private fun convert() {
         if (!convertSetup) return
         terminateConverter()
-        ok!!.isEnabled = false
+        ok.isEnabled = false
         buffer = null
 
-        val left = srcLeft!!.value as Int
-        val right = srcRight!!.value as Int
-        val top = srcTop!!.value as Int
-        val bottom = srcBottom!!.value as Int
-        val mw = macroW!!.value as Int
-        val mh = macroH!!.value as Int
-        val outw = sizeW!!.value as Int
-        val outh = sizeH!!.value as Int
-        val maxObjs = objCount!!.value as Int
+        val left = srcLeft.value as Int
+        val right = srcRight.value as Int
+        val top = srcTop.value as Int
+        val bottom = srcBottom.value as Int
+        val mw = macroW.value as Int
+        val mh = macroH.value as Int
+        val outw = sizeW.value as Int
+        val outh = sizeH.value as Int
+        val maxObjs = objCount.value as Int
 
 
         val croppedSourceImage = cropImage(image, left, right, top, bottom)
@@ -322,7 +322,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
         converter!!.setCheckVal(checkingValue)
         //var usableElements = new ArrayList<Integer>();
         var anySelected = false
-        for (chkb in elementCheckboxes!!) {
+        for (chkb in elementCheckboxes) {
             if (chkb.isSelected) {
                 val elementName = chkb.text
                 val id = ZType.getId(szzt, elementName)
@@ -386,7 +386,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
         outputVcol: IntArray,
         outputImage: BufferedImage
     ) {
-        if (!livePreviewChk!!.isSelected) return
+        if (!livePreviewChk.isSelected) return
         //System.out.println("updatePreview called from: " + Thread.currentThread());
         val g = outputImage.graphics
         val canvas = editor.canvas
@@ -420,7 +420,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
     private fun updateSourceImage(scaledImage: BufferedImage?) {
         val image = superZZTScale(scaledImage)
 
-        sourceImageLabel!!.icon = ImageIcon(image)
+        sourceImageLabel.icon = ImageIcon(image)
     }
 
     private fun superZZTScale(scaledImage: BufferedImage?): Image? {
@@ -432,7 +432,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
 
     private fun updateDestImage(outputImage: BufferedImage) {
         val image = superZZTScale(outputImage)
-        destImageLabel!!.icon = ImageIcon(image)
+        destImageLabel.icon = ImageIcon(image)
     }
 
     private fun terminateConverter() {
@@ -444,7 +444,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
     }
 
 
-    private fun scaleImage(croppedSourceImage: BufferedImage?, w: Int, h: Int): BufferedImage? {
+    private fun scaleImage(croppedSourceImage: BufferedImage?, w: Int, h: Int): BufferedImage {
         if (croppedSourceImage!!.width == w && croppedSourceImage.height == h) return croppedSourceImage
         val newImg = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
         val g = newImg.graphics
@@ -461,7 +461,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
         return newImg
     }
 
-    private fun cropImage(image: BufferedImage?, left: Int, right: Int, top: Int, bottom: Int): BufferedImage? {
+    private fun cropImage(image: BufferedImage?, left: Int, right: Int, top: Int, bottom: Int): BufferedImage {
         if (left == 0 && top == 0 && right == image!!.width - 1 && bottom == image.height - 1) return image
 
         val width = max(1.0, (right - left).toDouble()).toInt()
@@ -479,7 +479,7 @@ class ConvertImage(private val editor: WorldEditor, sourceImage: Image) : JDialo
             waitForBufferedImage(sourceImage, act)
         }
         image = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
-        val drawnImage = image!!.graphics.drawImage(sourceImage, 0, 0, null)
+        val drawnImage = image.graphics.drawImage(sourceImage, 0, 0, null)
         if (!drawnImage) {
             waitForBufferedImage(sourceImage, act)
         }
