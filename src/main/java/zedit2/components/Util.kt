@@ -136,6 +136,7 @@ object Util {
             val altgrKeyStroke = KeyStroke.getKeyStroke(keyStroke.keyCode, altgrMod)
             component.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(altgrKeyStroke, actionName)
         }
+        component.setFocusTraversalKeysEnabled(false)
         component.actionMap.put(actionName, object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent) {
                 // TODO(jakeouellette): This is fighting with the text entry from the WorldEditor keyListener

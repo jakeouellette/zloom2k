@@ -465,7 +465,7 @@ class BoardManager @JvmOverloads constructor(
                                 w.warn(
                                     1,
                                     String.format(
-                                        " has a passage at %d,%d pointing to a board being deleted. It will now point to the title screen.",
+                                        " has a passage at %s pointing to a board being deleted. It will now point to the title screen.",
                                         pos + 1
                                     )
                                 )

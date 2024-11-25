@@ -285,6 +285,7 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
         redrawAll: Boolean,
         show: ByteArray?
     ) {
+        Logger.i(TAG) { "Setting Data -- $dim, ${cols.size}, ${chars.size}, $offset, $redrawAll" }
         if (cols.size != dim.arrSize) {
             throw RuntimeException("Dimensions do not match colour array size ${cols.size} ${dim.arrSize}")
         }

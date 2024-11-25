@@ -12,7 +12,7 @@ import javax.swing.JOptionPane
 
 internal fun WorldEditor.operationTestWorld() {
     val changeBoardTo = if (GlobalEditor.getBoolean("TEST_SWITCH_BOARD", false)) {
-        boardIdx
+        currentBoardIdx
     } else {
         worldData.currentBoard
     }

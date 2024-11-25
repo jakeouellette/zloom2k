@@ -9,7 +9,7 @@ internal fun WorldEditor.operationExitCreate(exit: Int) {
     val xOff = intArrayOf(0, 0, -boardDim.w, boardDim.w)
     val yOff = intArrayOf(-boardDim.h, boardDim.h, 0, 0)
 
-    val oldBoardIdx = boardIdx
+    val oldBoardIdx = currentBoardIdx
     val destBoard = currentBoard!!.getExit(exit)
     if (destBoard != 0) {
         changeBoard(destBoard)

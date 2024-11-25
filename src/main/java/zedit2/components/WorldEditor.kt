@@ -61,7 +61,7 @@ class WorldEditor @JvmOverloads constructor(
 
     internal lateinit var boardSelectorComponent: BoardSelector
     internal var path: File? = null
-    var boardIdx: Int = 0
+    var currentBoardIdx: Int = -1
     internal var currentlyShowing = SHOW_NOTHING
     internal var currentBoard: Board? = null
     private var zoom: Double
@@ -143,11 +143,13 @@ class WorldEditor @JvmOverloads constructor(
     )
 
     init {
+        Logger.i(TAG) { "Initializing world for $path" }
         GlobalEditor.editorOpened()
         this.zoom = GlobalEditor.getDouble("ZOOM")
         createGUI()
         loadWorld(path, worldData)
         afterUpdate()
+        Logger.i(TAG) { "World initialized for $path" }
     }
 
     @Throws(IOException::class, WorldCorruptedException::class)
@@ -190,7 +192,7 @@ class WorldEditor @JvmOverloads constructor(
         this.path = path
         GlobalEditor.addToRecent(path)
         this.worldData = worldData
-        boards.clear()
+        val loadedBoards = mutableListOf<Board>()
         atlases.clear()
         try {
             canvas.setCP(null, null)
@@ -198,17 +200,19 @@ class WorldEditor @JvmOverloads constructor(
         }
 
         for (i in 0..worldData.numBoards) {
-            boards.add(worldData.getBoard(i))
+            loadedBoards.add(worldData.getBoard(i))
         }
-        onBoardsUpdated(boards)
 
-        val cb = worldData.currentBoard
-        boardDim = boards[0].dim
-        caretPos = boards[cb].getStat(0)!!.pos - 1
+        val currentBoardIdx = worldData.currentBoard
+        val currentBoard = loadedBoards[currentBoardIdx]
+        // Initialize position to the player starting position
+        caretPos = currentBoard.getStat(0).pos - 1
         canvas.centreView = true
 
         updateMenu()
-        changeBoard(cb)
+
+        onBoardsUpdated(loadedBoards, currentBoardIdx)
+        changeBoard(currentBoardIdx)
     }
 
     private fun changeToIndividualBoard(newBoardIdx: Int) {
@@ -229,11 +233,12 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     private fun setCurrentBoard(newBoardIdx: Int) {
-        boardIdx = newBoardIdx
-        currentBoard = if (boardIdx == -1) {
+        Logger.i(TAG) { "Current board set to index $newBoardIdx, in ${boards.size} boards" }
+        currentBoardIdx = newBoardIdx
+        currentBoard = if (currentBoardIdx == -1) {
             null
         } else {
-            boards[boardIdx]
+            boards[currentBoardIdx]
         }
     }
 
@@ -300,6 +305,7 @@ class WorldEditor @JvmOverloads constructor(
         canvas.setZoom(if (worldData.isSuperZZT) zoom * 2 else zoom)
         canvas.setAtlas(currentAtlas, boardDim, GlobalEditor.getBoolean("ATLAS_GRID", true))
         if (redraw) {
+            Logger.i(TAG) {"Redraw: $dim, $redrawDim, $redrawPos, $redrawPos2, $redraw"}
             for (y in 0 until gridDim.h) {
                 for (x in 0 until gridDim.w) {
                     val boardIdx = grid[y][x]
@@ -560,7 +566,9 @@ class WorldEditor @JvmOverloads constructor(
 
         for (boardIdx in boards.indices) {
             val board = boards[boardIdx]
-            warning.setPrefix(String.format("Board %d (%s) ", boardIdx, toUnicode(board.getName())))
+            val prefix = String.format("Board %d (%s) ", boardIdx, toUnicode(board.getName()))
+            Logger.i(TAG) { "$prefix dirty: ${board.isDirty}" }
+            warning.setPrefix(prefix)
             if (board.isDirty) {
                 worldCopy.setBoard(warning, boardIdx, board)
             }
@@ -632,6 +640,7 @@ class WorldEditor @JvmOverloads constructor(
                     boards.add(board)
                 }
                 onBoardsUpdated(boards)
+
             } catch (e: IOException) {
                 JOptionPane.showMessageDialog(frame, e, "Error importing world", JOptionPane.ERROR_MESSAGE)
             } catch (e: RuntimeException) {
@@ -699,7 +708,7 @@ class WorldEditor @JvmOverloads constructor(
             this,
             worldData,
             boards,
-            boardIdx,
+            currentBoardIdx,
             deleteBoard = deleteBoard,
             modal = deleteBoard == null
         )
@@ -737,7 +746,7 @@ class WorldEditor @JvmOverloads constructor(
             try {
                 currentBoard!!.loadFrom(file)
                 updateDefaultDir(file)
-                changeBoard(boardIdx)
+                changeBoard(currentBoardIdx)
             } catch (e: Exception) {
                 JOptionPane.showMessageDialog(frame, e, "Error loading board", JOptionPane.ERROR_MESSAGE)
             }
@@ -797,8 +806,8 @@ class WorldEditor @JvmOverloads constructor(
                 if (file != null) {
                     try {
                         boards[idx].loadFrom(file)
-                        if (idx == boardIdx) {
-                            changeBoard(boardIdx)
+                        if (idx == currentBoardIdx) {
+                            changeBoard(currentBoardIdx)
                         }
                     } catch (e: Exception) {
                         JOptionPane.showMessageDialog(frame, e, "Error loading board", JOptionPane.ERROR_MESSAGE)
@@ -891,7 +900,12 @@ class WorldEditor @JvmOverloads constructor(
             menus.add(m)
 
             m = Menu("Board")
-            m.add("Board settings...", "I") { e: ActionEvent? -> board(frame, currentBoard, worldData) }
+            m.add("Board settings...", "I") { e: ActionEvent? ->
+                board(frame, currentBoard, worldData) { _ ->
+                    this.boardSelectorComponent.updateBoards(this.boards, currentBoardIdx)
+                }
+
+            }
             m.add("Board exits", "X") { e: ActionEvent? -> operationBoardExits() }
             m.add()
 //            m.add("Switch board", "B") { e: ActionEvent? -> createBoardSelector() }
@@ -1455,7 +1469,11 @@ class WorldEditor @JvmOverloads constructor(
                 "D" -> operationDeleteBoard()
                 "F" -> operationFloodfill(caretPos, false)
                 "G" -> world(frame, boards, worldData, canvas)
-                "I" -> board(frame, currentBoard, worldData)
+                "I" -> {
+                    board(frame, currentBoard, worldData) { _ ->
+                        this.boardSelectorComponent.updateBoards(this.boards, currentBoardIdx)
+                    }
+                }
                 "L" -> menuOpenWorld()
                 "P" -> operationModifyBuffer(false)
                 "S" -> menuSaveAs()
@@ -2009,22 +2027,28 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     // TODO(jakeouellette): Make this behave a bit more reactive
-    internal fun onBoardsUpdated(boards: ArrayList<Board>) {
-        Logger.i(TAG) { "Boards updated. ${boards.size}" }
-        this.westPane.remove(boardSelector)
-        this.boards = boards
-        this.boardSelectorComponent = createBoardSelector()
-        this.boardSelector = JScrollPane(
-            boardSelectorComponent,
-            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER)
-        this.westPane.add(boardSelector, "cell 0 0, grow")
+    internal fun onBoardsUpdated(boards: List<Board>, currentBoard : Int = this.currentBoardIdx) {
+        Logger.i(TAG) { "Boards updated. ${boards.size}, $currentBoard" }
+        if (boards.isEmpty()) {
+            throw IllegalArgumentException("Cannot update to empty boards. Must have an initial board.")
+        }
+//        this.westPane.remove(boardSelector)
+
+        boardDim = boards[0].dim
+        this.boards = ArrayList(boards)
+        this.boardSelectorComponent.updateBoards(this.boards, currentBoard)
+//        this.boardSelectorComponent = createBoardSelector()
+//        this.boardSelector = JScrollPane(
+//            boardSelectorComponent,
+//            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+//            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER)
+//        this.westPane.add(boardSelector, "cell 0 0, grow")
     }
 
     private fun createBoardSelector(): BoardSelector {
         return BoardSelector(
                 this.canvas,
-                this.boardIdx,
+                this.currentBoardIdx,
                 this.frameForRelativePositioning,
                 { this.operationAddBoard() },
             {this.operationFocusOnBoardSelector()},
@@ -2032,7 +2056,9 @@ class WorldEditor @JvmOverloads constructor(
                 { e: ActionEvent ->
                     val newBoardIdx = e.actionCommand.toInt()
                     changeBoard(newBoardIdx)
-                })
+                },
+            { a, b -> this.operationSwapBoard(a,b) }
+            )
     }
 
 
@@ -2089,7 +2115,7 @@ class WorldEditor @JvmOverloads constructor(
         TileEditor(
             this,
             this.boardPosOffset,
-            this.boardIdx,
+            this.currentBoardIdx,
             this.worldData.isSuperZZT,
             this.boards,
             this.canvas,
@@ -2281,7 +2307,7 @@ class WorldEditor @JvmOverloads constructor(
         setCurrentBoard(grid[gridPos.y][gridPos.x])
         val worldName = if (path == null) "new world" else path!!.name
         val boardInfo = if (currentBoard != null) {
-            "Board #" + boardIdx + " :: " + toUnicode(currentBoard!!.getName())
+            "Board #" + currentBoardIdx + " :: " + toUnicode(currentBoard!!.getName())
         } else {
             "(no board)"
         }
@@ -2318,13 +2344,15 @@ class WorldEditor @JvmOverloads constructor(
 
         updateCurrentBoard()
         scrollToCursor()
+
         val boardPos = caretPos % boardDim
 
         var s = ""
+        Logger.i(TAG) { "Current board: $currentBoardIdx, ${currentBoard == null}, ${boards.size}"}
         if (currentBoard != null) {
             var boardNameFieldLen = 22
-            if (boardIdx < 100) boardNameFieldLen++
-            if (boardIdx < 10) boardNameFieldLen++
+            if (currentBoardIdx < 100) boardNameFieldLen++
+            if (currentBoardIdx < 10) boardNameFieldLen++
             val boardName = toUnicode(currentBoard!!.getName())
             boardNameFieldLen = min(boardNameFieldLen.toDouble(), boardName.length.toDouble()).toInt()
             val limitedName = boardName.substring(0, boardNameFieldLen)
@@ -2364,7 +2392,7 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     enum class ToolType {
-        TEXT_ENTRY, DRAWING, SELECTION_TOOL, EDITING, PAINT_BUCKET
+        TEXT_ENTRY, DRAWING, SELECTION_TOOL, EDITING, PAINT_BUCKET, EYEDROPPER_TOOL
     }
 
     private fun getBrushMode(): ToolType {
@@ -2462,6 +2490,7 @@ class WorldEditor @JvmOverloads constructor(
                         // (e.source as StatSelector).dataChanged()
                         afterModification()
                     }
+                    canvas.requestFocusInWindow()
                 }
             }
             tileInfoPanel.add(editButton, BorderLayout.SOUTH)

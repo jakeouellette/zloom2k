@@ -652,7 +652,10 @@ class TileEditor(
 
     private fun cancelButton(): JButton {
         val button = JButton("Cancel")
-        button.addActionListener { e: ActionEvent? -> tileEditorFrame!!.dispose() }
+        button.addActionListener { e: ActionEvent? ->
+            tileEditorFrame!!.dispose()
+            editor.canvas.requestFocusInWindow()
+        }
         return button
     }
 

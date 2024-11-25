@@ -89,6 +89,11 @@ fun WorldEditor.updateBufferTile(tile: Tile?, frameForRelativePositioning: Compo
                     source.onBrushUpdated(toolType, this.selectionModeConfiguration, this.paintBucketModeConfiguration)
 
                 },
+                onEyedropperSelected = { source ->
+                    toolType = ToolType.EYEDROPPER_TOOL
+                    source.onBrushUpdated(toolType, this.selectionModeConfiguration, this.paintBucketModeConfiguration)
+
+                },
                 onSelectionModeConfigured = { mode : SelectionModeConfiguration, source : BrushMenuPanel ->
                     this.selectionModeConfiguration = mode
                 },

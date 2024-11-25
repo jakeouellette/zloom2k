@@ -32,6 +32,7 @@ class BrushMenuPanel(
     onSelectionModeSelected: (ActionEvent, BrushMenuPanel) -> Unit,
     val onSelectionModeConfigured: (SelectionModeConfiguration, BrushMenuPanel) -> Unit,
     onEditModeSelected: (BrushMenuPanel) -> Unit,
+    onEyedropperSelected : (BrushMenuPanel) -> Unit,
     onEditBrushSelected: (ActionEvent, BrushMenuPanel) -> Unit,
     onEditColorSelected: (ActionEvent, BrushMenuPanel) -> Unit,
     onColorSwapSelected: (ActionEvent, BrushMenuPanel) -> Unit,
@@ -45,7 +46,7 @@ class BrushMenuPanel(
     val initialToolType : ToolType
 ) : JPanel() {
 
-
+    private var eyedropperButton: SvgJButton
     private var brushButton: SvgJButton
     private var blockButton: SvgJButton
     private var paintBucketButton: SvgJButton
@@ -62,6 +63,7 @@ class BrushMenuPanel(
         val iconColorProcessor = CustomColorsProcessor(listOf("colorable"))
         val swapColorProcessor = CustomColorsProcessor(listOf("colorable1", "colorable2"))
         val processor = CustomColorsProcessor(listOf("colorable"))
+        val eyedropperSvg: SVGDocument = loader.loadColorable("icons/eyedropper.svg", iconColorProcessor)!!
         val brushSvg: SVGDocument = loader.loadColorable("icons/brush.svg", iconColorProcessor)!!
         val selectorSvg: SVGDocument = loader.loadColorable("icons/selector.svg", iconColorProcessor)!!
         val paintbucketSvg: SVGDocument = loader.loadColorable("icons/paint-bucket.svg", iconColorProcessor)!!
@@ -106,6 +108,13 @@ class BrushMenuPanel(
                 })
                 this.add(configureSelectionButton, "gap right 10")
                 val brushSize = brushSvg.size()
+                eyedropperButton = SvgJButton(eyedropperSvg)
+                eyedropperButton.addActionListener(object : ActionListener {
+                    override fun actionPerformed(e: ActionEvent?) {
+                        onEyedropperSelected(this@BrushMenuPanel)
+                    }
+                })
+                this.add(eyedropperButton, "gap right 10")
                 brushButton = SvgJButton(brushSvg)
                 brushButton.addActionListener(object : ActionListener {
                     override fun actionPerformed(e: ActionEvent?) {
@@ -242,6 +251,7 @@ class BrushMenuPanel(
         this.blockButton.picked = false
         this.paintBucketButton.picked = false
         this.textCaretButton.picked = false
+        this.eyedropperButton.picked = false
 
         when (mode) {
             ToolType.SELECTION_TOOL -> {
@@ -257,21 +267,27 @@ class BrushMenuPanel(
             ToolType.PAINT_BUCKET -> {
                 this.paintBucketButton.picked = true
             }
+            ToolType.EYEDROPPER_TOOL -> {
+                this.eyedropperButton.picked = true
+            }
         }
         this.brushButton.toolTipText = BRUSH_TEXT
         this.blockButton.toolTipText = "$BLOCK_SELECT_TEXT (${config?.short ?: "-"})"
         this.paintBucketButton.toolTipText = "$PAINT_BUCKET_TEXT (${paintBucketConfig?.short ?: "-"}"
         this.textCaretButton.toolTipText = "Enter Text"
+        this.eyedropperButton.toolTipText = EYEDROPPER_TEXT
         this.blockButton.repaint()
         this.brushButton.repaint()
         this.paintBucketButton.repaint()
         this.textCaretButton.repaint()
+        this.eyedropperButton.repaint()
     }
 
     companion object {
         const val BLOCK_SELECT_TEXT = "Select"
         const val BRUSH_TEXT = "Brush"
         const val PAINT_BUCKET_TEXT = "Paint Bucket"
+        const val EYEDROPPER_TEXT = "Eyedropper - When selected, secondary click becomes brush"
     }
 
     class DownArrowJButton : JButton("▼") {

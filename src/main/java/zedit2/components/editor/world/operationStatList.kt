@@ -42,7 +42,7 @@ internal fun WorldEditor.operationStatList() {
 
     StatSelector(
         this.boardPosOffset,
-        this.boardIdx,
+        this.currentBoardIdx,
         this.canvas,
         board,
         { e: ActionEvent ->

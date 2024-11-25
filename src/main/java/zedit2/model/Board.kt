@@ -8,6 +8,8 @@ import zedit2.components.WorldEditor
 import zedit2.model.spatial.Dim
 import zedit2.model.spatial.Pos
 import zedit2.util.CP437
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import zedit2.util.ZType
 import java.io.File
 import java.io.IOException
@@ -580,6 +582,7 @@ abstract class Board {
     }
 
     fun drawToCanvas(canvas: DosCanvas, offset : Pos, pos : Pos, pos2 : Pos, showing: Int) {
+        Logger.i(TAG) { "Drawing to canvas, $offset, $pos, $pos2, $showing" }
         finalisationCheck()
 
         val wh = (pos2 - pos + 1).dim
@@ -622,7 +625,8 @@ abstract class Board {
                 }
             }
         }
-        canvas.setData(wh, cols, chars, offset + pos, showing, show)
+        // TODO: changed "showing" to true, it wasn't used inside?
+        canvas.setData(wh, cols, chars, offset + pos, true, show)
     }
 
     fun setDirty() {
@@ -648,6 +652,7 @@ abstract class Board {
         other.bco = bco.clone()
         other.name = name.clone()
         other.shots = shots
+        Logger.i(TAG) { "exits: ${exits.joinToString()}"}
         other.exits = exits.clone()
         other.restartOnZap = restartOnZap
         other.playerPos = playerPos

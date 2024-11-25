@@ -34,6 +34,7 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
         SELECTING,
         COPYING_SELECTION,
         MOVING_SELECTION,
+        MOVING_CARET,
         OTHER, // secondary, middle, text entry
         HOVERING,
         TO_DRAWING_OR_EDITING,
@@ -92,6 +93,9 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
                         MouseEventDescription.SELECTING
                     }
                 }
+                WorldEditor.ToolType.EYEDROPPER_TOOL -> {
+                    MouseEventDescription.MOVING_CARET
+                }
 
                 WorldEditor.ToolType.EDITING,
                 WorldEditor.ToolType.DRAWING -> MouseEventDescription.DRAWING_OR_EDITING
@@ -99,8 +103,20 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
                 else -> MouseEventDescription.OTHER
             }
         }
+        Pair(MouseState.RELEASED, MouseState.SECONDARY),
+        Pair(MouseState.RELEASED, MouseState.MIDDLE),
+        Pair(MouseState.SECONDARY, MouseState.RELEASED),
+        Pair(MouseState.SECONDARY, MouseState.SECONDARY) -> {
+            when (toolType) {
+                WorldEditor.ToolType.EYEDROPPER_TOOL -> {
+                    MouseEventDescription.DRAWING_OR_EDITING
+                }
 
-        Pair(MouseState.SECONDARY, MouseState.SECONDARY) -> MouseEventDescription.OTHER
+                WorldEditor.ToolType.EDITING,
+                WorldEditor.ToolType.DRAWING -> MouseEventDescription.MOVING_CARET
+                else -> MouseEventDescription.MOVING_CARET
+            }
+        }
         Pair(MouseState.MIDDLE, MouseState.MIDDLE) -> MouseEventDescription.OTHER
         Pair(MouseState.PRIMARY, MouseState.RELEASED) -> {
             when (toolType) {
@@ -113,6 +129,9 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
                             MouseEventDescription.PAINT_BUCKET_GRADIENT_FILL
                         }
                     }
+                }
+                WorldEditor.ToolType.EYEDROPPER_TOOL -> {
+                    MouseEventDescription.MOVING_CARET
                 }
                 WorldEditor.ToolType.SELECTION_TOOL -> {
                     if (wasCopying) {
@@ -177,11 +196,6 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
             }
         }
 
-        Pair(MouseState.RELEASED, MouseState.SECONDARY),
-        Pair(MouseState.RELEASED, MouseState.MIDDLE) -> {
-            MouseEventDescription.TO_NON_PRIMARY
-        }
-
         Pair(MouseState.RELEASED, MouseState.RELEASED) -> MouseEventDescription.HOVERING
         else -> {
             Logger.i(TAG) { "Unhandled State Transition. ${Pair(lastMouseState, state)}" }
@@ -221,6 +235,7 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
     }
 
     private fun mouseMoveCommon(e: MouseEvent) {
+
         val wasMoving = editor.moveBlockPos.isPositive
         var wasSelecting = dosCanvas.blockStartPos.isPositive
         val wasCopying = GlobalEditor.isBlockBuffer()
@@ -253,6 +268,10 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
             MouseEventDescription.TO_DRAWING_OR_EDITING -> {
                 Logger.i(TAG) { "$transition drawing"}
                 mouseDraw(mouseCoord)
+            }
+            MouseEventDescription.MOVING_CARET -> {
+                updateCaretPosition()
+                editor.operationBufferGrab()
             }
             MouseEventDescription.TO_SELECTING -> {
                 Logger.i(TAG) { "$transition Beginning Selection."}
@@ -331,6 +350,12 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
             Logger.i(TAG) { "$transition ran. $wasMoving $wasSelecting $wasCopying $selectedInsideBox ${editor.caretPos} ${GlobalEditor.blockBufferDim} ${editor.selectionBlockPos} ${editor.selectionBlockPos2} ${editor.anchorDelta} ${editor.moveBlockPos} ${dosCanvas.blockStartPos} ${editor.moveBlockDim} ${dosCanvas.mouseCursorPos}"}
         }
         editor.undoHandler.afterUpdate()
+
+        // Capture the screen if the user moved the cursor.
+        val lastMouseCoordVal = lastMouseCoord
+        if (lastMouseCoordVal != null && dosCanvas.toChar(mouseCoord) != dosCanvas.toChar(lastMouseCoordVal)) {
+            onFocusNeeded()
+        }
 
         lastMouseCoord = mouseCoord
         lastMouseState = editor.mouseState

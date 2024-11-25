@@ -1176,7 +1176,7 @@ class Settings(private val onMenuCreateRequested: ()-> Unit,
         )
 
         @JvmStatic
-        fun board(frame: JFrame?, currentBoard: Board?, worldData: WorldData) {
+        fun board(frame: JFrame?, currentBoard: Board?, worldData: WorldData, onBoardUpdated: (Any) -> Unit) {
             if (currentBoard == null) return
 
             val settings = JDialog()
@@ -1196,7 +1196,8 @@ class Settings(private val onMenuCreateRequested: ()-> Unit,
             boardNameLabel.text = "Board name: " + currentBoard.getName().size + "/" + boardNameLimit
 
             cp.add(boardNameLabel)
-            val boardNameField = JTextField(toUnicode(currentBoard.getName()))
+            val currentName = toUnicode(currentBoard.getName())
+            val boardNameField = JTextField(currentName)
             boardNameField.font = font
             boardNameField.toolTipText = "Board name"
 
@@ -1215,8 +1216,12 @@ class Settings(private val onMenuCreateRequested: ()-> Unit,
                 }
 
                 private fun upd() {
-                    currentBoard.setName(toBytes(boardNameField.text))
+                    val fieldText = boardNameField.text
+                    Logger.i(TAG) { "Updating board name to $fieldText"}
+                    currentBoard.setName(toBytes(fieldText))
                     boardNameLabel.text = "Board name: " + currentBoard.getName().size + "/" + boardNameLimit
+
+                    onBoardUpdated(currentBoard)
                 }
             })
             cp.add(boardNameField)
