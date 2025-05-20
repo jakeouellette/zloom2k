@@ -3,14 +3,22 @@ package zedit2.components.editor.world
 import zedit2.components.GlobalEditor
 import zedit2.components.Util.evalConfigDir
 import zedit2.components.WorldEditor
+import zedit2.util.Logger
+import zedit2.util.Logger.TAG
 import java.io.File
 import java.io.IOException
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.*
 import javax.swing.JOptionPane
+import kotlin.io.path.exists
+import kotlin.io.path.name
+import kotlin.io.path.nameWithoutExtension
 
 
 internal fun WorldEditor.operationTestWorld() {
+
+
     val changeBoardTo = if (GlobalEditor.getBoolean("TEST_SWITCH_BOARD", false)) {
         currentBoardIdx
     } else {
@@ -38,6 +46,9 @@ internal fun WorldEditor.operationTestWorld() {
         var basename: String? = ""
         var testFile: File? = null
         var testFileHi: File? = null
+        var testWeaveCfgFile: File? = null
+        var testWeaveIniFile: File? = null
+        var testCopiedFiles : MutableMap<File,File> = mutableMapOf()
         for (nameSuffix in 0..98) {
             basename = GlobalEditor.getString(zzt + "_TEST_FILENAME")
             if (nameSuffix > 1) {
@@ -51,17 +62,30 @@ internal fun WorldEditor.operationTestWorld() {
             if (basename!!.length > 8) basename = basename.substring(0, 8)
             testFile = Paths.get(dir.path, basename + ext).toFile()
             testFileHi = Paths.get(dir.path, basename + hiext).toFile()
+            for (copiedFileExtension in WorldEditor.copiedFileExtensions) {
+                val newPath = Paths.get(dir.path, "$basename.$copiedFileExtension")
+                val oldPath = File(path?.parent, "${path?.nameWithoutExtension}.$copiedFileExtension")
+                Logger.i(TAG, {"Checking: $oldPath, ${newPath.exists()} ${oldPath.exists()}"})
+                if (oldPath.exists()) {
+                    testCopiedFiles.put(oldPath, newPath.toFile())
+                }
+            }
             if (!testFile.exists()) {
                 break
             }
             testFile = null
             testFileHi = null
+            testCopiedFiles = mutableMapOf()
+
         }
         if (testFile == null) {
             throw IOException("Error creating test file")
         }
         unlinkList.add(testFile)
         unlinkList.add(testFileHi)
+        unlinkList.addAll(testCopiedFiles.values)
+        Logger.i(TAG, { "Weave paths for config: $testCopiedFiles" })
+
         val argList = ArrayList<String?>()
         argList.add(zeta.path)
 
@@ -88,7 +112,7 @@ internal fun WorldEditor.operationTestWorld() {
             inject_Enter = GlobalEditor.getBoolean(zzt + "_TEST_INJECT_ENTER", false)
             delay_Enter = GlobalEditor.getInt(zzt + "_TEST_INJECT_ENTER_DELAY", 0)
         }
-        launchTest(argList, dir, testFile, unlinkList, changeBoardTo, inject_P, delay_P, inject_Enter, delay_Enter)
+        launchTest(argList, dir, testFile, testCopiedFiles, unlinkList, changeBoardTo, inject_P, delay_P, inject_Enter, delay_Enter)
     } catch (e: IOException) {
         JOptionPane.showMessageDialog(frame, e, "Error testing world", JOptionPane.ERROR_MESSAGE)
     }

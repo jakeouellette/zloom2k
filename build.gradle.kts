@@ -19,7 +19,7 @@ application {
     mainClass = "zedit2.components.Main"
 }
 
-version = "0.3.5"
+version = "0.4.0"
 
 
 distributions {

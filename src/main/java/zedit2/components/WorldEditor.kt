@@ -1920,7 +1920,10 @@ class WorldEditor @JvmOverloads constructor(
     }
 
     internal fun launchTest(
-        argList: ArrayList<String?>, dir: File, testFile: File, unlinkList: ArrayList<File?>, testBoard: Int,
+        argList: ArrayList<String?>, dir: File,
+        testFile: File,
+        testCopiedFiles: Map<File, File>,
+        unlinkList: ArrayList<File?>, testBoard: Int,
         injectP: Boolean, delayP: Int, injectEnter: Boolean, delayEnter: Int
     ) {
         /*
@@ -1937,6 +1940,10 @@ class WorldEditor @JvmOverloads constructor(
                 val pb = ProcessBuilder(argList)
 
                 if (saveGame(testFile, worldCopy)) {
+                    for (e in testCopiedFiles.entries) {
+                        Files.copy(e.key.toPath(), e.value.toPath())
+                    }
+
                     pb.directory(dir)
                     val p = pb.start()
                     if (injectP || injectEnter) {
@@ -2819,5 +2826,6 @@ class WorldEditor @JvmOverloads constructor(
         const val SHOW_EMPTIES: Int = 4
         const val SHOW_EMPTEXTS: Int = 5
         const val SHOW_FAKES: Int = 6
+        public val copiedFileExtensions : Array<String> = arrayOf("CFG", "INI", "PAL", "HLP")
     }
 }
