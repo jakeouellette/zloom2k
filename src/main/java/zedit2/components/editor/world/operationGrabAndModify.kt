@@ -24,6 +24,8 @@ internal fun WorldEditor.operationGrabAndModify(grab: Boolean, advanced: Boolean
             blockFinishMove()
             return
         }
+        bufferTile = getTileAt(caretPos, true)
+        afterUpdate()
     }
     val tile = getTileAt(caretPos, false)
     val board = getBoardAt(caretPos)
