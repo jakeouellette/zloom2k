@@ -1,6 +1,7 @@
 package zedit2.util
 
 import zedit2.components.Main
+import com.formdev.flatlaf.util.UIScale
 import java.awt.Font
 import java.awt.FontFormatException
 import java.awt.GraphicsEnvironment
@@ -17,13 +18,13 @@ object CP437 {
             //Main.class.getClassLoader().getResource
             //new File("Px437_IBM_EGA8.ttf")
             val u = Main::class.java.classLoader.getResourceAsStream("Px437_IBM_EGA8.ttf")
-            font = Font.createFont(Font.TRUETYPE_FONT, u).deriveFont(16f)
+            font = Font.createFont(Font.TRUETYPE_FONT, u).deriveFont(UIScale.scale(16f))
         } catch (e: FontFormatException) {
             e.printStackTrace()
-            font = Font(Font.MONOSPACED, Font.PLAIN, 11)
+            font = Font(Font.MONOSPACED, Font.PLAIN, UIScale.scale(11))
         } catch (e: IOException) {
             e.printStackTrace()
-            font = Font(Font.MONOSPACED, Font.PLAIN, 11)
+            font = Font(Font.MONOSPACED, Font.PLAIN, UIScale.scale(11))
         }
     }
     private fun buildReverseTable() {

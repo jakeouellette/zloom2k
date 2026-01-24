@@ -330,7 +330,7 @@ class DosCanvas(private val editor: WorldEditor, override var zoomx: Double, ove
                         charBuffer
                     )
                     if (tshow.toInt() != 0) {
-                        drawShow(boardBufferGraphics[1], chr, col, view.x, view.y, 1, 1, tshow)
+                        drawShow(boardBufferGraphics[1], chr, col, oxy.x, oxy.y, 1, 1, tshow)
                     } else {
                         TilePainters.drawTile(
                             boardBufferGraphics[1],

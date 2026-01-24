@@ -4,8 +4,8 @@ This is a Kotlin fork of zloom2, refactoring its codebase in several ways with t
 
 * Kotlinified, making nullability clearer
 * Integrated with Gradle
-* (WIP) Refactoring State. Reducing Global mutables
-* (WIP) Improving the UX. Exposing tools and making editing more intuitive.
+* Refactoring State. Reducing Global mutables
+* Improving the UX. Exposing tools and making editing more intuitive.
 
 This is a fork written by Jake Ouellette.
 

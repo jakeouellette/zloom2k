@@ -863,7 +863,7 @@ class WorldEditor @JvmOverloads constructor(
             m.add("Save", "Ctrl-S") { e: ActionEvent? -> menuSave() }
             m.add("Save as", "S") { e: ActionEvent? -> menuSaveAs() }
             m.add()
-            m.add("ZLoom2 settings...", null) { e: ActionEvent? ->
+            m.add("ZLoom2k settings...", null) { e: ActionEvent? ->
                 Settings(
                     {
                         this.createMenu()
@@ -2318,7 +2318,7 @@ class WorldEditor @JvmOverloads constructor(
         } else {
             "(no board)"
         }
-        frame.title = "zloom2 [" + worldName + "] :: " + boardInfo + (if (isDirty) "*" else "")
+        frame.title = "zloom2k [" + worldName + "] :: " + boardInfo + (if (isDirty) "*" else "")
     }
 
     internal fun getTileAt(pos : Pos, copy: Boolean): Tile? {

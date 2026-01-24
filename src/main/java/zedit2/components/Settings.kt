@@ -1,6 +1,7 @@
 package zedit2.components
 
 import zedit2.components.BoardManager.Companion.generateBoardSelectArray
+import com.formdev.flatlaf.util.UIScale
 import zedit2.util.CP437.font
 import zedit2.util.CP437.toBytes
 import zedit2.util.CP437.toUnicode
@@ -33,7 +34,7 @@ class Settings(private val onMenuCreateRequested: ()-> Unit,
         Util.addEscClose(dialog, dialog.rootPane)
         dialog.isResizable = false
         dialog.setIconImage(null)
-        dialog.title = "ZLoom2 Settings"
+        dialog.title = "ZLoom2k Settings"
         dialog.modalityType = ModalityType.APPLICATION_MODAL
         //dialog.setResizable(false);
         dialog.defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
@@ -61,7 +62,7 @@ class Settings(private val onMenuCreateRequested: ()-> Unit,
 
         val trHandler = transferHandler
 
-        val titleFieldFont = Font(Font.SANS_SERIF, Font.BOLD, 11)
+        val titleFieldFont = Font(Font.SANS_SERIF, Font.BOLD, UIScale.scale(11))
         val cellRenderer = renderer
         applyButton.isEnabled = false
         val listDataListener: ListDataListener = object : ListDataListener {

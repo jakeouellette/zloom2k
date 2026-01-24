@@ -1,6 +1,7 @@
 package zedit2.components
 
 import zedit2.util.CP437
+import com.formdev.flatlaf.util.UIScale
 import java.awt.*
 import java.awt.event.ActionEvent
 import java.awt.event.ActionListener
@@ -114,13 +115,13 @@ open class EditingModePane : JPanel() {
         g.color = lightCol
         val fonts = arrayOf(
             CP437.font,
-            Font(Font.SANS_SERIF, Font.BOLD, 14),
-            Font(Font.SANS_SERIF, Font.BOLD, 12),
-            Font(Font.SANS_SERIF, Font.PLAIN, 12),
-            Font(Font.SANS_SERIF, Font.BOLD, 10),
-            Font(Font.SANS_SERIF, Font.PLAIN, 10),
-            Font(Font.SANS_SERIF, Font.BOLD, 8),
-            Font(Font.SANS_SERIF, Font.PLAIN, 8)
+            Font(Font.SANS_SERIF, Font.BOLD, UIScale.scale(14)),
+            Font(Font.SANS_SERIF, Font.BOLD, UIScale.scale(12)),
+            Font(Font.SANS_SERIF, Font.PLAIN, UIScale.scale(12)),
+            Font(Font.SANS_SERIF, Font.BOLD, UIScale.scale(10)),
+            Font(Font.SANS_SERIF, Font.PLAIN, UIScale.scale(10)),
+            Font(Font.SANS_SERIF, Font.BOLD, UIScale.scale(8)),
+            Font(Font.SANS_SERIF, Font.PLAIN, UIScale.scale(8))
         )
 
         var metrics: FontMetrics

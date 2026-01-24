@@ -1,11 +1,16 @@
 
 plugins {
     alias(libs.plugins.jvm)
+    alias(libs.plugins.shadow)
     application
 }
 
 repositories {
     mavenCentral()
+}
+
+kotlin {
+    jvmToolchain(21)
 }
 
 dependencies {
@@ -19,7 +24,13 @@ application {
     mainClass = "zedit2.components.Main"
 }
 
-version = "0.4.1"
+tasks.shadowJar {
+    manifest {
+        attributes["Main-Class"] = "zedit2.components.Main"
+    }
+}
+
+version = "0.5.0"
 
 
 distributions {
