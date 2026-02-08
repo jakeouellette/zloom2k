@@ -1622,6 +1622,9 @@ class WorldEditor @JvmOverloads constructor(
         get() = caretPos.max(selectionBlockAnchorPos)
 
     private fun afterSelectionBlockOperation(modified: Boolean) {
+        if (selectionBlockAnchorPos != Pos.NEG_ONE) {
+            caretPos = caretPos.min(selectionBlockAnchorPos)
+        }
         canvas.setCaret(caretPos)
         setSelectionBlockStart(Pos.NEG_ONE)
         if (modified) afterModification()
@@ -1715,6 +1718,7 @@ class WorldEditor @JvmOverloads constructor(
         blockTileMove(blockMap, false)
 
         setMoveBlock(Pos.NEG_ONE, Dim.EMPTY)
+        caretPos = moveBlockPos
         afterSelectionBlockOperation(true)
     }
 

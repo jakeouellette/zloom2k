@@ -36,7 +36,7 @@ tasks.jar {
     archiveClassifier.set("nodeps")
 }
 
-version = "0.5.1"
+version = "0.5.2"
 
 distributions {
     main {
