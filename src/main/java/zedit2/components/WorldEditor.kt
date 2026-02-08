@@ -74,6 +74,7 @@ class WorldEditor @JvmOverloads constructor(
     internal var caretPos = Pos.ZERO
     internal var anchorDelta : Dim? = null
     internal var selectionBlockAnchorPos = Pos.NEG_ONE
+    internal var blockSelectionStartedByKeyboard = false
     // TODO(jakeouellette): Should these be negative, or 0
     internal var moveBlockDim = Dim(0, 0)
     internal var moveBlockPos = Pos.NEG_ONE
@@ -1621,7 +1622,6 @@ class WorldEditor @JvmOverloads constructor(
         get() = caretPos.max(selectionBlockAnchorPos)
 
     private fun afterSelectionBlockOperation(modified: Boolean) {
-        caretPos = caretPos.min(selectionBlockAnchorPos)
         canvas.setCaret(caretPos)
         setSelectionBlockStart(Pos.NEG_ONE)
         if (modified) afterModification()

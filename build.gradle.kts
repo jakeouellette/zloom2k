@@ -1,4 +1,3 @@
-
 plugins {
     alias(libs.plugins.jvm)
     alias(libs.plugins.shadow)
@@ -21,17 +20,23 @@ dependencies {
 }
 
 application {
-    mainClass = "zedit2.components.Main"
+    mainClass.set("zedit2.components.Main")
 }
 
 tasks.shadowJar {
+    // Remove the -all classifier from the shadow jar
+    archiveClassifier.set("")
     manifest {
         attributes["Main-Class"] = "zedit2.components.Main"
     }
 }
 
-version = "0.5.0"
+tasks.jar {
+    // Add -nodeps classifier to the standard jar
+    archiveClassifier.set("nodeps")
+}
 
+version = "0.5.1"
 
 distributions {
     main {
@@ -41,5 +46,3 @@ distributions {
         }
     }
 }
-
-

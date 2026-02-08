@@ -277,7 +277,7 @@ class CanvasMouseListener(val onFocusNeeded : () -> Unit, val editor: WorldEdito
                 Logger.i(TAG) { "$transition Beginning Selection."}
                 // Note: this is basically a copy of operationBlockStart, but it uses the mouse
                 updateCaretPosition()
-                editor.operationBlockStart()
+                editor.operationBlockStart(fromKeyboard = false)
             }
             MouseEventDescription.SELECTED_TO_ACTION,
             MouseEventDescription.SELECTED_TO_COPYING,

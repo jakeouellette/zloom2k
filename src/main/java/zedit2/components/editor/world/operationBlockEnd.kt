@@ -14,10 +14,11 @@ internal fun WorldEditor.operationBlockEnd() {
     val savedBlockstart = selectionBlockAnchorPos
     val savedCaretPos = caretPos
     val lastSelectionModeConfiguration = this.selectionModeConfiguration
-    if (lastSelectionModeConfiguration != null) {
+    if (!this.blockSelectionStartedByKeyboard) {
         operateOnMenuItem(lastSelectionModeConfiguration.description)
         return
     }
+    this.blockSelectionStartedByKeyboard = false
     val popupMenu = JPopupMenu("Choose block command")
     popupMenu.addPopupMenuListener(this)
     val menuItems = SelectionModeConfiguration.entries.map { it.description }
